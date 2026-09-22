@@ -6,7 +6,7 @@
     <AssemblyName>Vexis</AssemblyName>
     <Product>Vexis Hardware Monitoring</Product>
     <!-- Bump this for every release. build-installer.bat reads it for the installer too. -->
-    <Version>2.1.0</Version>
+    <Version>2.1.1</Version>
     <ApplicationIcon>vexis.ico</ApplicationIcon>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

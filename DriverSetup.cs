@@ -17,8 +17,6 @@ public static class DriverSetup
     private const string PawnIoUninstallKey =
         @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\PawnIO";
     private const string PawnIoSetupName = "PawnIO_setup.exe";
-    private const string PawnIoDownloadUrl =
-        "https://github.com/namazso/PawnIO.Setup/releases/latest/download/PawnIO_setup.exe";
 
     public static bool IsPawnIoInstalled()
     {
@@ -40,51 +38,82 @@ public static class DriverSetup
         catch { return null; }
     }
 
-    /// <summary>
-    /// Installs PawnIO if it is missing. Uses the copy shipped next to Vexis.exe
-    /// (the installer bundles it) and downloads it only as a fallback.
-    /// Returns true when PawnIO is installed afterwards.
-    /// </summary>
-    public static bool EnsurePawnIo()
+    public static bool IsPawnIoServicePresent()
     {
-        if (IsPawnIoInstalled())
+        try
         {
-            Console.WriteLine($"[pawnio] Installed (v{PawnIoVersion() ?? "?"}).");
+            using var key = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\PawnIO");
+            return key != null;
+        }
+        catch { return false; }
+    }
+
+    /// <summary>"RUNNING", "STOPPED", ... or "MISSING" — from sc.exe query.</summary>
+    public static string PawnIoServiceState()
+    {
+        if (!IsPawnIoServicePresent()) return "MISSING";
+        string output = RunHidden("sc.exe", "query PawnIO");
+        foreach (var state in new[] { "RUNNING", "STOPPED", "START_PENDING", "STOP_PENDING" })
+            if (output.Contains(state)) return state;
+        return "UNKNOWN";
+    }
+
+    /// <summary>
+    /// Makes sure the PawnIO driver is installed and running, using the copy of
+    /// PawnIO_setup.exe shipped next to Vexis.exe.
+    ///
+    /// Older Vexis builds ran "sc delete PawnIO" on every launch. That removed the
+    /// driver service but left PawnIO's uninstall registry entry behind, so PawnIO
+    /// looks installed while nothing is actually loaded. That case is repaired by
+    /// uninstalling and reinstalling. <paramref name="forceRepair"/> does the same
+    /// on demand (Security page button).
+    /// </summary>
+    public static bool EnsurePawnIo(bool forceRepair = false)
+    {
+        bool registered = IsPawnIoInstalled();
+        bool service    = IsPawnIoServicePresent();
+
+        if (registered && service && !forceRepair)
+        {
+            if (PawnIoServiceState() != "RUNNING") RunHidden("sc.exe", "start PawnIO");
+            Console.WriteLine($"[pawnio] Installed (v{PawnIoVersion() ?? "?"}), service {PawnIoServiceState()}.");
             return true;
         }
 
-        Console.WriteLine("[pawnio] Not installed — installing sensor driver...");
+        Console.WriteLine(forceRepair ? "[pawnio] Repair requested."
+            : registered ? "[pawnio] Registered but driver service missing — repairing."
+                         : "[pawnio] Not installed — installing sensor driver.");
+
+        string setup = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, PawnIoSetupName);
+        if (!File.Exists(setup))
+        {
+            Console.WriteLine($"[pawnio] {PawnIoSetupName} not found next to Vexis.exe — reinstall Vexis, " +
+                              "or install PawnIO manually from https://pawnio.eu");
+            return false;
+        }
+
+        if (registered)
+            Console.WriteLine($"[pawnio] Uninstall: {RunSetup(setup, "-uninstall -silent")}");
+        Console.WriteLine($"[pawnio] Install: {RunSetup(setup, "-install -silent")}");
+
+        bool ok = IsPawnIoInstalled() && IsPawnIoServicePresent();
+        if (ok && PawnIoServiceState() != "RUNNING") RunHidden("sc.exe", "start PawnIO");
+        Console.WriteLine(ok ? $"[pawnio] Installed OK, service {PawnIoServiceState()}."
+                             : "[pawnio] Still not installed — CPU sensors will be limited.");
+        return ok;
+    }
+
+    private static string RunSetup(string setup, string args)
+    {
         try
         {
-            string setup = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, PawnIoSetupName);
-            if (!File.Exists(setup))
-            {
-                setup = Path.Combine(Path.GetTempPath(), PawnIoSetupName);
-                Console.WriteLine("[pawnio] Bundled installer missing, downloading...");
-                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
-                http.DefaultRequestHeaders.Add("User-Agent", "Vexis");
-                var bytes = http.GetByteArrayAsync(PawnIoDownloadUrl).GetAwaiter().GetResult();
-                File.WriteAllBytes(setup, bytes);
-            }
-
             using var p = Process.Start(new ProcessStartInfo
-            {
-                FileName        = setup,
-                Arguments       = "-install -silent",
-                UseShellExecute = false,
-                CreateNoWindow  = true
-            });
-            p?.WaitForExit(60_000);
-            Console.WriteLine($"[pawnio] Setup exit code: {p?.ExitCode}");
+            { FileName = setup, Arguments = args, UseShellExecute = false, CreateNoWindow = true });
+            if (p == null) return "failed to start";
+            p.WaitForExit(60_000);
+            return $"exit code {p.ExitCode}";
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[pawnio] Install failed: {ex.Message}");
-        }
-
-        bool ok = IsPawnIoInstalled();
-        Console.WriteLine(ok ? "[pawnio] Installed OK." : "[pawnio] Still not installed — CPU sensors will be limited.");
-        return ok;
+        catch (Exception ex) { return ex.Message; }
     }
 
     /// <summary>
@@ -113,7 +142,7 @@ public static class DriverSetup
     // Older Vexis builds switched these off. Vexis no longer touches them, but the
     // Security page lets users see their state and turn them back on.
 
-    public record SecurityStatus(bool pawnio, string? pawnioVersion,
+    public record SecurityStatus(bool pawnio, string? pawnioVersion, string pawnioService,
                                  bool hvci, bool blocklist, bool vbs);
 
     public static SecurityStatus GetSecurityStatus()
@@ -124,6 +153,7 @@ public static class DriverSetup
         return new SecurityStatus(
             pawnio:        IsPawnIoInstalled(),
             pawnioVersion: PawnIoVersion(),
+            pawnioService: PawnIoServiceState(),
             hvci:          hvci == 1,
             blocklist:     vdb != 0,   // missing value = Windows default (on)
             vbs:           vbs == 1);
@@ -158,14 +188,20 @@ public static class DriverSetup
         catch { return null; }
     }
 
-    private static void RunHidden(string file, string args)
+    private static string RunHidden(string file, string args)
     {
         try
         {
             using var p = Process.Start(new ProcessStartInfo
-            { FileName = file, Arguments = args, UseShellExecute = false, CreateNoWindow = true });
-            p?.WaitForExit(3000);
+            {
+                FileName = file, Arguments = args, UseShellExecute = false, CreateNoWindow = true,
+                RedirectStandardOutput = true
+            });
+            if (p == null) return "";
+            string output = p.StandardOutput.ReadToEnd();
+            p.WaitForExit(5000);
+            return output;
         }
-        catch { }
+        catch { return ""; }
     }
 }

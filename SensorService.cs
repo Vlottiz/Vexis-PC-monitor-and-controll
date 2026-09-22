@@ -35,6 +35,8 @@ public class SensorData
     public float?  gpu_load    { get; set; }
     public float?  ram_load    { get; set; }
     public float?  ram_used_gb { get; set; }
+    public float?  virt_used_gb { get; set; }  // commit charge (RAM + page file)
+    public float?  virt_load    { get; set; }
     public List<float>? dimm_temps { get; set; }
     public Dictionary<int, CoreInfo>  cores     { get; set; } = new();
     public Dictionary<string, float>  all_temps { get; set; } = new();
@@ -338,15 +340,24 @@ public class SensorService : IDisposable
             }
 
             // RAM load, used GB, and DIMM temps from Memory hardware
+            // "Virtual Memory" and "Total Memory" use the same sensor names in LHM,
+            // so tell them apart by hardware name (Virtual Memory is listed first).
             if (hw.HardwareType == HardwareType.Memory)
             {
                 hw.Update();
+                bool isVirtual = hw.Name.Contains("Virtual", StringComparison.OrdinalIgnoreCase);
                 foreach (var s in hw.Sensors)
                 {
                     if (s.SensorType == SensorType.Load && s.Name == "Memory" && s.Value.HasValue)
-                        data.ram_load ??= s.Value.Value;
-                    if (s.SensorType == SensorType.Data && s.Name.Contains("Memory Used") && s.Value.HasValue)
-                        data.ram_used_gb ??= s.Value.Value;
+                    {
+                        if (isVirtual) data.virt_load ??= s.Value.Value;
+                        else           data.ram_load  ??= s.Value.Value;
+                    }
+                    if (s.SensorType == SensorType.Data && s.Name == "Memory Used" && s.Value.HasValue)
+                    {
+                        if (isVirtual) data.virt_used_gb ??= s.Value.Value;
+                        else           data.ram_used_gb  ??= s.Value.Value;
+                    }
                     if (s.SensorType == SensorType.Temperature && s.Value.HasValue)
                     {
                         data.dimm_temps ??= new List<float>();

@@ -269,7 +269,7 @@ public class MainForm : Form
                     break;
 
                 case "installPawnIO":
-                    _ = Task.Run(() => { DriverSetup.EnsurePawnIo(); PushSecurityStatus(); });
+                    _ = Task.Run(() => { DriverSetup.EnsurePawnIo(forceRepair: true); PushSecurityStatus(); });
                     break;
 
                 case "restoreSecurity":
