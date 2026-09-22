@@ -1,0 +1,3 @@
+# Batch files must keep CRLF line endings or cmd.exe misparses them
+*.bat -text
+*.cmd -text
