@@ -135,6 +135,18 @@ public class SensorService : IDisposable
             foreach (var sub in hw.SubHardware)
             {
                 sub.Update();
+                // SuperIO reads are skipped while another app holds the ISA bus lock —
+                // give it a few more tries before reporting what we found.
+                for (int retry = 0; retry < 5 && sub.HardwareType == HardwareType.SuperIO &&
+                     !sub.Sensors.Any(x => x.SensorType is SensorType.Fan or SensorType.Temperature); retry++)
+                {
+                    Thread.Sleep(200);
+                    sub.Update();
+                }
+                if (sub.HardwareType == HardwareType.SuperIO &&
+                    !sub.Sensors.Any(x => x.SensorType is SensorType.Fan or SensorType.Temperature))
+                    Console.WriteLine($"[hw]   ! {sub.Name} could not be read — another program (MSI Center, " +
+                                      "HWiNFO, AIDA64, ...) is probably holding the hardware bus. Close it and restart Vexis.");
                 int fanCount  = sub.Sensors.Count(s => s.SensorType == SensorType.Fan);
                 int ctrlCount = sub.Sensors.Count(s => s.SensorType == SensorType.Control);
                 Console.WriteLine($"[hw]   SubHW: [{sub.HardwareType}] {sub.Name} — {fanCount} fan, {ctrlCount} ctrl sensors");
