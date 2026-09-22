@@ -1,0 +1,10 @@
+bin/
+obj/
+publish/
+*.user
+.vs/
+debug.log
+
+# Build outputs / downloaded at build time
+VexisHM-Setup.exe
+PawnIO_setup.exe

@@ -28,6 +28,11 @@ public class MainForm : Form
 
     public static readonly string AppDir = AppDomain.CurrentDomain.BaseDirectory;
 
+    // Single source of truth: <Version> in Pcmonitor2_0.csproj
+    public static readonly Version AppVersion =
+        typeof(MainForm).Assembly.GetName().Version ?? new Version(0, 0, 0);
+    public static string AppVersionText => $"{AppVersion.Major}.{AppVersion.Minor}.{AppVersion.Build}";
+
     public MainForm()
     {
         SuspendLayout();
@@ -102,19 +107,20 @@ public class MainForm : Form
             {
                 await Task.Delay(5000);
                 using var http = new System.Net.Http.HttpClient();
-                http.DefaultRequestHeaders.Add("User-Agent", "Vexis/2.0");
+                http.DefaultRequestHeaders.Add("User-Agent", $"Vexis/{AppVersionText}");
                 http.Timeout = TimeSpan.FromSeconds(8);
                 var json = await http.GetStringAsync(
                     "https://api.github.com/repos/Vlottiz/vexis/releases/latest");
                 var doc  = System.Text.Json.JsonDocument.Parse(json);
                 var tag  = doc.RootElement.GetProperty("tag_name").GetString() ?? "";
-                if (!string.IsNullOrEmpty(tag) && tag != "v2.0.0")
+                if (Version.TryParse(tag.TrimStart('v', 'V'), out var latest) &&
+                    latest > new Version(AppVersionText))
                 {
                     Console.WriteLine($"[update] New version available: {tag}");
                     Invoke(() => _webView.CoreWebView2?.ExecuteScriptAsync(
                         $"typeof navSetUpdateAvailable==='function'&&navSetUpdateAvailable('{tag}')"));
                 }
-                else Console.WriteLine($"[update] Up to date ({tag})");
+                else Console.WriteLine($"[update] Up to date (running v{AppVersionText}, latest {tag})");
             }
             catch (Exception ex) { Console.WriteLine($"[update] Check failed: {ex.Message}"); }
         });
@@ -144,6 +150,19 @@ public class MainForm : Form
         }
     }
 
+    // Sends driver / Windows protection status to the Security page (main window + popouts)
+    private void PushSecurityStatus()
+    {
+        string json   = JsonSerializer.Serialize(DriverSetup.GetSecurityStatus(), _json);
+        string script = $"typeof onSecurityStatus==='function'&&onSecurityStatus({json})";
+        BeginInvoke(() =>
+        {
+            _webView.CoreWebView2?.ExecuteScriptAsync(script);
+            foreach (var p in _popouts.Values)
+                if (!p.IsDisposed) _ = p.ExecuteScriptAsync(script);
+        });
+    }
+
     private async Task SendConfigViaScript()
     {
         try
@@ -152,7 +171,7 @@ public class MainForm : Form
             {
                 type = "config", colors = _config.Colors, settings = _config.Settings,
                 colorProfiles = _config.ColorProfiles, fanCurves = _config.FanCurves,
-                lastPresetIdx = _config.LastPresetIdx
+                lastPresetIdx = _config.LastPresetIdx, appVersion = AppVersionText
             };
             string json = JsonSerializer.Serialize(payload, _json);
             await _webView.CoreWebView2.ExecuteScriptAsync(
@@ -245,16 +264,16 @@ public class MainForm : Form
                     }
                     break;
 
-                case "saveSecurityPrefs":
-                    _config.Security ??= new SecurityPrefs();
-                    _config.Security.FirstRunDone          = !(msg.startup ?? true);
-                    _config.Security.AutoMemoryIntegrity   = msg.hvci     ?? true;
-                    _config.Security.AutoDriverBlocklist   = msg.vdb      ?? true;
-                    _config.Security.AutoVbs               = msg.vbs      ?? true;
-                    _config.Security.AutoDefenderExclusion = msg.defender ?? true;
-                    _config.Security.AutoFirewallRule      = msg.firewall ?? true;
-                    _config.Save();
-                    Console.WriteLine($"[config] Security prefs saved — startup={msg.startup} hvci={msg.hvci} vdb={msg.vdb} vbs={msg.vbs} defender={msg.defender} firewall={msg.firewall}");
+                case "getSecurityStatus":
+                    PushSecurityStatus();
+                    break;
+
+                case "installPawnIO":
+                    _ = Task.Run(() => { DriverSetup.EnsurePawnIo(); PushSecurityStatus(); });
+                    break;
+
+                case "restoreSecurity":
+                    _ = Task.Run(() => { DriverSetup.RestoreWindowsSecurity(); PushSecurityStatus(); });
                     break;
 
                 case "saveSettings":
@@ -625,11 +644,5 @@ public class IncomingMessage
     public float?                      value    { get; set; }
     public bool?                       enabled  { get; set; }
     public FanCurve?                   fanCurve { get; set; }
-    public bool? startup  { get; set; }
-    public bool? hvci     { get; set; }
-    public bool? vdb      { get; set; }
-    public bool? vbs      { get; set; }
-    public bool? defender { get; set; }
-    public bool? firewall { get; set; }
     public int?  seq      { get; set; }
 }

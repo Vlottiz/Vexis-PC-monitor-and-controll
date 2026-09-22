@@ -138,289 +138,54 @@
   <div class="page-content" style="max-width:680px;padding-bottom:40px">
 
     <div class="sec-page-note">
-      ⚠ Vexis automatically adjusts certain Windows security settings on startup to
-      enable hardware sensor access. Use this page to control exactly what gets changed —
-      and understand why each setting exists before deciding to turn it off.
+      Vexis reads CPU, fan and memory sensors through the <b>PawnIO</b> driver. PawnIO is signed and
+      works with all Windows protections left ON — Vexis does <b>not</b> change Memory Integrity,
+      Virtualization-Based Security or the Vulnerable Driver Blocklist.
       <br><br>
-      Changes take effect on next restart of Vexis. Some require a Windows reboot.
+      Older Vexis versions switched those protections off. If they show OFF below, you can turn them
+      back on here (a Windows restart is required).
     </div>
 
-    <!-- First-run / startup bypass toggle -->
-    <div class="sec-firstrun">
-      <div style="flex:1">
-        <div style="font-size:10px;font-family:monospace;letter-spacing:.08em;color:var(--label);margin-bottom:4px">STARTUP SECURITY SETUP</div>
-        <div style="font-size:9px;color:var(--label);opacity:.7;line-height:1.4">
-          When enabled, Vexis checks and applies your selected security settings every time it starts.
-          Disable this if you want to manage Windows security settings manually.
-        </div>
+    <!-- ═══ SENSOR DRIVER ═══════════════════════════════════════════════════════ -->
+    <div class="sec-card">
+      <div class="sec-header">
+        <span class="sec-icon">⚙</span>
+        <span class="sec-title">PAWNIO SENSOR DRIVER</span>
+        <span class="sec-badge off" id="badge-pawnio">…</span>
       </div>
-      <label class="sec-toggle" style="width:44px;height:24px">
-        <input type="checkbox" id="toggle-startup" checked onchange="savePref('firstRun',!this.checked)">
-        <span class="sec-slider"></span>
-      </label>
+      <div class="sec-divider"></div>
+      <div class="sec-body open">
+        <div class="sec-row"><span class="sec-row-icon">📖</span>
+          <div class="sec-row-text">Needed for per-core temperatures and clocks (Intel &amp; AMD), motherboard fan
+          sensors and DIMM temperatures. Installed automatically by the Vexis installer.</div></div>
+        <button class="sec-apply-btn" style="margin-top:4px" onclick="installPawnIO()">⬇ INSTALL / REPAIR PAWNIO</button>
+      </div>
     </div>
 
-    <!-- ═══ MEMORY INTEGRITY ═══════════════════════════════════════════════════ -->
-    <div class="sec-card" id="card-hvci">
-      <div class="sec-header" onclick="toggleCard('hvci')">
+    <!-- ═══ WINDOWS PROTECTIONS (read-only status) ════════════════════════════ -->
+    <div class="sec-card">
+      <div class="sec-header">
         <span class="sec-icon">🛡</span>
         <span class="sec-title">MEMORY INTEGRITY (HVCI)</span>
-        <span class="sec-badge inactive" id="badge-hvci">AUTO OFF</span>
-        <label class="sec-toggle" onclick="event.stopPropagation()">
-          <input type="checkbox" id="toggle-hvci" checked onchange="savePref('hvci',this.checked)">
-          <span class="sec-slider"></span>
-        </label>
-      </div>
-      <div class="sec-divider"></div>
-      <div class="sec-body" id="body-hvci">
-        <div class="sec-row">
-          <span class="sec-row-icon">📖</span>
-          <div>
-            <div class="sec-row-label">What it does</div>
-            <div class="sec-row-text">Memory Integrity (formally Hypervisor-Protected Code Integrity / HVCI) uses hardware virtualization to run the Windows kernel code integrity checks inside a protected environment. It prevents unsigned or vulnerable kernel-mode drivers from loading, even if an attacker has modified them.</div>
-          </div>
-        </div>
-        <div class="sec-row">
-          <span class="sec-row-icon">🔒</span>
-          <div>
-            <div class="sec-row-label">Why Microsoft built it</div>
-            <div class="sec-row-text">Protects against rootkits, bootkits, and sophisticated malware that installs itself as a kernel driver. It's one of the core Windows 11 security requirements because modern attacks frequently exploit the kernel rather than user-mode software.</div>
-          </div>
-        </div>
-        <div class="sec-row">
-          <span class="sec-row-icon">⚙</span>
-          <div>
-            <div class="sec-row-label">Why Vexis needs it off</div>
-            <div class="sec-row-text">WinRing0x64.sys — the driver that reads per-core CPU temperatures and clock speeds — is listed on Microsoft's vulnerable driver blocklist. Memory Integrity refuses to load it. Without this driver, Intel per-core temps and clocks are unavailable. AMD systems often work without it.</div>
-          </div>
-        </div>
-        <div class="sec-row">
-          <span class="sec-row-icon">⚠</span>
-          <div>
-            <div class="sec-row-label">What you lose when it's off</div>
-            <div class="sec-row-text">A malicious kernel-mode driver could load and gain full system access. This is a realistic threat vector for targeted attacks, less so for everyday users. Game anti-cheat software (Valorant's Vanguard, FACEIT) may refuse to run without Memory Integrity enabled.</div>
-          </div>
-        </div>
-        <div class="sec-row">
-          <span class="sec-row-icon">🔍</span>
-          <div>
-            <div class="sec-row-label">Things to consider</div>
-            <div class="sec-row-text">If you only play games with kernel-level anti-cheat, keep Memory Integrity ON and accept limited Intel sensor data. If you're on AMD, WinRing0 may not be required at all — AMD SMU access uses a different path that often works without this driver.</div>
-          </div>
-        </div>
-        <span class="sec-risk risk-medium">⬤ MEDIUM RISK when off — primarily a concern for targeted attacks or kernel-level anti-cheat games</span>
+        <span class="sec-badge off" id="badge-hvci">…</span>
       </div>
     </div>
-
-    <!-- ═══ VULNERABLE DRIVER BLOCKLIST ════════════════════════════════════════ -->
-    <div class="sec-card" id="card-vdb">
-      <div class="sec-header" onclick="toggleCard('vdb')">
+    <div class="sec-card">
+      <div class="sec-header">
         <span class="sec-icon">🚫</span>
         <span class="sec-title">VULNERABLE DRIVER BLOCKLIST</span>
-        <span class="sec-badge inactive" id="badge-vdb">AUTO OFF</span>
-        <label class="sec-toggle" onclick="event.stopPropagation()">
-          <input type="checkbox" id="toggle-vdb" checked onchange="savePref('vdb',this.checked)">
-          <span class="sec-slider"></span>
-        </label>
-      </div>
-      <div class="sec-divider"></div>
-      <div class="sec-body" id="body-vdb">
-        <div class="sec-row">
-          <span class="sec-row-icon">📖</span>
-          <div>
-            <div class="sec-row-label">What it does</div>
-            <div class="sec-row-text">Microsoft maintains a list of drivers known to have security vulnerabilities. The Vulnerable Driver Blocklist prevents these drivers from loading, even if they have valid signatures. The list is updated via Windows Update and covers thousands of known-bad driver versions.</div>
-          </div>
-        </div>
-        <div class="sec-row">
-          <span class="sec-row-icon">🔒</span>
-          <div>
-            <div class="sec-row-label">Why Microsoft built it</div>
-            <div class="sec-row-text">Defends against BYOVD (Bring Your Own Vulnerable Driver) attacks — a technique where attackers drop a legitimate but exploitable driver onto a system to bypass OS protections and escalate privileges. This has been used in real-world ransomware and APT attacks.</div>
-          </div>
-        </div>
-        <div class="sec-row">
-          <span class="sec-row-icon">⚙</span>
-          <div>
-            <div class="sec-row-label">Why Vexis needs it off</div>
-            <div class="sec-row-text">WinRing0x64.sys is on the blocklist. The same driver is used by HWiNFO64, CPU-Z, and MSI Afterburner — they all face the same issue. The blocklist doesn't distinguish between a hardware monitoring app and a malicious use of the same driver.</div>
-          </div>
-        </div>
-        <div class="sec-row">
-          <span class="sec-row-icon">⚠</span>
-          <div>
-            <div class="sec-row-label">What you lose when it's off</div>
-            <div class="sec-row-text">Known-vulnerable drivers can load. An attacker who can drop a file on your system could use one of these drivers to escalate from user to kernel privileges. This is the same technique used by BlackByte, AvosLocker, and other ransomware strains.</div>
-          </div>
-        </div>
-        <div class="sec-row">
-          <span class="sec-row-icon">🔍</span>
-          <div>
-            <div class="sec-row-label">Things to consider</div>
-            <div class="sec-row-text">The practical risk depends on how an attacker gets onto your system in the first place. If you practice good security hygiene (no pirated software, updated Windows, not clicking random links), the residual risk is low. HWiNFO64 is a widely-used alternative that faces the same trade-off.</div>
-          </div>
-        </div>
-        <span class="sec-risk risk-high">⬤ HIGHER RISK when off — BYOVD is a documented real-world attack vector used in ransomware</span>
+        <span class="sec-badge off" id="badge-blocklist">…</span>
       </div>
     </div>
-
-    <!-- ═══ VBS ═════════════════════════════════════════════════════════════════ -->
-    <div class="sec-card" id="card-vbs">
-      <div class="sec-header" onclick="toggleCard('vbs')">
+    <div class="sec-card">
+      <div class="sec-header">
         <span class="sec-icon">🔐</span>
         <span class="sec-title">VIRTUALIZATION-BASED SECURITY (VBS)</span>
-        <span class="sec-badge inactive" id="badge-vbs">AUTO OFF</span>
-        <label class="sec-toggle" onclick="event.stopPropagation()">
-          <input type="checkbox" id="toggle-vbs" checked onchange="savePref('vbs',this.checked)">
-          <span class="sec-slider"></span>
-        </label>
-      </div>
-      <div class="sec-divider"></div>
-      <div class="sec-body" id="body-vbs">
-        <div class="sec-row">
-          <span class="sec-row-icon">📖</span>
-          <div>
-            <div class="sec-row-label">What it does</div>
-            <div class="sec-row-text">VBS uses the CPU's hardware virtualization (Intel VT-x / AMD-V) to create an isolated secure environment called the Virtual Secure Mode (VSM). Critical security components — including credential hashes, kernel code, and key material — are stored inside VSM where even a compromised kernel cannot access them.</div>
-          </div>
-        </div>
-        <div class="sec-row">
-          <span class="sec-row-icon">🔒</span>
-          <div>
-            <div class="sec-row-label">Why Microsoft built it</div>
-            <div class="sec-row-text">Protects against pass-the-hash attacks, credential theft (mimikatz style), and kernel exploits. With VBS on, even full kernel control doesn't give an attacker access to login credentials. It's a core part of Windows 11's security baseline.</div>
-          </div>
-        </div>
-        <div class="sec-row">
-          <span class="sec-row-icon">⚙</span>
-          <div>
-            <div class="sec-row-label">Why Vexis needs it off</div>
-            <div class="sec-row-text">VBS enforces Memory Integrity (HVCI). Disabling VBS is sometimes required when HVCI can't be individually toggled — on some system configurations, VBS and HVCI are linked. Vexis disables this as a fallback if the HVCI key alone is insufficient.</div>
-          </div>
-        </div>
-        <div class="sec-row">
-          <span class="sec-row-icon">⚠</span>
-          <div>
-            <div class="sec-row-label">What you lose when it's off</div>
-            <div class="sec-row-text">Credential Guard is disabled — your NTLM hashes and Kerberos tickets are no longer isolated in VSM. A kernel-level exploit can now extract credentials from LSASS memory. This is the technique used in most enterprise network compromises (pass-the-hash, pass-the-ticket).</div>
-          </div>
-        </div>
-        <div class="sec-row">
-          <span class="sec-row-icon">🔍</span>
-          <div>
-            <div class="sec-row-label">Things to consider</div>
-            <div class="sec-row-text">For home users and gaming PCs, VBS off is the norm — most games and hardware tools require it. The credential theft risk is primarily relevant in domain-joined enterprise environments. If your PC is on a corporate network, consult your IT team before disabling VBS. Requires a reboot to take effect.</div>
-          </div>
-        </div>
-        <span class="sec-risk risk-medium">⬤ MEDIUM RISK for home users — HIGH RISK on domain-joined corporate PCs</span>
+        <span class="sec-badge off" id="badge-vbs">…</span>
       </div>
     </div>
 
-    <!-- ═══ WINDOWS DEFENDER EXCLUSION ═════════════════════════════════════════ -->
-    <div class="sec-card" id="card-defender">
-      <div class="sec-header" onclick="toggleCard('defender')">
-        <span class="sec-icon">🛡</span>
-        <span class="sec-title">WINDOWS DEFENDER EXCLUSION</span>
-        <span class="sec-badge active" id="badge-defender">AUTO ON</span>
-        <label class="sec-toggle" onclick="event.stopPropagation()">
-          <input type="checkbox" id="toggle-defender" checked onchange="savePref('defender',this.checked)">
-          <span class="sec-slider"></span>
-        </label>
-      </div>
-      <div class="sec-divider"></div>
-      <div class="sec-body" id="body-defender">
-        <div class="sec-row">
-          <span class="sec-row-icon">📖</span>
-          <div>
-            <div class="sec-row-label">What it does</div>
-            <div class="sec-row-text">Adds Vexis's executable and the hardware sensor driver (LibreHardwareMonitorLib.sys) to Windows Defender's exclusion list. Excluded paths and processes are not scanned for malware in real time.</div>
-          </div>
-        </div>
-        <div class="sec-row">
-          <span class="sec-row-icon">🔒</span>
-          <div>
-            <div class="sec-row-label">Why Microsoft built it</div>
-            <div class="sec-row-text">Defender's exclusions exist to reduce false positives for legitimate software that uses techniques that look similar to malware — such as low-level hardware access, process injection, or kernel drivers.</div>
-          </div>
-        </div>
-        <div class="sec-row">
-          <span class="sec-row-icon">⚙</span>
-          <div>
-            <div class="sec-row-label">Why Vexis needs it</div>
-            <div class="sec-row-text">LibreHardwareMonitorLib.sys triggers Defender's heuristics because it accesses hardware registers at the kernel level — the same technique used by some rootkits. Without the exclusion, Defender may quarantine the driver and prevent sensor readings from working.</div>
-          </div>
-        </div>
-        <div class="sec-row">
-          <span class="sec-row-icon">⚠</span>
-          <div>
-            <div class="sec-row-label">What you lose when it's on (exclusion applied)</div>
-            <div class="sec-row-text">If Vexis's install folder is ever compromised by malware, Defender won't detect it. This is an unlikely scenario if you downloaded Vexis from the official GitHub release, but worth understanding.</div>
-          </div>
-        </div>
-        <div class="sec-row">
-          <span class="sec-row-icon">🔍</span>
-          <div>
-            <div class="sec-row-label">Things to consider</div>
-            <div class="sec-row-text">The exclusion is narrowly scoped to Vexis's process and the LHM driver temp file. It doesn't exclude your entire PC or install folder. If you see Defender alerts about Vexis, that's likely a false positive — but you can verify by checking the file hash against the GitHub release.</div>
-          </div>
-        </div>
-        <span class="sec-risk risk-low">⬤ LOW RISK — narrowly scoped exclusion; only affects the Vexis process and sensor driver</span>
-      </div>
-    </div>
-
-    <!-- ═══ FIREWALL RULE ════════════════════════════════════════════════════════ -->
-    <div class="sec-card" id="card-firewall">
-      <div class="sec-header" onclick="toggleCard('firewall')">
-        <span class="sec-icon">🌐</span>
-        <span class="sec-title">OPENRGB FIREWALL RULE (PORT 6742)</span>
-        <span class="sec-badge active" id="badge-firewall">AUTO ON</span>
-        <label class="sec-toggle" onclick="event.stopPropagation()">
-          <input type="checkbox" id="toggle-firewall" checked onchange="savePref('firewall',this.checked)">
-          <span class="sec-slider"></span>
-        </label>
-      </div>
-      <div class="sec-divider"></div>
-      <div class="sec-body" id="body-firewall">
-        <div class="sec-row">
-          <span class="sec-row-icon">📖</span>
-          <div>
-            <div class="sec-row-label">What it does</div>
-            <div class="sec-row-text">Adds a Windows Firewall inbound rule allowing TCP connections on port 6742 — the port OpenRGB's SDK server listens on. Without this rule, Windows Firewall may block Vexis from connecting to OpenRGB.</div>
-          </div>
-        </div>
-        <div class="sec-row">
-          <span class="sec-row-icon">🔒</span>
-          <div>
-            <div class="sec-row-label">Why Windows Firewall exists</div>
-            <div class="sec-row-text">The Windows Firewall blocks unsolicited inbound connections by default, preventing external hosts from reaching services running on your PC. This is a critical network boundary control.</div>
-          </div>
-        </div>
-        <div class="sec-row">
-          <span class="sec-row-icon">⚙</span>
-          <div>
-            <div class="sec-row-label">Why Vexis needs it</div>
-            <div class="sec-row-text">Vexis communicates with OpenRGB via its local network API (REST on port 6742). If the Firewall blocks this port, the RGB control page can't connect to OpenRGB even though both are running on the same machine.</div>
-          </div>
-        </div>
-        <div class="sec-row">
-          <span class="sec-row-icon">⚠</span>
-          <div>
-            <div class="sec-row-label">What you lose when it's on (rule applied)</div>
-            <div class="sec-row-text">Port 6742 is open to inbound connections. Since OpenRGB binds to 127.0.0.1 (localhost only) by default, external machines on your network cannot reach it. Any process running locally on your PC can connect to OpenRGB and control your RGB devices.</div>
-          </div>
-        </div>
-        <div class="sec-row">
-          <span class="sec-row-icon">🔍</span>
-          <div>
-            <div class="sec-row-label">Things to consider</div>
-            <div class="sec-row-text">The localhost-only binding means this is essentially a local IPC channel, not a network exposure. The realistic threat is another local application taking control of your RGB — not an external attacker. If you don't use the RGB control page, you can safely disable this rule.</div>
-          </div>
-        </div>
-        <span class="sec-risk risk-low">⬤ LOW RISK — localhost only; no external network exposure when OpenRGB uses its default binding</span>
-      </div>
-    </div>
-
-    <button class="sec-apply-btn" onclick="saveAll()">💾 SAVE &amp; APPLY ON NEXT LAUNCH</button>
+    <button class="sec-apply-btn" onclick="restoreSecurity()">🛡 RESTORE WINDOWS PROTECTIONS</button>
     <div class="sec-status-bar" id="sec-status"></div>
 
     <!-- ── Live console ───────────────────────────────────────────────────── -->
@@ -440,85 +205,38 @@
 <script src="/nav.js?v=8" data-page="security"></script>
 <script>
 // ── State ─────────────────────────────────────────────────────────────────────
-const PREFS_KEY = 'pcm-security-prefs';
-
-// Defaults match original auto-apply behaviour
-const defaults = {
-  startup:  true,   // run security setup on startup
-  hvci:     true,   // auto-disable Memory Integrity
-  vdb:      true,   // auto-disable Driver Blocklist
-  vbs:      true,   // auto-disable VBS
-  defender: true,   // auto-add Defender exclusion
-  firewall: true,   // auto-add firewall rule
-};
-
-let prefs = { ...defaults };
-
-// ── Load ─────────────────────────────────────────────────────────────────────
-function loadPrefs() {
-  try {
-    const stored = localStorage.getItem(PREFS_KEY);
-    if (stored) prefs = { ...defaults, ...JSON.parse(stored) };
-  } catch { }
-
-  document.getElementById('toggle-startup').checked  = prefs.startup;
-  document.getElementById('toggle-hvci').checked     = prefs.hvci;
-  document.getElementById('toggle-vdb').checked      = prefs.vdb;
-  document.getElementById('toggle-vbs').checked      = prefs.vbs;
-  document.getElementById('toggle-defender').checked = prefs.defender;
-  document.getElementById('toggle-firewall').checked = prefs.firewall;
-
-  updateBadges();
-}
-
-function savePref(key, val) {
-  prefs[key] = val;
-  updateBadges();
-}
-
-function updateBadges() {
-  setBadge('hvci',     prefs.hvci     && prefs.startup, 'AUTO OFF', 'SKIPPED', 'inactive', 'off');
-  setBadge('vdb',      prefs.vdb      && prefs.startup, 'AUTO OFF', 'SKIPPED', 'inactive', 'off');
-  setBadge('vbs',      prefs.vbs      && prefs.startup, 'AUTO OFF', 'SKIPPED', 'inactive', 'off');
-  setBadge('defender', prefs.defender && prefs.startup, 'AUTO ON',  'SKIPPED', 'active',   'off');
-  setBadge('firewall', prefs.firewall && prefs.startup, 'AUTO ON',  'SKIPPED', 'active',   'off');
-}
-
-function setBadge(id, active, labelOn, labelOff, classOn, classOff) {
+// ── Driver + Windows protection status (from C#) ─────────────────────────────
+function setBadge(id, on, labelOn, labelOff) {
   const b = document.getElementById('badge-' + id);
   if (!b) return;
-  b.textContent = active ? labelOn : labelOff;
-  b.className   = 'sec-badge ' + (active ? classOn : classOff);
+  b.textContent = on ? labelOn : labelOff;
+  b.className   = 'sec-badge ' + (on ? 'active' : 'inactive');
 }
 
-// ── Toggle card body ─────────────────────────────────────────────────────────
-function toggleCard(id) {
-  const body = document.getElementById('body-' + id);
-  if (!body) return;
-  body.classList.toggle('open');
-}
+window.onSecurityStatus = function(st) {
+  setBadge('pawnio',    st.pawnio,    'INSTALLED' + (st.pawnioVersion ? ' v' + st.pawnioVersion : ''), 'NOT INSTALLED');
+  setBadge('hvci',      st.hvci,      'ON', 'OFF');
+  setBadge('blocklist', st.blocklist, 'ON', 'OFF');
+  setBadge('vbs',       st.vbs,       'ON', 'OFF');
+};
 
-// ── Save all prefs to localStorage + send to C# ──────────────────────────────
-function saveAll() {
-  try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch { }
-
-  // Send to C# so it can update config.json
-  sendToHost({
-    type: 'saveSecurityPrefs',
-    startup:  prefs.startup,
-    hvci:     prefs.hvci,
-    vdb:      prefs.vdb,
-    vbs:      prefs.vbs,
-    defender: prefs.defender,
-    firewall: prefs.firewall,
-  });
-
+function setStatus(text) {
   const s = document.getElementById('sec-status');
-  s.textContent = '✓ Saved — changes take effect on next Vexis launch.';
-  setTimeout(() => { s.textContent = ''; }, 4000);
+  if (s) s.textContent = text;
 }
 
-loadPrefs();
+function installPawnIO() {
+  setStatus('Installing PawnIO… restart Vexis when done.');
+  sendToHost({ type: 'installPawnIO' });
+}
+
+function restoreSecurity() {
+  if (!confirm('Turn Memory Integrity, VBS and the Vulnerable Driver Blocklist back on?\nWindows must be restarted afterwards.')) return;
+  setStatus('Restoring… restart Windows to apply.');
+  sendToHost({ type: 'restoreSecurity' });
+}
+
+sendToHost({ type: 'getSecurityStatus' });
 
 // ── Live console ─────────────────────────────────────────────────────────────
 let _logSeq    = 0;

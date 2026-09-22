@@ -1,88 +1,87 @@
 @echo off
-title PC Monitor — Build Installer
-echo.
-echo  ============================================
-echo   PC Monitor — Installer Builder
-echo  ============================================
-echo.
-
-:: Check for admin
-net session >nul 2>&1
-if %errorlevel% neq 0 (
-    echo  [!] Run this as Administrator
-    pause
-    exit /b 1
-)
-
-:: Step 1 — Publish
-echo  [1/3] Publishing app...
+setlocal
+title Vexis - Build Installer
 cd /d "%~dp0"
-taskkill /IM Pcmonitor2.0.exe /F >nul 2>&1
-dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o publish >nul 2>&1
-if %errorlevel% neq 0 (
-    echo  [!] Publish failed. Run "dotnet publish" manually to see errors.
-    pause
-    exit /b 1
+echo.
+echo  ============================================
+echo   Vexis - Installer Builder
+echo  ============================================
+echo.
+
+:: ── Version (single source: <Version> in Pcmonitor2_0.csproj) ─────────────────
+for /f "usebackq delims=" %%v in (`powershell -NoProfile -Command "([xml](Get-Content 'Pcmonitor2_0.csproj')).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1"`) do set VERSION=%%v
+if "%VERSION%"=="" (
+    echo  [!] Could not read ^<Version^> from Pcmonitor2_0.csproj
+    goto :fail
 )
-echo      Done.
+echo  Version: %VERSION%
+echo.
 
-:: Step 2 — Copy web assets + bundled DLLs into publish folder
-echo  [2/4] Copying web assets...
-copy /y *.html publish\ >nul 2>&1
-copy /y *.js   publish\ >nul 2>&1
-copy /y *.css  publish\ >nul 2>&1
-copy /y LICENSE.txt publish\ >nul 2>&1
-echo      Done.
-
-:: Step 2b — Copy hidapi.dll (HIDAPI library for MSI ARGB header control)
-echo  [3/4] Checking for hidapi.dll...
-if exist "hidapi.dll" (
-    copy /y hidapi.dll publish\ >nul 2>&1
-    echo      hidapi.dll copied.
+:: ── Step 1: PawnIO sensor driver installer (bundled into the setup) ───────────
+echo  [1/4] Checking PawnIO_setup.exe...
+if not exist "PawnIO_setup.exe" (
+    echo      Downloading from github.com/namazso/PawnIO.Setup ...
+    powershell -NoProfile -Command "Invoke-WebRequest -UseBasicParsing 'https://github.com/namazso/PawnIO.Setup/releases/latest/download/PawnIO_setup.exe' -OutFile 'PawnIO_setup.exe'"
+    if not exist "PawnIO_setup.exe" (
+        echo      [!] Download failed. Vexis will download PawnIO on first launch instead.
+    )
 ) else (
-    echo      [!] hidapi.dll not found in project root.
-    echo          MSI motherboard RGB will not work without it.
-    echo          Download from: https://github.com/libusb/hidapi/releases
-    echo          Extract hidapi.dll ^(x64^) and place it here: %~dp0hidapi.dll
+    echo      Found.
 )
+if not exist "hidapi.dll" (
+    echo      [!] hidapi.dll missing - MSI motherboard RGB will not work.
+)
+echo.
 
-:: Step 4 — Build installer
-echo  [4/4] Building installer...
+:: ── Step 2: Publish ────────────────────────────────────────────────────────────
+echo  [2/4] Publishing app (Release, win-x64, self-contained)...
+taskkill /IM Vexis.exe /F >nul 2>&1
+if exist publish rmdir /s /q publish
+dotnet publish Pcmonitor2_0.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o publish
+if errorlevel 1 (
+    echo.
+    echo  [!] Publish failed - see the errors above.
+    goto :fail
+)
+copy /y LICENSE.txt publish\ >nul
+echo.
 
-:: Try common NSIS locations
-set NSIS=""
-if exist "C:\Program Files (x86)\NSIS\makensis.exe" set NSIS="C:\Program Files (x86)\NSIS\makensis.exe"
-if exist "C:\Program Files\NSIS\makensis.exe"       set NSIS="C:\Program Files\NSIS\makensis.exe"
-
-if %NSIS%=="" (
+:: ── Step 3: Find NSIS ─────────────────────────────────────────────────────────
+echo  [3/4] Looking for NSIS...
+set "NSIS="
+if exist "%ProgramFiles(x86)%\NSIS\makensis.exe" set "NSIS=%ProgramFiles(x86)%\NSIS\makensis.exe"
+if exist "%ProgramFiles%\NSIS\makensis.exe"      set "NSIS=%ProgramFiles%\NSIS\makensis.exe"
+if not defined NSIS (
     echo.
-    echo  [!] NSIS not found. To build an installer:
-    echo      1. Download NSIS from https://nsis.sourceforge.io/Download
-    echo      2. Install it
-    echo      3. Run this script again
+    echo  [!] NSIS not found. Install it from https://nsis.sourceforge.io/Download
+    echo      then run this script again.
     echo.
-    echo  For now, your publish folder is ready to zip and share:
-    echo  %~dp0publish\
-    echo.
+    echo  The app itself is built in: %~dp0publish\
     explorer "%~dp0publish"
-    pause
-    exit /b 0
+    goto :fail
 )
 
-%NSIS% installer.nsi
-if %errorlevel% neq 0 (
-    echo  [!] NSIS build failed.
-    pause
-    exit /b 1
+:: ── Step 4: Build installer ────────────────────────────────────────────────────
+echo  [4/4] Building installer...
+"%NSIS%" /V2 /DVERSION=%VERSION% installer.nsi
+if errorlevel 1 (
+    echo  [!] NSIS build failed - see the errors above.
+    goto :fail
 )
 
 echo.
 echo  ============================================
-echo   SUCCESS — PCMonitor-Setup.exe is ready!
+echo   SUCCESS - VexisHM-Setup.exe  (v%VERSION%)
 echo  ============================================
 echo.
-echo  Share PCMonitor-Setup.exe with anyone.
-echo  They just double-click and follow the wizard.
+echo  Next: create a GitHub release tagged v%VERSION% and attach
+echo  VexisHM-Setup.exe so the in-app update check sees it.
 echo.
-explorer "%~dp0"
+explorer /select,"%~dp0VexisHM-Setup.exe"
 pause
+exit /b 0
+
+:fail
+echo.
+pause
+exit /b 1
