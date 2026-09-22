@@ -541,11 +541,13 @@ function buildDynamicBars(coresObj, hwInfo) {
 
   const isAmd   = hwInfo?.vendor === 'amd';
   const ccdCnt  = hwInfo?.ccdCount || 0;
-  const hasCcds = isAmd && ccdCnt >= 2 && keys.length === 16;
+  // Two CCDs with an even core split (e.g. 6+6, 8+8). Cores are numbered CCD by CCD.
+  const hasCcds = isAmd && ccdCnt === 2 && keys.length >= 4 && keys.length % 2 === 0;
+  const perCcd  = hasCcds ? keys.length / 2 : keys.length;
 
   CORES_META = keys.map((id, i) => ({
     id,
-    ccd: hasCcds ? (i < 8 ? 0 : 1) : 0,
+    ccd: hasCcds ? (i < perCcd ? 0 : 1) : 0,
     rank: coresObj[id]?.rank || 0
   }));
 
@@ -563,8 +565,9 @@ function buildDynamicBars(coresObj, hwInfo) {
   if (hasCcds) {
     if (ccd0lbl) ccd0lbl.textContent = 'CCD0';
     if (ccd1lbl) ccd1lbl.textContent = 'CCD1';
-    if (ccd0type) ccd0type.textContent = 'V-Cache';
-    if (ccd1type) ccd1type.textContent = 'Compute';
+    // Dual-CCD X3D parts have the 3D V-Cache on CCD0 only
+    if (ccd0type) ccd0type.textContent = hwInfo?.x3d ? 'V-Cache' : '';
+    if (ccd1type) ccd1type.textContent = hwInfo?.x3d ? 'Compute' : '';
     const ccd1wrap = document.getElementById('ccd1wrap');
     if (ccd1wrap) ccd1wrap.style.display = '';
   } else {

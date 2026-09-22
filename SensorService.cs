@@ -17,6 +17,7 @@ public class HwInfo
     public int    ramMhz  { get; set; }
     public string ramType { get; set; } = "";
     public int    ccdCount  { get; set; } = 0;   // AMD CCDs, 0 for Intel/other
+    public bool   x3d       { get; set; } = false; // AMD 3D V-Cache part
     public bool   driverOk  { get; set; } = false; // true = LHM ring-0 driver reading OK
 }
 
@@ -69,13 +70,6 @@ public class SensorService : IDisposable
 
     public IEnumerable<IHardware> AllHardware => _computer.Hardware;
     public SensorData GetLatestData() => _latest;
-
-    // AMD 9950X3D specific rank table
-    private static readonly Dictionary<int, (int displayId, int rank)> _amd9950x3dMap = new()
-    {
-        {1,(0,12)},{2,(1,11)},{3,(2,8)},{4,(3,10)},{5,(4,13)},{6,(5,9)},{7,(6,15)},{8,(7,14)},
-        {9,(8,2)},{10,(9,1)},{11,(10,3)},{12,(11,5)},{13,(12,4)},{14,(13,1)},{15,(14,6)},{16,(15,7)}
-    };
 
     // Matches: "Core #1", "CPU Core #1", "P-Core #1", "E-Core #1" (Intel 12th gen+)
     private static readonly Regex CoreClockRe = new(
@@ -191,12 +185,12 @@ public class SensorService : IDisposable
                 // CCD count for AMD
                 if (_hwInfo.vendor == "amd")
                 {
-                    var ccdTemps = hw.Sensors
+                    // One "CCDn (Tdie)" sensor per CCD — don't count "CCDs Max/Average"
+                    _hwInfo.ccdCount = hw.Sensors
                         .Where(s => s.SensorType == SensorType.Temperature &&
-                                    (s.Name.Contains("CCD") || s.Name.Contains("Ccd")))
-                        .Select(s => s.Name)
-                        .Distinct().Count();
-                    _hwInfo.ccdCount = ccdTemps;
+                                    Regex.IsMatch(s.Name, @"^CCD\d+", RegexOptions.IgnoreCase))
+                        .Select(s => s.Name).Distinct().Count();
+                    _hwInfo.x3d = name.Contains("X3D", StringComparison.OrdinalIgnoreCase);
                 }
 
                 // Check if driver loaded OK (any temp sensor has a real value)
@@ -303,13 +297,6 @@ public class SensorService : IDisposable
             .OrderBy(i => i).ToList();
 
         _hwInfo.cores = genericIndices.Count;
-
-        if (_hwInfo.cpu.Contains("9950") && genericIndices.Count == 16)
-        {
-            _coreMap = new(_amd9950x3dMap);
-            Console.WriteLine("[hw]   --> Using AMD 9950X3D rank map");
-            return;
-        }
 
         int did = 0;
         foreach (int idx in genericIndices)

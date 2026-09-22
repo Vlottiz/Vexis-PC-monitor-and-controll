@@ -61,6 +61,30 @@ Section "Vexis Hardware Monitoring" SecMain
   ; Copy all published files
   File /r "publish\*.*"
 
+  ; WebView2 runtime — the UI needs it. Always on Windows 11; may be missing on
+  ; Windows 10. The bootstrapper (downloaded by build-installer.bat) fetches the
+  ; current runtime from Microsoft, so this step needs internet on such PCs.
+  ; Registered under WOW6432Node (NSIS default 32-bit view) or per-user.
+  ReadRegStr $3 HKLM "SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" "pv"
+  ${If} $3 == ""
+  ${OrIf} $3 == "0.0.0.0"
+    ReadRegStr $3 HKCU "Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" "pv"
+  ${EndIf}
+  ${If} $3 == ""
+  ${OrIf} $3 == "0.0.0.0"
+!if /FileExists "MicrosoftEdgeWebview2Setup.exe"
+    DetailPrint "Installing Microsoft Edge WebView2 Runtime..."
+    InitPluginsDir
+    File "/oname=$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe" "MicrosoftEdgeWebview2Setup.exe"
+    ExecWait '"$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe" /silent /install' $1
+    DetailPrint "WebView2 setup exit code: $1"
+!else
+    DetailPrint "WebView2 Runtime missing - Vexis will show a download link on first launch."
+!endif
+  ${Else}
+    DetailPrint "WebView2 Runtime $3 already installed."
+  ${EndIf}
+
   ; Sensor driver — PawnIO (signed, works with Memory Integrity ON).
   ; $0 = PawnIO registered (uninstall key), $2 = driver service present.
   ; Older Vexis builds deleted the service but left the registration, so

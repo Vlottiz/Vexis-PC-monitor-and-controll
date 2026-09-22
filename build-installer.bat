@@ -19,7 +19,7 @@ echo Version: %VERSION% >> "%LOG%"
 echo.
 
 rem --- Step 1: PawnIO sensor driver installer (bundled into the setup) -------
-echo  [1/4] Checking PawnIO_setup.exe...
+echo  [1/4] Checking bundled installers (PawnIO, WebView2)...
 if exist "PawnIO_setup.exe" goto :have_pawnio
 echo      Downloading from github.com/namazso/PawnIO.Setup ...
 curl.exe -L --fail -o PawnIO_setup.exe https://github.com/namazso/PawnIO.Setup/releases/latest/download/PawnIO_setup.exe >> "%LOG%" 2>&1
@@ -29,6 +29,11 @@ goto :after_pawnio
 echo      Found.
 :after_pawnio
 if not exist "hidapi.dll" echo      [!] hidapi.dll missing - MSI motherboard RGB will not work.
+if exist "MicrosoftEdgeWebview2Setup.exe" goto :have_webview2
+echo      Downloading WebView2 bootstrapper (for Windows 10 PCs without it)...
+curl.exe -L --fail -o MicrosoftEdgeWebview2Setup.exe "https://go.microsoft.com/fwlink/p/?LinkId=2124703" >> "%LOG%" 2>&1
+if not exist "MicrosoftEdgeWebview2Setup.exe" echo      [!] WebView2 bootstrapper download failed - installer will skip that step.
+:have_webview2
 echo.
 
 rem --- Step 2: Publish ------------------------------------------------------
