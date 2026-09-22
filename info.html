@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store">
+<title>PC Monitor — Info</title>
+<link rel="stylesheet" href="/ui.css?v=8">
+<style>
+  .credit-row { display:flex;align-items:flex-start;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(68,51,0,.15); }
+  .credit-row:last-child { border-bottom:none; }
+  .credit-name { font-size:11px;color:var(--label);font-weight:500; }
+  .credit-role { font-size:9px;color:var(--label-dim);margin-top:2px;letter-spacing:.04em;line-height:1.5; }
+  .credit-badge { font-size:8px;padding:2px 7px;border-radius:10px;background:rgba(68,51,0,.2);border:1px solid rgba(68,51,0,.3);color:var(--label-dim);letter-spacing:.06em;white-space:nowrap; }
+  .update-dot { width:8px;height:8px;border-radius:50%;background:#333;flex-shrink:0;transition:background .3s; }
+  .update-dot.ok  { background:#44aa66;box-shadow:0 0 6px #44aa66; }
+  .update-dot.new { background:#ffaa00;box-shadow:0 0 6px #ffaa00; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="page-header">
+    <div class="page-title">◌ Info & Support</div>
+    <div class="page-subtitle">v2.0 · Open Source · MIT License</div>
+  </div>
+  <div class="page-body">
+
+    <!-- Support -->
+    <div class="card">
+      <div class="card-header"><span class="card-title">SUPPORT THE PROJECT</span></div>
+      <div style="font-size:10px;color:var(--label-dim);margin-bottom:14px;line-height:1.8">
+        PC Monitor is completely free and open source. If you find it useful,
+        consider buying me a coffee — it helps keep development going and motivates new features.
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;margin-bottom:8px"
+        onclick="sendToHost({type:'openUrl',url:'https://buymeacoffee.com/reyobu'})">
+        ☕ Buy Me a Coffee
+      </button>
+      <button class="btn btn-ghost" style="width:100%;justify-content:center"
+        onclick="sendToHost({type:'openUrl',url:'https://github.com/Vlottiz/pc-monitor'})">
+        ⊞ View on GitHub
+      </button>
+    </div>
+
+    <!-- Version / Update checker -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">VERSION</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="update-dot" id="update-dot"></div>
+          <span id="update-status" style="font-size:9px;color:var(--label-dim);letter-spacing:.06em">CHECKING...</span>
+        </div>
+      </div>
+      <div class="info-row"><span class="info-key">Installed</span><span class="info-val" id="ver-current">v2.0.0</span></div>
+      <div class="info-row"><span class="info-key">Latest on GitHub</span><span class="info-val" id="ver-latest">—</span></div>
+      <div id="update-btn-wrap" style="display:none;margin-top:10px">
+        <button class="btn btn-primary" style="width:100%;justify-content:center"
+          onclick="sendToHost({type:'openUrl',url:'https://github.com/Vlottiz/pc-monitor/releases/latest'})">
+          ↓ Download Latest Release
+        </button>
+      </div>
+    </div>
+
+    <!-- About -->
+    <div class="card">
+      <div class="card-header"><span class="card-title">ABOUT</span><span class="badge badge-ok">v2.0.0</span></div>
+      <div class="info-row"><span class="info-key">Author</span><span class="info-val">Vlottiz</span></div>
+      <div class="info-row"><span class="info-key">License</span><span class="info-val">MIT</span></div>
+      <div class="info-row"><span class="info-key">Platform</span><span class="info-val">Windows 10/11 · .NET 8</span></div>
+      <div class="info-row">
+        <span class="info-key">GitHub</span>
+        <span class="info-val" style="color:var(--gpu-acc);cursor:pointer"
+          onclick="sendToHost({type:'openUrl',url:'https://github.com/Vlottiz/pc-monitor'})">
+          github.com/Vlottiz/pc-monitor ↗
+        </span>
+      </div>
+    </div>
+
+    <!-- Credits -->
+    <div class="card">
+      <div class="card-header"><span class="card-title">CREDITS & ATTRIBUTIONS</span></div>
+
+      <div class="credit-row">
+        <div style="flex:1">
+          <div class="credit-name">LibreHardwareMonitor</div>
+          <div class="credit-role">Hardware sensor reading — CPU, GPU, fans, temperatures</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;margin-left:8px">
+          <span class="credit-badge">MIT</span>
+          <span class="credit-badge" style="cursor:pointer;color:var(--gpu-acc)"
+            onclick="sendToHost({type:'openUrl',url:'https://github.com/LibreHardwareMonitor/LibreHardwareMonitor'})">GitHub ↗</span>
+        </div>
+      </div>
+
+      <div class="credit-row">
+        <div style="flex:1">
+          <div class="credit-name">Microsoft WebView2</div>
+          <div class="credit-role">Embedded browser engine powering the entire UI</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;margin-left:8px">
+          <span class="credit-badge">FREE</span>
+          <span class="credit-badge">Microsoft</span>
+        </div>
+      </div>
+
+      <div class="credit-row">
+        <div style="flex:1">
+          <div class="credit-name">System.Management (WMI)</div>
+          <div class="credit-role">CPU load, RAM info, Intel clock fallback</div>
+        </div>
+        <span class="credit-badge" style="margin-left:8px">MIT · Microsoft</span>
+      </div>
+
+      <div class="credit-row">
+        <div style="flex:1">
+          <div class="credit-name">NSIS Installer</div>
+          <div class="credit-role">Windows installer system</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;margin-left:8px">
+          <span class="credit-badge">zLib</span>
+          <span class="credit-badge" style="cursor:pointer;color:var(--gpu-acc)"
+            onclick="sendToHost({type:'openUrl',url:'https://nsis.sourceforge.io'})">Site ↗</span>
+        </div>
+      </div>
+
+      <div class="credit-row">
+        <div style="flex:1">
+          <div class="credit-name">Claude — Anthropic</div>
+          <div class="credit-role">AI assistant — accelerated UI development, C# debugging, and implementation. All ideas, design, and features directed by Vlottiz.</div>
+        </div>
+        <span class="credit-badge" style="cursor:pointer;color:var(--gpu-acc);margin-left:8px"
+          onclick="sendToHost({type:'openUrl',url:'https://claude.ai'})">claude.ai ↗</span>
+      </div>
+
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(68,51,0,.2);font-size:9px;color:var(--label-dim);line-height:1.7">
+        All ideas, feature design, and project direction by <strong style="color:var(--label)">Vlottiz</strong>.
+        Built on the shoulders of an incredible open source community. Thank you to every contributor.
+      </div>
+    </div>
+
+    <!-- Requirements -->
+    <div class="card">
+      <div class="card-header"><span class="card-title">REQUIREMENTS</span></div>
+      <div class="info-row"><span class="info-key">OS</span><span class="info-val">Windows 10/11 (64-bit)</span></div>
+      <div class="info-row"><span class="info-key">Runtime</span><span class="info-val">.NET 8 (bundled)</span></div>
+      <div class="info-row"><span class="info-key">WebView2</span><span class="info-val">Pre-installed on Win11</span></div>
+      <div class="info-row"><span class="info-key">Privileges</span><span class="info-val">Admin (auto-elevates on launch)</span></div>
+      <div class="info-row">
+        <span class="info-key">Intel temps</span>
+        <span class="info-val" style="color:var(--temp-warn)">Requires kernel driver — see ℹ in app</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="/nav.js?v=8" data-page="info"></script>
+<script>
+const CURRENT_VERSION = 'v2.0.0';
+const GITHUB_RELEASES = 'https://api.github.com/repos/Vlottiz/pc-monitor/releases/latest';
+
+async function checkUpdate() {
+  const dot = document.getElementById('update-dot');
+  const txt = document.getElementById('update-status');
+  const lv  = document.getElementById('ver-latest');
+  try {
+    const res  = await fetch(GITHUB_RELEASES, {signal: AbortSignal.timeout(8000)});
+    if (!res.ok) throw new Error('No releases');
+    const data = await res.json();
+    const latest = data.tag_name || '';
+    lv.textContent = latest || '—';
+    if (latest && latest !== CURRENT_VERSION) {
+      dot.className = 'update-dot new';
+      txt.textContent = 'UPDATE AVAILABLE'; txt.style.color = '#ffaa00';
+      document.getElementById('update-btn-wrap').style.display = 'block';
+    } else if (latest) {
+      dot.className = 'update-dot ok';
+      txt.textContent = 'UP TO DATE'; txt.style.color = '#44aa66';
+    } else {
+      txt.textContent = 'NO RELEASES YET';
+    }
+  } catch {
+    txt.textContent = 'OFFLINE'; lv.textContent = '—';
+  }
+}
+
+function receiveData(d) {}
+function onConfigReceived(cfg) { navOnConfig(cfg); }
+if (IS_WEBVIEW) {
+  window.chrome.webview.addEventListener('message', e => {
+    try { const m=JSON.parse(e.data); if(m.type==='config')onConfigReceived(m); } catch {}
+  });
+  sendToHost({type:'requestConfig'});
+}
+setTimeout(checkUpdate, 600);
+</script>
+</body>
+</html>

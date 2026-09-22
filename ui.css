@@ -1,0 +1,315 @@
+/* ── PC Monitor — Shared UI Design System ── */
+/* Include via <link rel="stylesheet" href="/ui.css"> on every page */
+
+:root {
+  /* ── Font Scale System ── */
+  --fs-base: 1;          /* user-controlled multiplier, default 1 */
+  --fs-xs:   calc(8px  * var(--fs-base));
+  --fs-sm:   calc(9px  * var(--fs-base));
+  --fs-md:   calc(11px * var(--fs-base));
+  --fs-body: calc(13px * var(--fs-base));
+  --fs-lg:   calc(15px * var(--fs-base));
+  --fs-xl:   calc(18px * var(--fs-base));
+  --fs-2xl:  calc(22px * var(--fs-base));
+  --fs-3xl:  calc(28px * var(--fs-base));
+  --fs-4xl:  calc(42px * var(--fs-base));
+
+  --bg:#0a0808; --surface:#140f08; --surface2:#1e1608;
+  --border:#443300; --border-bright:#886600;
+  --label:#aa7700; --label-dim:#665500;
+  --text:#e8d080; --text-dim:#886600; --text-muted:#443300;
+  --header-title:#ffcc00; --title-glow:#ffcc00;
+  --line-col1:#ffcc00; --line-col2:#00ffcc;
+  --temp-low:#00aacc; --temp-warn:#ffaa00; --temp-hot:#ff4444;
+  --gpu-acc:#00ffcc; --mem-acc:#ffaa00;
+  --peak-col:#ffcc00; --avg-col:#00ffcc; --pwr-col:#ff6600;
+  --card-bg:#140f08; --card-title:#886600;
+  --glow-col:#ffcc00; --divider-line:#443300;
+  --bar-bg:#0a0600; --temp-val:#00ddaa;
+  --sum-lbl:#aa7700;
+}
+
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+html, body {
+  height: 100%; width: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, monospace;
+  font-size: var(--fs-body);
+  overflow: hidden;
+}
+
+/* ── Page shell ── */
+.page {
+  height: 100vh;
+  display: grid;
+  grid-template-rows: 56px 1fr;
+}
+
+/* ── Page header ── */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px 0 44px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  position: relative;
+}
+.page-header::after {
+  content: '';
+  position: absolute;
+  bottom: -1px; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--line-col1), var(--line-col2), var(--line-col1), transparent);
+}
+.page-title {
+  font-size: var(--fs-md);
+  font-weight: 700;
+  letter-spacing: .22em;
+  color: var(--header-title);
+  text-shadow: 0 0 16px var(--title-glow), 0 0 4px var(--header-title);
+  text-transform: uppercase;
+}
+.page-subtitle {
+  font-size: var(--fs-md);
+  color: var(--label-dim);
+  letter-spacing: .1em;
+}
+.page-time {
+  font-size: var(--fs-body);
+  color: var(--label-dim);
+  letter-spacing: .06em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Page body (scrollable) ── */
+.page-body {
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.page-body::-webkit-scrollbar { width: 4px; }
+.page-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ── Cards ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 14px 16px;
+  position: relative;
+}
+.card:hover { border-color: var(--border-bright); }
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 12px; right: 12px; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border-bright), transparent);
+  opacity: 0.4;
+}
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.card-title {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--card-title);
+}
+.card-grid { display: grid; gap: 12px; }
+.card-grid-2 { grid-template-columns: 1fr 1fr; }
+.card-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+.card-grid-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+
+/* ── Stat blocks ── */
+.stat { display: flex; flex-direction: column; gap: 2px; }
+.stat-label {
+  font-size: var(--fs-sm);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--label-dim);
+}
+.stat-value {
+  font-size: var(--fs-2xl);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: .02em;
+}
+.stat-value.sm { font-size: var(--fs-lg); }
+.stat-value.lg { font-size: var(--fs-3xl); }
+.stat-unit {
+  font-size: var(--fs-md);
+  color: var(--label-dim);
+  margin-left: 2px;
+}
+.stat-sub {
+  font-size: var(--fs-md);
+  color: var(--label-dim);
+  margin-top: 1px;
+}
+
+/* ── Progress bars ── */
+.bar-wrap {
+  background: var(--bar-bg);
+  border-radius: 3px;
+  height: 5px;
+  overflow: hidden;
+  border: 1px solid rgba(68,51,0,0.4);
+  margin-top: 6px;
+}
+.bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width .5s ease;
+}
+.bar-temp { background: linear-gradient(90deg, var(--temp-low), var(--temp-warn), var(--temp-hot)); }
+.bar-clk  { background: linear-gradient(90deg, var(--surface2), var(--peak-col)); }
+.bar-gpu  { background: linear-gradient(90deg, var(--surface2), var(--gpu-acc)); }
+.bar-mem  { background: linear-gradient(90deg, var(--surface2), var(--mem-acc)); }
+
+/* ── Divider ── */
+.divider {
+  height: 1px;
+  background: var(--divider-line);
+  margin: 10px 0;
+}
+
+/* ── Row layouts ── */
+.row { display: flex; align-items: center; gap: 8px; }
+.row-between { display: flex; align-items: center; justify-content: space-between; }
+.col { display: flex; flex-direction: column; gap: 4px; }
+
+/* ── Badges ── */
+.badge {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px; border-radius: 10px;
+  font-size: var(--fs-sm); letter-spacing: .08em; font-weight: 600;
+  text-transform: uppercase;
+}
+.badge-ok   { background: rgba(0,170,100,0.15); border: 1px solid rgba(0,170,100,0.3); color: #00aa64; }
+.badge-warn { background: rgba(255,170,0,0.15);  border: 1px solid rgba(255,170,0,0.3);  color: #ffaa00; }
+.badge-hot  { background: rgba(255,68,68,0.15);  border: 1px solid rgba(255,68,68,0.3);  color: #ff4444; }
+.badge-dim  { background: rgba(68,51,0,0.15);    border: 1px solid rgba(68,51,0,0.3);    color: var(--label-dim); }
+
+/* ── Buttons ── */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border-radius: 4px; cursor: pointer;
+  font-size: var(--fs-md); letter-spacing: .1em; font-family: inherit;
+  font-weight: 600; text-transform: uppercase;
+  transition: all .15s;
+}
+.btn-primary {
+  background: rgba(255,204,0,0.1); border: 1px solid var(--border-bright);
+  color: var(--header-title);
+}
+.btn-primary:hover { background: rgba(255,204,0,0.2); }
+.btn-ghost {
+  background: transparent; border: 1px solid var(--border);
+  color: var(--label);
+}
+.btn-ghost:hover { border-color: var(--border-bright); color: var(--header-title); }
+.btn-danger {
+  background: rgba(180,20,20,0.1); border: 1px solid rgba(180,20,20,0.3);
+  color: #cc4444;
+}
+.btn-danger:hover { background: rgba(180,20,20,0.25); }
+.btn:disabled { opacity: 0.35; cursor: default; }
+
+/* ── Table ── */
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table th {
+  font-size: var(--fs-sm); letter-spacing: .14em; text-transform: uppercase;
+  color: var(--label-dim); padding: 6px 10px; text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.data-table th:not(:first-child) { text-align: right; }
+.data-table td { padding: 7px 10px; font-size: var(--fs-md); border-bottom: 1px solid rgba(68,51,0,0.2); }
+.data-table td:not(:first-child) { text-align: right; }
+.data-table tr:hover td { background: rgba(68,51,0,0.15); }
+.data-table .group-row td {
+  font-size: var(--fs-sm); letter-spacing: .18em; text-transform: uppercase;
+  color: var(--border-bright); background: rgba(0,0,0,0.3); padding: 5px 10px;
+  border-bottom: 1px solid rgba(68,51,0,0.3);
+}
+
+/* ── Form controls ── */
+.select {
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); font-size: var(--fs-md); padding: 5px 8px;
+  border-radius: 4px; cursor: pointer; outline: none;
+  font-family: inherit;
+}
+.select:focus { border-color: var(--border-bright); }
+.range-slider {
+  width: 100%; height: 4px; -webkit-appearance: none; appearance: none;
+  background: linear-gradient(90deg, var(--surface2), var(--mem-acc));
+  border-radius: 2px; cursor: pointer; outline: none;
+}
+.range-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--mem-acc); cursor: pointer; border: 2px solid var(--surface);
+}
+.label-row {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 6px;
+}
+.control-label { font-size: var(--fs-md); color: var(--label); }
+.control-value { font-size: var(--fs-md); color: var(--mem-acc); font-weight: 600; }
+
+/* ── Quick nav tiles ── */
+.nav-tiles {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+.nav-tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 6px 10px;
+  cursor: pointer; text-align: center;
+  transition: border-color .2s, background .2s;
+}
+.nav-tile:hover { border-color: var(--border-bright); background: var(--surface2); }
+.nav-tile-icon { font-size: var(--fs-xl); color: var(--label-dim); margin-bottom: 5px; display: block; }
+.nav-tile-label { font-size: var(--fs-xs); letter-spacing: .12em; color: var(--card-title); text-transform: uppercase; }
+
+/* ── Accent glow text ── */
+.glow { text-shadow: 0 0 12px currentColor; }
+
+/* ── Info rows ── */
+.info-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 5px 0; border-bottom: 1px solid rgba(68,51,0,0.2);
+}
+.info-row:last-child { border-bottom: none; }
+.info-key { font-size: var(--fs-md); color: var(--label-dim); }
+.info-val { font-size: var(--fs-md); color: var(--text); font-weight: 500; }
+
+/* ── Empty state ── */
+.empty-state {
+  text-align: center; padding: 40px 20px;
+  color: var(--label-dim); font-size: var(--fs-md); letter-spacing: .08em;
+}
+
+/* ── Text elements use --text CSS variable ── */
+/* Set by theme presets — light themes set dark values, dark themes set light values */
+
+/* ── Page entry animation (frosted transition effect) ── */
+@keyframes pcm-enter {
+  from { opacity: 0; transform: scale(0.985); filter: blur(6px); }
+  to   { opacity: 1; transform: scale(1);     filter: blur(0);   }
+}
+.page {
+  animation: pcm-enter 0.38s cubic-bezier(0.4, 0, 0.2, 1) both;
+}

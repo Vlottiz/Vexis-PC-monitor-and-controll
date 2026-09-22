@@ -1,0 +1,3 @@
+*add a memory isolation switch to disable auto turn off for users who dont want security vulnerabilities 
+
+Ui is fantastic

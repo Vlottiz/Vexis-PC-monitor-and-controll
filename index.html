@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PC Monitor</title>
+<style>
+:root {
+  --scale:1;
+  --bg:#0a0808;--card-bg:#120e08;--border:#443300;--label:#aa7700;
+  --divider-line:#443300;--divider-lbl:#ffcc00;
+  --header-title:#ffcc00;--header-sub:#aa8800;--header-acc:#00ffcc;--header-time:#776600;
+  --title-glow:#ffcc00;--glow-col:#ffcc00;
+  --line-col1:#ffcc00;--line-col2:#00ffcc;
+  --ccd-lbl:#ffcc00;--core-lbl:#aa8800;--bar-bg:#120a00;--temp-val:#00ddaa;
+  --temp-low:#00aacc;--temp-warn:#00ffcc;
+  --sum-lbl:#aa7700;--peak-col:#ffcc00;--avg-col:#00ffcc;--pwr-col:#ff6600;
+  --gpu-acc:#00ffcc;--mem-acc:#ffaa00;--card-title:#aa7700;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100%;overflow:hidden;}
+body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;background:var(--bg);color:#eeddff;font-family:monospace;padding:8px;display:flex;flex-direction:column;transform:scale(var(--scale));transform-origin:top left;width:calc((100vw - 24px)/var(--scale));height:calc(100vh/var(--scale));padding-right:24px;}
+#root{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.divider{display:flex;align-items:center;gap:8px;margin:6px 0 4px;}
+.divider-line{flex:1;height:1px;background:var(--divider-line);}
+.divider-label{font-size:10px;color:var(--divider-lbl);letter-spacing:.15em;}
+.stat-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;}
+.stat-label{font-size:10px;color:var(--label);text-transform:uppercase;letter-spacing:.05em;}
+.stat-val{font-size:12px;font-weight:600;text-shadow:0 0 8px var(--glow-col);}
+.card{background:var(--card-bg);border:1px solid var(--border);border-radius:3px;padding:8px 10px;}
+.card-title{font-size:9px;color:var(--card-title);letter-spacing:.12em;margin-bottom:6px;text-align:center;}
+#hcpu,#hpwr,#peakclk,#avgclk,#pkgpwr,#sgpuT,#sgpuV,#sgpuP,#sgpuC{text-shadow:0 0 14px var(--glow-col),0 0 5px var(--glow-col);}
+.accent-line{height:1px;background:linear-gradient(90deg,transparent,var(--line-col1),var(--line-col2),var(--line-col1),transparent);}
+#status{position:fixed;bottom:6px;right:8px;font-size:8px;letter-spacing:.08em;color:#2a0a3a;}
+#status.ok{color:#2a0a3a;}
+#update-pulse{text-align:center;font-size:7px;font-family:monospace;color:#3a1540;letter-spacing:.12em;margin:-1px 0 3px;opacity:0.18;transition:opacity 0.6s ease;flex-shrink:0;}
+#update-pulse.flash{opacity:0.55;transition:opacity 0s;}
+#settings-btn{position:fixed;top:6px;right:8px;z-index:1500;background:none;border:none;cursor:pointer;font-size:14px;color:#cc88aa;padding:4px;line-height:1;opacity:0.2;transition:opacity .2s;}
+#settings-btn:hover{opacity:0.9;}
+@keyframes gearBlink{0%,100%{opacity:0.2;}50%{opacity:1;text-shadow:0 0 8px var(--glow-col),0 0 16px var(--line-col1);}}
+#settings-btn.blinking{animation:gearBlink 0.7s ease-in-out infinite;}
+#settings-drawer{position:fixed;left:0;right:0;bottom:0;top:0;z-index:1600;background:rgba(0,0,0,0.94);backdrop-filter:blur(10px);display:flex;flex-direction:column;transform:translateY(100%);transition:transform 0.3s ease;}
+#settings-drawer.open{transform:translateY(0);}
+#drawer-handle{height:22px;display:flex;align-items:center;justify-content:center;cursor:ns-resize;flex-shrink:0;background:rgba(0,0,0,0.6);border-bottom:1px solid #1a0828;user-select:none;touch-action:none;}
+#drawer-grip{font-size:14px;color:#2a0a3a;letter-spacing:6px;transition:color .2s;}
+#drawer-handle:hover #drawer-grip{color:var(--line-col1);}
+#settings-header{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;border-bottom:1px solid #3a1540;flex-shrink:0;background:rgba(0,0,0,0.7);}
+#settings-header>span{font-size:11px;color:#cc88aa;letter-spacing:.2em;}
+#settings-header-btns{display:flex;gap:5px;}
+#settings-header-btns button{background:#1a0828;border:1px solid #5c2278;color:#cc88aa;font-size:8px;padding:4px 8px;border-radius:2px;cursor:pointer;letter-spacing:.08em;font-family:monospace;}
+#settings-header-btns button:hover{background:#2a0a3a;}
+#settings-header-btns button.active{background:#3a0060;border-color:var(--line-col1);color:#dd88ff;}
+.tab-bar{display:flex;border-bottom:1px solid #2a0a2a;flex-shrink:0;background:rgba(0,0,0,0.7);}
+.tab-btn{flex:1;padding:7px 4px;font-size:9px;color:#4a1a4a;background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;letter-spacing:.1em;font-family:monospace;transition:color .2s,border-color .2s;}
+.tab-btn:hover{color:#8a4a6a;}
+.tab-btn.active{color:#cc88aa;border-bottom-color:var(--line-col1);}
+.tab-panel{display:none;flex:1;overflow-y:auto;padding:10px 14px;}
+.tab-panel.active{display:block;}
+.settings-section{margin-bottom:14px;}
+.settings-section-title{font-size:9px;color:#8a3a5a;letter-spacing:.2em;margin-bottom:8px;text-transform:uppercase;display:flex;align-items:center;gap:8px;}
+.settings-section-title::after{content:'';flex:1;height:1px;background:#2a0a2a;}
+.grad-preview{width:100%;height:10px;border-radius:3px;margin-bottom:8px;border:1px solid #2a0a2a;}
+.grad-row{display:flex;align-items:center;gap:6px;background:#0f060f;border:1px solid #2a0a2a;border-radius:3px;padding:6px 8px;margin-bottom:4px;}
+.grad-row label{font-size:8px;color:#9a6a8a;flex:1;}
+.grad-row input[type=color]{width:22px;height:18px;border:1px solid #5c2278;border-radius:2px;cursor:pointer;background:none;padding:1px;flex-shrink:0;}
+.grad-row .c-reset{background:none;border:none;color:#4a1a4a;cursor:pointer;font-size:10px;padding:0 1px;transition:color .15s;}
+.grad-row .c-reset:hover{color:#cc88aa;}
+.color-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+.color-row{background:#0f060f;border:1px solid #2a0a2a;border-radius:3px;padding:5px 8px;transition:border-color .2s;}
+.color-row:hover{border-color:#5c2278;}
+.color-row-top{display:flex;align-items:center;gap:5px;}
+.color-row label{font-size:8px;color:#9a6a8a;flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.c-preview{width:20px;height:16px;border-radius:2px;flex-shrink:0;border:1px solid #2a0a2a;font-size:7px;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+.c-reset{background:none;border:none;color:#4a1a4a;cursor:pointer;font-size:10px;padding:0 1px;transition:color .15s;flex-shrink:0;}
+.c-reset:hover{color:#cc88aa;}
+.color-row input[type=color]{width:22px;height:18px;border:1px solid #5c2278;border-radius:2px;cursor:pointer;background:none;padding:1px;flex-shrink:0;}
+.bright-wrap{margin-top:4px;}
+.bright-slider{width:100%;height:3px;-webkit-appearance:none;appearance:none;border-radius:2px;cursor:pointer;outline:none;background:linear-gradient(90deg,#000,transparent 50%,#fff);}
+.bright-slider::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;border-radius:50%;background:#cc88aa;cursor:pointer;border:1px solid #5c2278;}
+.setting-row{display:flex;align-items:center;justify-content:space-between;background:#0f060f;border:1px solid #2a0a2a;border-radius:3px;padding:6px 10px;gap:8px;margin-bottom:6px;}
+.setting-row label{font-size:9px;color:#9a6a8a;flex:1;}
+.setting-row select{background:#1a0828;border:1px solid #5c2278;color:#cc88aa;font-size:9px;padding:3px 6px;border-radius:2px;font-family:monospace;cursor:pointer;outline:none;}
+.preset-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:14px;}
+.preset-btn{background:#0f060f;border:1px solid #2a0a2a;border-radius:3px;padding:6px 4px;cursor:pointer;text-align:center;transition:border-color .2s,background .2s;display:flex;flex-direction:column;align-items:center;gap:4px;}
+.preset-btn:hover{border-color:#5c2278;background:#1a0828;}
+.preset-name{font-size:7px;color:#9a6a8a;letter-spacing:.08em;font-family:monospace;}
+.preset-swatch{display:flex;gap:2px;}
+.preset-dot{width:7px;height:7px;border-radius:50%;}
+.profile-card{background:#0f060f;border:1px solid #2a0a2a;border-radius:3px;padding:8px 10px;margin-bottom:8px;}
+.profile-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.profile-name{font-size:10px;color:#8a4a6a;letter-spacing:.12em;flex:1;}
+.profile-dots{display:flex;gap:3px;}
+.profile-dot{width:10px;height:10px;border-radius:50%;border:1px solid rgba(255,255,255,0.1);}
+.profile-btns{display:flex;gap:5px;}
+.pbtn{background:#1a0828;border:1px solid #3a1540;color:#7a4a6a;font-size:8px;padding:3px 8px;border-radius:2px;cursor:pointer;font-family:monospace;letter-spacing:.06em;transition:all .15s;}
+.pbtn:hover:not(:disabled){background:#2a0a3a;border-color:#5c2278;color:#cc88aa;}
+.pbtn.load{border-color:#5c2278;color:#aa66cc;}
+.pbtn.danger{border-color:#3a1520;color:#6a2a3a;}
+.pbtn.danger:hover{background:#2a0010;border-color:#8a2255;color:#ff4488;}
+.pbtn:disabled{opacity:0.3;cursor:default;}
+.profile-empty{font-size:8px;color:#3a1540;letter-spacing:.08em;}
+</style>
+</head>
+<body>
+<div id="root">
+  <!-- Driver warning + Intel info panel -->
+  <div id="driver-warn" style="display:none;flex-shrink:0;margin-bottom:4px;padding-left:36px">
+    <div style="display:flex;gap:4px">
+      <div id="warn-tab" onclick="showInfoTab('warn')"
+        style="flex:1;background:rgba(180,120,0,.15);border:1px solid rgba(180,120,0,.4);border-radius:4px 0 0 4px;padding:6px 10px;cursor:pointer;font-size:9px;color:#cc9900;font-family:monospace;letter-spacing:.05em;line-height:1.5">
+        ⚠ CPU TEMPS UNAVAILABLE<br>
+        <span style="color:#886600;font-size:8px">Clock speeds via Windows fallback</span>
+      </div>
+      <div id="info-tab" onclick="showInfoTab('info')"
+        style="width:32px;background:rgba(0,100,200,.12);border:1px solid rgba(0,100,200,.3);border-radius:0 4px 4px 0;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;color:#4499cc"
+        title="Why am I seeing this?">ℹ</div>
+    </div>
+    <div id="intel-info-panel" style="display:none;background:rgba(0,0,0,.3);border:1px solid rgba(0,100,200,.25);border-radius:0 0 4px 4px;padding:8px 10px;font-size:9px;line-height:1.7;color:#6699bb;font-family:monospace">
+      <strong style="color:#4499cc;letter-spacing:.1em">INTEL CPU DETECTED</strong><br>
+      Intel processors require a kernel-mode driver to read per-core temps and individual clock speeds.
+      This driver is blocked by Windows security on most modern systems.<br><br>
+      <span style="color:#886600">What you ARE getting:</span> Real-time all-core average clock via Windows
+      Performance Counters — this accurately reflects Turbo Boost activity and load.<br><br>
+      <span style="color:#886600">What requires a paid cert (~$300/yr):</span> Per-core temps, per-core
+      individual clock speeds. Same limitation affects CPU-Z and similar free tools.
+    </div>
+  </div>
+  <div style="text-align:center;padding:0 44px 8px 44px;border-bottom:1px solid var(--border);margin-bottom:8px;position:relative;flex-shrink:0">
+    <div class="accent-line" style="position:absolute;top:0;left:0;right:0"></div>
+    <div id="hw-cpu" style="padding-left:36px;font-size:15px;color:var(--header-title);font-weight:600;letter-spacing:.1em;text-shadow:0 0 12px var(--title-glow),0 0 4px var(--header-title)">···</div>
+    <div id="hw-sub" style="font-size:13px;color:var(--header-sub);margin-top:2px;letter-spacing:.12em">···</div>
+    <div style="display:flex;justify-content:center;gap:24px;margin-top:7px">
+      <span id="hcpu" style="font-size:15px;font-weight:600">--°C</span>
+      <span id="hpwr" style="font-size:15px;color:var(--header-acc);font-weight:600">--W</span>
+      <span id="htime" style="font-size:14px;color:var(--header-time)"></span>
+    </div>
+  </div>
+  <!-- Divider with spark toggle -->
+  <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-top:0">
+    <div style="flex:1;height:1px;background:var(--divider-line)"></div>
+    <span style="font-size:9px;color:var(--divider-lbl);letter-spacing:.18em;white-space:nowrap">CPU CORES</span>
+    <button id="spark-toggle" onclick="toggleSparklines()"
+      style="font-size:8px;font-family:monospace;letter-spacing:.08em;background:rgba(0,255,204,.08);border:1px solid rgba(0,255,204,.2);color:var(--avg-col);padding:1px 6px;border-radius:2px;cursor:pointer">
+      ▾ SPARK
+    </button>
+    <div style="flex:1;height:1px;background:var(--divider-line)"></div>
+  </div>
+  <div id="update-pulse" style="flex-shrink:0">···</div>
+
+  <!-- ── 3-COLUMN SPARK LAYOUT ────────────────────────────────────────────── -->
+  <div id="spark-layout" style="display:flex;gap:6px;flex:1;min-height:0;overflow:hidden">
+
+    <!-- LEFT SIDE PANEL (hidden when spark off) -->
+    <div id="side-left" style="display:none;width:88px;flex-shrink:0;flex-direction:column;gap:4px;justify-content:space-evenly">
+      <div class="card" style="padding:8px;flex-shrink:0">
+        <div style="font-size:8px;color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">PEAK</div>
+        <div id="peakclk" style="font-size:13px;color:var(--peak-col);font-weight:700;font-family:monospace">--</div>
+        <div style="height:3px;background:var(--bar-bg);border-radius:2px;margin-top:4px;overflow:hidden;border:1px solid var(--border)"><div id="sl-peak-bar" style="height:100%;background:var(--peak-col);width:0%;transition:width .5s"></div></div>
+      </div>
+      <div class="card" style="padding:8px;flex-shrink:0">
+        <div id="avg-label" style="font-size:8px;color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">AVG</div>
+        <div id="avgclk" style="font-size:13px;color:var(--avg-col);font-weight:700;font-family:monospace">--</div>
+        <div style="height:3px;background:var(--bar-bg);border-radius:2px;margin-top:4px;overflow:hidden;border:1px solid var(--border)"><div id="sl-avg-bar" style="height:100%;background:var(--avg-col);width:0%;transition:width .5s"></div></div>
+      </div>
+      <div class="card" style="padding:8px;flex-shrink:0" id="sl-ccd0-card">
+        <div style="font-size:8px;color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">CCD0</div>
+        <div id="sl-ccd0" style="font-size:13px;color:var(--temp-val);font-weight:700;font-family:monospace">--</div>
+      </div>
+      <div class="card" style="padding:8px;flex-shrink:0" id="sl-ccd1-card">
+        <div style="font-size:8px;color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">CCD1</div>
+        <div id="sl-ccd1" style="font-size:13px;color:var(--temp-val);font-weight:700;font-family:monospace">--</div>
+      </div>
+    </div>
+
+    <!-- CENTER: CORE BARS (always visible) -->
+    <div id="cores-center" style="flex:1;display:flex;flex-direction:column;min-width:0">
+      <div style="margin-bottom:4px;display:flex;justify-content:space-between;flex-shrink:0">
+        <div style="font-size:13px;color:var(--ccd-lbl);font-weight:600" data-ccd0-lbl>CCD0</div>
+        <div style="font-size:13px;color:var(--ccd-lbl);font-weight:600" data-ccd0-type>V-Cache</div>
+      </div>
+      <div id="ccd0bars" style="flex-shrink:0"></div>
+      <div id="ccd1wrap" style="margin:8px 0 4px;display:flex;justify-content:space-between;flex-shrink:0">
+        <div style="font-size:13px;color:var(--ccd-lbl);font-weight:600" data-ccd1-lbl>CCD1</div>
+        <div style="font-size:13px;color:var(--ccd-lbl);font-weight:600" data-ccd1-type>Compute</div>
+      </div>
+      <div id="ccd1bars" style="flex-shrink:0"></div>
+      <div style="flex:1"></div>
+    </div>
+
+    <!-- RIGHT SIDE PANEL (hidden when spark off) -->
+    <div id="side-right" style="display:none;width:88px;flex-shrink:0;flex-direction:column;gap:4px;justify-content:space-evenly">
+      <div class="card" style="padding:8px;flex-shrink:0">
+        <div style="font-size:8px;color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">POWER</div>
+        <div id="pkgpwr" style="font-size:13px;color:var(--pwr-col);font-weight:700;font-family:monospace">--</div>
+      </div>
+      <div class="card" style="padding:8px;flex-shrink:0">
+        <div style="font-size:8px;color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">CPU LOAD</div>
+        <div id="cpuload" style="font-size:13px;color:var(--avg-col);font-weight:700;font-family:monospace">--%</div>
+        <div style="height:3px;background:var(--bar-bg);border-radius:2px;margin-top:4px;overflow:hidden;border:1px solid var(--border)"><div id="sl-load-bar" style="height:100%;background:var(--avg-col);width:0%;transition:width .5s"></div></div>
+      </div>
+      <div class="card" style="padding:8px;flex-shrink:0">
+        <div style="font-size:8px;color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">GPU TEMP</div>
+        <div id="sl-gpu-t" style="font-size:13px;color:var(--temp-low);font-weight:700;font-family:monospace">--</div>
+      </div>
+      <div class="card" style="padding:8px;flex-shrink:0">
+        <div style="font-size:8px;color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">GPU CLK</div>
+        <div id="sl-gpu-c" style="font-size:13px;color:var(--gpu-acc);font-weight:700;font-family:monospace">--</div>
+      </div>
+      <div class="card" style="padding:8px;flex-shrink:0">
+        <div style="font-size:8px;color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">GPU LOAD</div>
+        <div id="sl-gpu-l" style="font-size:13px;color:var(--gpu-acc);font-weight:700;font-family:monospace">--%</div>
+        <div style="height:3px;background:var(--bar-bg);border-radius:2px;margin-top:4px;overflow:hidden;border:1px solid var(--border)"><div id="sl-gpuload-bar" style="height:100%;background:var(--gpu-acc);width:0%;transition:width .5s"></div></div>
+      </div>
+      <div class="card" style="padding:8px;flex-shrink:0">
+        <div style="font-size:8px;color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">RAM LOAD</div>
+        <div id="sl-ram-l" style="font-size:13px;color:var(--mem-acc);font-weight:700;font-family:monospace">--%</div>
+        <div style="height:3px;background:var(--bar-bg);border-radius:2px;margin-top:4px;overflow:hidden;border:1px solid var(--border)"><div id="sl-ramload-bar" style="height:100%;background:var(--mem-acc);width:0%;transition:width .5s"></div></div>
+      </div>
+    </div>
+
+  </div><!-- end spark-layout -->
+
+  <!-- BOTTOM SUMMARY BAR (shown when spark off) -->
+  <div id="summary-bar-wrap" style="margin-top:6px;flex-shrink:0;display:flex;gap:6px">
+    <div id="sum-left" class="card" style="flex:1;display:flex;justify-content:space-around;padding:8px 12px">
+      <div style="text-align:center">
+        <div style="font-size:10px;color:var(--sum-lbl);letter-spacing:.08em">PEAK</div>
+        <div id="peakclk-bot" style="font-size:14px;color:var(--peak-col);font-weight:700">--</div>
+      </div>
+      <div style="width:1px;background:var(--border)"></div>
+      <div style="text-align:center">
+        <div style="font-size:10px;color:var(--sum-lbl);letter-spacing:.08em">AVG</div>
+        <div id="avgclk-bot" style="font-size:14px;color:var(--avg-col);font-weight:700">--</div>
+      </div>
+    </div>
+    <div id="sum-right" class="card" style="flex:1;display:flex;justify-content:space-around;padding:8px 12px">
+      <div style="text-align:center">
+        <div style="font-size:9px;color:var(--sum-lbl);letter-spacing:.08em">POWER</div>
+        <div id="pkgpwr-bot" style="font-size:13px;color:var(--pwr-col);font-weight:700">--</div>
+      </div>
+      <div style="width:1px;background:var(--border)"></div>
+      <div style="text-align:center">
+        <div style="font-size:9px;color:var(--sum-lbl);letter-spacing:.08em">CPU</div>
+        <div id="cpuload-bot" style="font-size:13px;color:var(--avg-col);font-weight:700">--%</div>
+      </div>
+      <div style="width:1px;background:var(--border)"></div>
+      <div style="text-align:center">
+        <div style="font-size:9px;color:var(--sum-lbl);letter-spacing:.08em">GPU</div>
+        <div id="gpuload-bot" style="font-size:13px;color:var(--gpu-acc);font-weight:700">--%</div>
+      </div>
+      <div style="width:1px;background:var(--border)"></div>
+      <div style="text-align:center">
+        <div style="font-size:9px;color:var(--sum-lbl);letter-spacing:.08em">RAM</div>
+        <div id="ramload-bot" style="font-size:13px;color:var(--mem-acc);font-weight:700">--%</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM CARDS (hidden in spark mode) -->
+  <div id="bottom-cards" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;flex-shrink:0">
+    <div class="card">
+      <div class="card-title" id="ccd-section-title">THERMALS</div>
+      <div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span class="stat-label">CCD0</span><span id="sccd0" class="stat-val" style="color:var(--temp-val)">--</span></div>
+        <div style="height:9px;background:var(--bar-bg);border-radius:2px;overflow:hidden;border:1px solid var(--border);position:relative"><div id="tbar0" style="position:absolute;inset:0;border-radius:2px;transition:clip-path .4s ease;clip-path:inset(0 100% 0 0)"></div></div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span class="stat-label">CCD1</span><span id="sccd1" class="stat-val" style="color:var(--temp-val)">--</span></div>
+        <div style="height:9px;background:var(--bar-bg);border-radius:2px;overflow:hidden;border:1px solid var(--border);position:relative"><div id="tbar1" style="position:absolute;inset:0;border-radius:2px;transition:clip-path .4s ease;clip-path:inset(0 100% 0 0)"></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">MEMORY</div>
+      <div class="stat-row"><span class="stat-label">CLK</span><span id="hw-ram-clk" class="stat-val" style="color:var(--mem-acc)">···</span></div>
+      <div class="stat-row"><span class="stat-label">TYPE</span><span id="hw-ram-type" class="stat-val" style="color:var(--mem-acc)">···</span></div>
+      <div class="stat-row"><span class="stat-label">SIZE</span><span id="hw-ram-size" class="stat-val" style="color:var(--mem-acc)">···</span></div>
+    </div>
+  </div>
+  <div class="card" id="gpu-card" style="margin-top:8px;flex-shrink:0">
+    <div id="hw-gpu-title" class="card-title">GPU · ···</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px">
+      <div class="stat-row"><span class="stat-label">TEMP</span><span id="sgpuT" class="stat-val">--</span></div>
+      <div class="stat-row"><span class="stat-label">VCORE</span><span id="sgpuV" class="stat-val" style="color:var(--gpu-acc)">--</span></div>
+      <div class="stat-row"><span class="stat-label">POWER</span><span id="sgpuP" class="stat-val" style="color:var(--gpu-acc)">--</span></div>
+      <div class="stat-row"><span class="stat-label">CLK</span><span id="sgpuC" class="stat-val" style="color:var(--gpu-acc)">--</span></div>
+    </div>
+  </div>
+  <div style="position:relative;margin-top:8px;flex-shrink:0"><div class="accent-line"></div></div>
+</div>
+
+<div id="status">LIVE</div>
+<button id="settings-btn" onclick="openSettings()" title="Customize">⚙</button>
+
+<div id="settings-drawer">
+  <div id="drawer-handle"><div id="drawer-grip">· · ·</div></div>
+  <div id="settings-header">
+    <span>CUSTOMIZE</span>
+    <div id="settings-header-btns">
+      <button id="peek-btn" onclick="togglePeek()">PEEK</button>
+      <button onclick="resetAll()">RESET</button>
+      <button onclick="closeSettings()">CLOSE</button>
+    </div>
+  </div>
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="showTab('display')">DISPLAY</button>
+    <button class="tab-btn" onclick="showTab('colors')">COLORS</button>
+    <button class="tab-btn" onclick="showTab('profiles')">PROFILES</button>
+  </div>
+  <div id="tab-display" class="tab-panel active">
+    <div class="settings-section">
+      <div class="settings-section-title">PERFORMANCE</div>
+      <div class="setting-row"><label>Gear blink on startup</label><select id="s-gearBlink" onchange="setSetting('gearBlinkDuration',parseInt(this.value))"><option value="0">Never</option><option value="5">5 seconds</option><option value="10">10 seconds</option><option value="20">20 seconds</option><option value="30">30 seconds</option></select></div>
+      <div class="setting-row"><label>Update speed</label><select id="s-updateInterval" onchange="setSetting('updateInterval',parseInt(this.value))"><option value="250">Max (4/sec)</option><option value="500">Fast (2/sec)</option><option value="1000">Normal (1/sec)</option><option value="2000">Slow (0.5/sec)</option><option value="5000">Very Slow</option></select></div>
+      <div class="setting-row"><label>Thermal decimal places</label><select id="s-thermalDecimals" onchange="setSetting('thermalDecimals',parseInt(this.value))"><option value="0">None (45°)</option><option value="1">.X (45.5°)</option><option value="2">.XX (45.50°)</option><option value="3">.XXX</option><option value="4">.XXXX</option></select></div>
+      <div class="setting-row"><label>AVG MHz window</label><select id="s-avgWindow" onchange="setSetting('avgWindow',this.value)"><option value="sync">Sync with update</option><option value="1000">1 second</option><option value="5000">5 seconds</option><option value="15000">15 seconds</option><option value="30000">30 seconds</option><option value="60000">1 minute</option></select></div>
+    </div>
+  </div>
+  <div id="tab-colors" class="tab-panel">
+    <div class="settings-section"><div class="settings-section-title">ACCENT LINES</div><div class="accent-line grad-preview"></div><div class="grad-row"><label>Color 1</label><button class="c-reset" onclick="resetGrad('lineCol1')">↺</button><input type="color" data-ck="lineCol1" value="#9900ff" oninput="onColorPickerChange('lineCol1',this.value)"></div><div class="grad-row"><label>Color 2</label><button class="c-reset" onclick="resetGrad('lineCol2')">↺</button><input type="color" data-ck="lineCol2" value="#ff0044" oninput="onColorPickerChange('lineCol2',this.value)"></div></div>
+    <div class="settings-section"><div class="settings-section-title">CORE BAR GRADIENT</div><div id="barGradPreview" class="grad-preview"></div><div class="grad-row"><label>Start</label><button class="c-reset" onclick="resetGrad('barStart')">↺</button><input type="color" data-ck="barStart" oninput="onColorPickerChange('barStart',this.value)"></div><div class="grad-row"><label>Low clock</label><button class="c-reset" onclick="resetGrad('barLow')">↺</button><input type="color" data-ck="barLow" oninput="onColorPickerChange('barLow',this.value)"></div><div class="grad-row"><label>Mid clock</label><button class="c-reset" onclick="resetGrad('barMid')">↺</button><input type="color" data-ck="barMid" oninput="onColorPickerChange('barMid',this.value)"></div><div class="grad-row"><label>High clock</label><button class="c-reset" onclick="resetGrad('barHigh')">↺</button><input type="color" data-ck="barHigh" oninput="onColorPickerChange('barHigh',this.value)"></div><div class="grad-row"><label>Boost</label><button class="c-reset" onclick="resetGrad('barBoost')">↺</button><input type="color" data-ck="barBoost" oninput="onColorPickerChange('barBoost',this.value)"></div></div>
+    <div class="settings-section"><div class="settings-section-title">TEMPERATURE GRADIENT</div><div id="tempGradPreview" class="grad-preview"></div><div class="grad-row"><label>Cold</label><button class="c-reset" onclick="resetGrad('tempCold')">↺</button><input type="color" data-ck="tempCold" oninput="onColorPickerChange('tempCold',this.value)"></div><div class="grad-row"><label>Mid</label><button class="c-reset" onclick="resetGrad('tempMid')">↺</button><input type="color" data-ck="tempMid" oninput="onColorPickerChange('tempMid',this.value)"></div><div class="grad-row"><label>Hot</label><button class="c-reset" onclick="resetGrad('tempHot')">↺</button><input type="color" data-ck="tempHot" oninput="onColorPickerChange('tempHot',this.value)"></div></div>
+    <div class="settings-section"><div class="settings-section-title">TEMP DISPLAY COLORS</div><div class="color-grid" id="cg-tempdisp"></div></div>
+    <div class="settings-section"><div class="settings-section-title">GLOW &amp; FX</div><div class="color-grid" id="cg-glow"></div></div>
+    <div class="settings-section"><div class="settings-section-title">GLOBAL</div><div class="color-grid" id="cg-global"></div></div>
+    <div class="settings-section"><div class="settings-section-title">HEADER</div><div class="color-grid" id="cg-header"></div></div>
+    <div class="settings-section"><div class="settings-section-title">SUMMARY BAR</div><div class="color-grid" id="cg-summary"></div></div>
+    <div class="settings-section"><div class="settings-section-title">GPU &amp; MEMORY</div><div class="color-grid" id="cg-gpu"></div></div>
+  </div>
+  <div id="tab-profiles" class="tab-panel">
+    <div class="settings-section"><div class="settings-section-title">QUICK PRESETS</div><div class="preset-grid" id="preset-grid"></div></div>
+    <div class="settings-section"><div class="settings-section-title">SAVED PROFILES</div><div id="profiles-list"></div></div>
+  </div>
+</div>
+
+<script src="/nav.js?v=8" data-page="performance"></script>
+<script>
+// ══════════════════════════════════════════════════════════════════════════════
+// WEBVIEW2 IPC — IS_WEBVIEW and sendToHost defined in nav.js
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Set up message listener (nav.js already defined IS_WEBVIEW + sendToHost)
+if (IS_WEBVIEW) {
+  window.chrome.webview.addEventListener('message', e => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'config') {
+        onConfigReceived(msg);
+      } else {
+        // SensorData comes directly (includes fans field now)
+        receiveData(msg);
+      }
+    } catch(err) { console.error('[ipc]', err); }
+  });
+  sendToHost({ type: 'requestConfig' });
+}
+
+// ── Config received from C# ────────────────────────────────────────────────
+function onConfigReceived(cfg) {
+  if (cfg.colors && Object.keys(cfg.colors).length > 0) {
+    COLORS = {...COLOR_DEFAULTS, ...cfg.colors};
+    Object.assign(_baseColors, COLORS);
+    applyAllColors();
+    buildColorPickers();
+  }
+  if (cfg.settings && Object.keys(cfg.settings).length > 0) {
+    if (cfg.settings.gearBlinkDuration) SETTINGS.gearBlinkDuration = parseInt(cfg.settings.gearBlinkDuration);
+    if (cfg.settings.updateInterval)    SETTINGS.updateInterval    = parseInt(cfg.settings.updateInterval);
+    if (cfg.settings.avgWindow)         SETTINGS.avgWindow         = cfg.settings.avgWindow;
+    syncSettingsPickers();
+    startApplyTimer();
+  }
+  if (cfg.colorProfiles) _serverProfiles = cfg.colorProfiles;
+  renderProfiles();
+  startGearBlink();
+}
+
+// ── Save helpers — persist to C# AppData ──────────────────────────────────
+function persistColors() {
+  sendToHost({ type: 'saveColors', colors: COLORS });
+}
+function persistSettings() {
+  const s = {};
+  s.gearBlinkDuration = String(SETTINGS.gearBlinkDuration);
+  s.updateInterval    = String(SETTINGS.updateInterval);
+  s.avgWindow         = SETTINGS.avgWindow;
+  sendToHost({ type: 'saveSettings', settings: s });
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// HW INFO AUTO-FILL
+// ══════════════════════════════════════════════════════════════════════════════
+let _hwApplied = false;
+function applyHwInfo(info) {
+  if (!info) return;
+  // Driver warning — show once per session, auto-dismiss after 10s
+  const dw = document.getElementById('driver-warn');
+  if (dw && info.driverOk === false) {
+    if (typeof navSetDriverWarning === 'function')
+      navSetDriverWarning('CPU sensor driver blocked');
+    const dismissed = sessionStorage.getItem('pcm-warn-dismissed') === '1';
+    if (!dismissed) {
+      dw.style.display = 'block'; dw.style.opacity = '1'; dw.style.transition = '';
+      if (!window._warnTimerStarted) {
+        window._warnTimerStarted = true;
+        setTimeout(() => {
+          sessionStorage.setItem('pcm-warn-dismissed','1');
+          dw.style.transition = 'opacity 1.2s ease'; dw.style.opacity = '0';
+          setTimeout(() => { dw.style.display = 'none'; }, 1200);
+        }, 10000);
+      }
+    }
+  } else if (dw && info.driverOk !== false) {
+    dw.style.display = 'none';
+    if (typeof navSetDriverWarning === 'function') navSetDriverWarning(null);
+  }
+  // Hide THERMALS card for Intel (CCD temps are AMD-only)
+  const ccdTitle = document.getElementById('ccd-section-title');
+  if (ccdTitle) {
+    const ccdCard = ccdTitle.closest('.card') || ccdTitle.parentElement;
+    if (ccdCard) ccdCard.style.display = info.vendor === 'amd' ? '' : 'none';
+  }
+
+  if (_hwApplied) return;
+  if (!info.cpu || !info.gpu) return;
+  _hwApplied = true;
+  const cpu = document.getElementById('hw-cpu');
+  const sub = document.getElementById('hw-sub');
+  const gpu = document.getElementById('hw-gpu-title');
+  const clk = document.getElementById('hw-ram-clk');
+  const typ = document.getElementById('hw-ram-type');
+  const sz  = document.getElementById('hw-ram-size');
+  if (cpu) cpu.textContent = info.cpu.toUpperCase();
+  if (sub) {
+    const parts = [];
+    if (info.cores)   parts.push(info.cores + 'C');
+    if (info.threads) parts.push(info.threads + 'T');
+    if (info.socket)  parts.push(info.socket);
+    if (info.ramType && info.ramMhz) parts.push(info.ramType + '-' + info.ramMhz);
+    sub.textContent = parts.join(' · ');
+  }
+  if (gpu) gpu.textContent = 'GPU · ' + (info.gpuVram ? `${info.gpu.toUpperCase()} · ${info.gpuVram}GB` : info.gpu.toUpperCase());
+  if (clk) clk.textContent = info.ramMhz ? info.ramMhz + 'MHz' : '···';
+  if (typ) typ.textContent = info.ramType || '···';
+  if (sz)  sz.textContent  = info.ramGb   ? info.ramGb + 'GB'  : '···';
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// COLOR SYSTEM
+// ══════════════════════════════════════════════════════════════════════════════
+const COLOR_DEFAULTS={bg:'#0a0808',cardBg:'#120e08',border:'#443300',label:'#aa7700',dividerLine:'#443300',dividerLbl:'#ffcc00',headerTitle:'#ffcc00',headerSub:'#aa8800',headerAcc:'#00ffcc',headerTime:'#776600',titleGlow:'#ffcc00',glowCol:'#ffcc00',lineCol1:'#ffcc00',lineCol2:'#00ffcc',ccdLbl:'#ffcc00',coreLbl:'#aa8800',barBg:'#120a00',barStart:'#221100',barLow:'#443300',barMid:'#886600',barHigh:'#ffaa00',barBoost:'#ffcc00',tempCold:'#007799',tempMid:'#00ccaa',tempHot:'#00ffcc',tempVal:'#00ddaa',tempLow:'#00aacc',tempWarn:'#00ffcc',sumLbl:'#aa7700',peakCol:'#ffcc00',avgCol:'#00ffcc',pwrCol:'#ff6600',gpuAcc:'#00ffcc',memAcc:'#ffaa00',cardTitle:'#aa7700'};
+const VAR_MAP={bg:'--bg',cardBg:'--card-bg',border:'--border',label:'--label',dividerLine:'--divider-line',dividerLbl:'--divider-lbl',headerTitle:'--header-title',headerSub:'--header-sub',headerAcc:'--header-acc',headerTime:'--header-time',titleGlow:'--title-glow',glowCol:'--glow-col',lineCol1:'--line-col1',lineCol2:'--line-col2',ccdLbl:'--ccd-lbl',coreLbl:'--core-lbl',barBg:'--bar-bg',tempVal:'--temp-val',tempLow:'--temp-low',tempWarn:'--temp-warn',sumLbl:'--sum-lbl',peakCol:'--peak-col',avgCol:'--avg-col',pwrCol:'--pwr-col',gpuAcc:'--gpu-acc',memAcc:'--mem-acc',cardTitle:'--card-title'};
+const PREVIEW_STYLE={bg:c=>`background:${c}`,cardBg:c=>`background:${c}`,border:c=>`border:2px solid ${c};background:transparent`,label:c=>`background:#0a0612;color:${c}`,dividerLine:c=>`background:linear-gradient(90deg,transparent,${c},transparent)`,dividerLbl:c=>`background:#000;color:${c}`,headerTitle:c=>`background:#000;color:${c}`,headerSub:c=>`background:#000;color:${c}`,headerAcc:c=>`background:#000;color:${c}`,headerTime:c=>`background:#000;color:${c}`,titleGlow:c=>`background:#000;box-shadow:0 0 6px ${c};border:1px solid ${c}`,glowCol:c=>`background:#000;box-shadow:0 0 8px ${c};border:1px solid ${c}`,ccdLbl:c=>`background:#000;color:${c}`,coreLbl:c=>`background:#000;color:${c}`,barBg:c=>`background:${c}`,tempVal:c=>`background:#0a0612;color:${c}`,tempLow:c=>`background:#000;color:${c}`,tempWarn:c=>`background:#000;color:${c}`,sumLbl:c=>`background:#0a0612;color:${c}`,peakCol:c=>`background:#0a0612;color:${c};font-weight:bold`,avgCol:c=>`background:#0a0612;color:${c};font-weight:bold`,pwrCol:c=>`background:#0a0612;color:${c};font-weight:bold`,gpuAcc:c=>`background:#0a0612;color:${c}`,memAcc:c=>`background:#0a0612;color:${c}`,cardTitle:c=>`background:#0a0612;color:${c}`};
+const PREVIEW_INNER={label:'Aa',dividerLbl:'──',headerTitle:'CPU',headerSub:'16C',headerAcc:'68W',headerTime:'12:00',titleGlow:'',glowCol:'',ccdLbl:'CCD',coreLbl:'C0',tempVal:'48°',tempLow:'48°',tempWarn:'76°',sumLbl:'PEAK',peakCol:'5720',avgCol:'4800',pwrCol:'68W',gpuAcc:'1722',memAcc:'6000',cardTitle:'GPU'};
+const COLOR_GROUPS={tempdisp:[['tempVal','Temp value'],['tempLow','Cool temp'],['tempWarn','Warm temp'],['tempHot','Hot temp']],glow:[['glowCol','Value glow'],['titleGlow','Title glow'],['barBg','Bar bg'],['cardBg','Card bg']],global:[['bg','Page bg'],['border','Border'],['label','Label'],['dividerLine','Divider line'],['dividerLbl','Divider label']],header:[['headerTitle','Title'],['headerSub','Subtitle'],['headerAcc','Watts'],['headerTime','Time'],['ccdLbl','CCD label'],['coreLbl','Core label']],summary:[['sumLbl','Label'],['peakCol','Peak MHz'],['avgCol','Avg MHz'],['pwrCol','Power']],gpu:[['gpuAcc','GPU accent'],['memAcc','Memory'],['cardTitle','Card title']]};
+const GRAD_KEYS=new Set(['lineCol1','lineCol2','barStart','barLow','barMid','barHigh','barBoost','tempCold','tempMid','tempHot']);
+let COLORS={...COLOR_DEFAULTS};
+const _baseColors={...COLOR_DEFAULTS};
+// Expose color updater to nav.js for cross-tab theme application
+window.__setColors = function(cols) {
+  COLORS = {...COLORS, ...cols};
+  Object.assign(_baseColors, COLORS);
+  applyAllColors();
+  buildColorPickers();
+};
+let _serverProfiles={};
+
+function blendBrightness(hex,amount){if(!hex||hex.length<7)return hex;let r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);if(amount>0){const t=amount/100;r=Math.round(r+(255-r)*t);g=Math.round(g+(255-g)*t);b=Math.round(b+(255-b)*t);}else if(amount<0){const t=-amount/100;r=Math.round(r*(1-t));g=Math.round(g*(1-t));b=Math.round(b*(1-t));}return`#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;}
+function applyAllColors(){const r=document.documentElement.style;for(const[k,v]of Object.entries(VAR_MAP))r.setProperty(v,COLORS[k]);document.body.style.background=COLORS.bg;updateTempBars();redrawCoreBars();updateGradPreviews();}
+function setColor(key,val){COLORS[key]=val;if(VAR_MAP[key])document.documentElement.style.setProperty(VAR_MAP[key],val);if(key==='bg')document.body.style.background=val;if(key.startsWith('temp'))updateTempBars();if(key.startsWith('bar')||key==='barStart')redrawCoreBars();updateGradPreviews();const prev=document.getElementById('prev-'+key);if(prev){const ps=PREVIEW_STYLE[key];if(ps)prev.style.cssText='width:20px;height:16px;border-radius:2px;flex-shrink:0;border:1px solid #2a0a2a;font-size:7px;display:flex;align-items:center;justify-content:center;overflow:hidden;'+ps(val);prev.textContent=PREVIEW_INNER[key]||'';}persistColors();}
+function onColorPickerChange(key,val){_baseColors[key]=val;const sl=document.getElementById('bright-'+key);if(sl)sl.value=0;setColor(key,val);}
+function onBrightnessSlide(key,amount){const adjusted=blendBrightness(_baseColors[key],parseInt(amount));setColor(key,adjusted);const input=document.querySelector(`input[data-ck="${key}"]`);if(input)input.value=adjusted;}
+function resetGrad(key){_baseColors[key]=COLOR_DEFAULTS[key];const sl=document.getElementById('bright-'+key);if(sl)sl.value=0;const input=document.querySelector(`input[data-ck="${key}"]`);if(input)input.value=COLOR_DEFAULTS[key];setColor(key,COLOR_DEFAULTS[key]);}
+function resetSingleColor(key){_baseColors[key]=COLOR_DEFAULTS[key];const sl=document.getElementById('bright-'+key);if(sl)sl.value=0;const input=document.querySelector(`input[data-ck="${key}"]`);if(input)input.value=COLOR_DEFAULTS[key];setColor(key,COLOR_DEFAULTS[key]);}
+function updateGradPreviews(){const bp=document.getElementById('barGradPreview');if(bp)bp.style.background=`linear-gradient(90deg,${COLORS.barStart},${COLORS.barLow} 25%,${COLORS.barMid} 50%,${COLORS.barHigh} 75%,${COLORS.barBoost})`;const tp=document.getElementById('tempGradPreview');if(tp)tp.style.background=`linear-gradient(90deg,${COLORS.tempCold},${COLORS.tempMid},${COLORS.tempHot})`;}
+function updateTempBars(){const g=`linear-gradient(90deg,${COLORS.tempCold},${COLORS.tempMid},${COLORS.tempHot})`;document.getElementById('tbar0').style.background=g;document.getElementById('tbar1').style.background=g;}
+function redrawCoreBars(){CORES_META.forEach(c=>{const bar=document.getElementById('bar'+c.id);if(bar&&bar._lastClk!==undefined)bar.style.background=barGrad(bar._lastClk);});}
+function buildColorPickers(){for(const key of GRAD_KEYS){const input=document.querySelector(`input[data-ck="${key}"]`);if(input)input.value=COLORS[key];}for(const[group,rows]of Object.entries(COLOR_GROUPS)){const el=document.getElementById('cg-'+group);if(!el)continue;el.innerHTML='';rows.forEach(([key,label])=>{const row=document.createElement('div');row.className='color-row';const ps=PREVIEW_STYLE[key]?PREVIEW_STYLE[key](COLORS[key]):'background:'+COLORS[key];const inner=PREVIEW_INNER[key]||'';row.innerHTML=`<div class="color-row-top"><label>${label}</label><div id="prev-${key}" class="c-preview" style="${ps}">${inner}</div><button class="c-reset" onclick="resetSingleColor('${key}')" title="Reset">↺</button><input type="color" data-ck="${key}" value="${COLORS[key]}" onchange="onColorPickerChange('${key}',this.value)" oninput="onColorPickerChange('${key}',this.value)"></div><div class="bright-wrap"><input type="range" id="bright-${key}" class="bright-slider" min="-100" max="100" value="0" oninput="onBrightnessSlide('${key}',this.value)"></div>`;el.appendChild(row);});}updateGradPreviews();}
+
+// ── Presets ────────────────────────────────────────────────────────────────
+const PRESETS=[{name:'DEFAULT',colors:null},{name:'MATRIX',colors:{bg:'#000000',cardBg:'#010d01',border:'#003300',label:'#005500',dividerLine:'#003300',dividerLbl:'#00aa00',headerTitle:'#00ff44',headerSub:'#007722',headerAcc:'#00dd22',headerTime:'#005511',titleGlow:'#00ff44',glowCol:'#00ff44',lineCol1:'#00ff44',lineCol2:'#006622',ccdLbl:'#00ff44',coreLbl:'#00aa22',barBg:'#010d01',barStart:'#001100',barLow:'#003311',barMid:'#006622',barHigh:'#00aa33',barBoost:'#00ff44',tempCold:'#003322',tempMid:'#00aa44',tempHot:'#00ff22',tempVal:'#00cc33',tempLow:'#00cc33',tempWarn:'#00ff22',sumLbl:'#00aa22',peakCol:'#00ff44',avgCol:'#00cc33',pwrCol:'#00aa22',gpuAcc:'#00ee33',memAcc:'#00cc44',cardTitle:'#007722'}},{name:'CYBERPUNK',colors:{bg:'#0a0808',cardBg:'#120e08',border:'#443300',label:'#aa7700',dividerLine:'#443300',dividerLbl:'#ffcc00',headerTitle:'#ffcc00',headerSub:'#aa8800',headerAcc:'#00ffcc',headerTime:'#776600',titleGlow:'#ffcc00',glowCol:'#ffcc00',lineCol1:'#ffcc00',lineCol2:'#00ffcc',ccdLbl:'#ffcc00',coreLbl:'#aa8800',barBg:'#120a00',barStart:'#221100',barLow:'#443300',barMid:'#886600',barHigh:'#ffaa00',barBoost:'#ffcc00',tempCold:'#007799',tempMid:'#00ccaa',tempHot:'#00ffcc',tempVal:'#00ddaa',tempLow:'#00aacc',tempWarn:'#00ffcc',sumLbl:'#aa7700',peakCol:'#ffcc00',avgCol:'#00ffcc',pwrCol:'#ff6600',gpuAcc:'#00ffcc',memAcc:'#ffaa00',cardTitle:'#aa7700'}},{name:'OCEAN',colors:{bg:'#000810',cardBg:'#000d1a',border:'#003366',label:'#336699',dividerLine:'#003366',dividerLbl:'#4499cc',headerTitle:'#00aaff',headerSub:'#336688',headerAcc:'#00ccff',headerTime:'#224466',titleGlow:'#00aaff',glowCol:'#00ccff',lineCol1:'#00aaff',lineCol2:'#0044cc',ccdLbl:'#00aaff',coreLbl:'#336699',barBg:'#000d1a',barStart:'#001122',barLow:'#003366',barMid:'#0066aa',barHigh:'#0099dd',barBoost:'#00ccff',tempCold:'#003399',tempMid:'#0066cc',tempHot:'#00aaff',tempVal:'#4499bb',tempLow:'#0099dd',tempWarn:'#00aaff',sumLbl:'#4499cc',peakCol:'#00ccff',avgCol:'#0099ff',pwrCol:'#0066cc',gpuAcc:'#00ddff',memAcc:'#0099cc',cardTitle:'#336699'}},{name:'EMBER',colors:{bg:'#080200',cardBg:'#100400',border:'#441100',label:'#883300',dividerLine:'#441100',dividerLbl:'#cc5500',headerTitle:'#ff4400',headerSub:'#882200',headerAcc:'#ff8800',headerTime:'#662200',titleGlow:'#ff4400',glowCol:'#ff6600',lineCol1:'#ff4400',lineCol2:'#ff8800',ccdLbl:'#ff4400',coreLbl:'#cc4400',barBg:'#100400',barStart:'#220800',barLow:'#441100',barMid:'#882200',barHigh:'#cc4400',barBoost:'#ff6600',tempCold:'#441100',tempMid:'#cc4400',tempHot:'#ff8800',tempVal:'#cc6600',tempLow:'#cc4400',tempWarn:'#ff6600',sumLbl:'#cc5500',peakCol:'#ff4400',avgCol:'#ff8800',pwrCol:'#cc3300',gpuAcc:'#ff6600',memAcc:'#ff4400',cardTitle:'#883300'}},{name:'SYNTHWAVE',colors:{bg:'#0d0015',cardBg:'#150020',border:'#6600aa',label:'#9933cc',dividerLine:'#6600aa',dividerLbl:'#cc44ff',headerTitle:'#ff44cc',headerSub:'#9933aa',headerAcc:'#cc44ff',headerTime:'#662288',titleGlow:'#ff44cc',glowCol:'#cc44ff',lineCol1:'#cc44ff',lineCol2:'#ff44cc',ccdLbl:'#ff44cc',coreLbl:'#cc44aa',barBg:'#150020',barStart:'#220033',barLow:'#440088',barMid:'#8800cc',barHigh:'#cc00ff',barBoost:'#ff44cc',tempCold:'#4400aa',tempMid:'#cc00aa',tempHot:'#ff00cc',tempVal:'#cc44ff',tempLow:'#cc44ff',tempWarn:'#ff00cc',sumLbl:'#cc44ff',peakCol:'#ff44cc',avgCol:'#cc44ff',pwrCol:'#aa00ff',gpuAcc:'#ff00cc',memAcc:'#cc44ff',cardTitle:'#9933aa'}},{name:'TACTICAL',colors:{bg:'#040600',cardBg:'#070900',border:'#1a2200',label:'#4a5a22',dividerLine:'#1a2200',dividerLbl:'#6a7a33',headerTitle:'#aacc00',headerSub:'#556611',headerAcc:'#ccaa00',headerTime:'#3a4a11',titleGlow:'#aacc00',glowCol:'#aacc00',lineCol1:'#aacc00',lineCol2:'#ccaa00',ccdLbl:'#aacc00',coreLbl:'#778833',barBg:'#060800',barStart:'#0a0e00',barLow:'#1a2a00',barMid:'#3a5500',barHigh:'#6a9900',barBoost:'#aacc00',tempCold:'#224400',tempMid:'#778800',tempHot:'#ccaa00',tempVal:'#88aa00',tempLow:'#88aa00',tempWarn:'#ccaa00',sumLbl:'#6a7a33',peakCol:'#aacc00',avgCol:'#88aa00',pwrCol:'#ccaa00',gpuAcc:'#ccaa00',memAcc:'#aacc00',cardTitle:'#556622'}},{name:'GHOST',colors:{bg:'#080808',cardBg:'#0f0f0f',border:'#333333',label:'#666666',dividerLine:'#333333',dividerLbl:'#888888',headerTitle:'#ffffff',headerSub:'#888888',headerAcc:'#cccccc',headerTime:'#555555',titleGlow:'#ffffff',glowCol:'#aaaaaa',lineCol1:'#cccccc',lineCol2:'#888888',ccdLbl:'#ffffff',coreLbl:'#888888',barBg:'#111111',barStart:'#1a1a1a',barLow:'#333333',barMid:'#666666',barHigh:'#999999',barBoost:'#ffffff',tempCold:'#333333',tempMid:'#888888',tempHot:'#ffffff',tempVal:'#aaaaaa',tempLow:'#aaaaaa',tempWarn:'#dddddd',sumLbl:'#888888',peakCol:'#ffffff',avgCol:'#cccccc',pwrCol:'#aaaaaa',gpuAcc:'#dddddd',memAcc:'#bbbbbb',cardTitle:'#777777'}}];
+const PRESET_SWATCH_KEYS=['headerTitle','barBoost','lineCol1','lineCol2'];
+function renderPresets(){const grid=document.getElementById('preset-grid');grid.innerHTML='';PRESETS.forEach((p,i)=>{const btn=document.createElement('button');btn.className='preset-btn';btn.onclick=()=>applyPreset(i);const c=p.colors||COLOR_DEFAULTS;const dots=PRESET_SWATCH_KEYS.map(k=>`<div class="preset-dot" style="background:${c[k]||'#333'}"></div>`).join('');btn.innerHTML=`<div class="preset-swatch">${dots}</div><div class="preset-name">${p.name}</div>`;grid.appendChild(btn);});}
+function applyPreset(idx){COLORS={...COLOR_DEFAULTS,...(PRESETS[idx].colors||{})};Object.assign(_baseColors,COLORS);applyAllColors();buildColorPickers();persistColors();}
+
+// ── Profiles (backed by C# config) ────────────────────────────────────────
+const PROFILE_KEYS=['headerTitle','barBoost','avgCol','memAcc','gpuAcc','lineCol1','lineCol2','border'];
+function saveProfile(slot){_serverProfiles[slot]=COLORS;sendToHost({type:'saveProfile',slot,colors:COLORS});renderProfiles();}
+function loadProfile(slot){if(!_serverProfiles[slot])return;COLORS={...COLOR_DEFAULTS,..._serverProfiles[slot]};Object.assign(_baseColors,COLORS);applyAllColors();buildColorPickers();persistColors();}
+function clearProfile(slot){delete _serverProfiles[slot];sendToHost({type:'deleteProfile',slot});renderProfiles();}
+function renderProfiles(){
+  const container=document.getElementById('profiles-list');container.innerHTML='';
+  for(let i=1;i<=3;i++){
+    const pC=_serverProfiles[i]||null;
+    const card=document.createElement('div');card.className='profile-card';
+    const dots=pC?PROFILE_KEYS.map(k=>`<div class="profile-dot" style="background:${pC[k]||'#333'}"></div>`).join(''):'<span class="profile-empty">EMPTY SLOT</span>';
+    card.innerHTML=`<div class="profile-row"><span class="profile-name">PROFILE ${i}</span><div class="profile-dots">${dots}</div></div><div class="profile-btns"><button class="pbtn" onclick="saveProfile(${i})">SAVE</button><button class="pbtn load" onclick="loadProfile(${i})" ${!pC?'disabled':''}>LOAD</button><button class="pbtn danger" onclick="clearProfile(${i})" style="${!pC?'display:none':''}">CLEAR</button></div>`;
+    container.appendChild(card);
+  }
+}
+
+function resetAll(){COLORS={...COLOR_DEFAULTS};SETTINGS={...SETTING_DEFAULTS};Object.assign(_baseColors,COLORS);applyAllColors();buildColorPickers();syncSettingsPickers();persistColors();persistSettings();}
+function openSettings(){const d=document.getElementById('settings-drawer');d.style.top='0';d.classList.add('open');renderProfiles();renderPresets();}
+function closeSettings(){document.getElementById('settings-drawer').classList.remove('open');if(_peeking)togglePeek();}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TABS + DRAG + PEEK
+// ══════════════════════════════════════════════════════════════════════════════
+function showTab(name){document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));document.getElementById('tab-'+name).classList.add('active');document.querySelectorAll('.tab-btn').forEach(b=>{if(b.textContent.toLowerCase()===name)b.classList.add('active');});if(name==='profiles'){renderProfiles();renderPresets();}}
+function initDrawerDrag(){const handle=document.getElementById('drawer-handle'),drawer=document.getElementById('settings-drawer');let dragging=false,startY=0,startTop=0;const getTop=()=>parseInt(drawer.style.top||'0')||0;const clamp=v=>Math.max(0,Math.min(window.innerHeight-120,v));const setTop=t=>{drawer.style.top=clamp(t)+'px';};handle.addEventListener('mousedown',e=>{dragging=true;startY=e.clientY;startTop=getTop();e.preventDefault();});document.addEventListener('mousemove',e=>{if(!dragging)return;setTop(startTop+e.clientY-startY);});document.addEventListener('mouseup',()=>{dragging=false;});handle.addEventListener('touchstart',e=>{dragging=true;startY=e.touches[0].clientY;startTop=getTop();},{passive:true});document.addEventListener('touchmove',e=>{if(!dragging)return;setTop(startTop+e.touches[0].clientY-startY);},{passive:true});document.addEventListener('touchend',()=>{dragging=false;});}
+let _peeking=false;
+function togglePeek(){_peeking=!_peeking;const d=document.getElementById('settings-drawer'),btn=document.getElementById('peek-btn');if(_peeking){d.style.background='rgba(0,0,0,0.15)';d.style.backdropFilter='blur(1px)';btn.classList.add('active');btn.textContent='PEEKING';}else{d.style.background='rgba(0,0,0,0.94)';d.style.backdropFilter='blur(10px)';btn.classList.remove('active');btn.textContent='PEEK';}}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SETTINGS
+// ══════════════════════════════════════════════════════════════════════════════
+const SETTING_DEFAULTS={gearBlinkDuration:10,updateInterval:250,avgWindow:'sync',thermalDecimals:1};
+let SETTINGS={...SETTING_DEFAULTS};
+function setSetting(key,val){SETTINGS[key]=val;if(key==='updateInterval')startApplyTimer();if(key==='avgWindow')updateAvgLabel();persistSettings();}
+function syncSettingsPickers(){const g=document.getElementById('s-gearBlink'),u=document.getElementById('s-updateInterval'),a=document.getElementById('s-avgWindow'),d=document.getElementById('s-thermalDecimals');if(g)g.value=String(SETTINGS.gearBlinkDuration);if(u)u.value=String(SETTINGS.updateInterval);if(a)a.value=String(SETTINGS.avgWindow);if(d)d.value=String(SETTINGS.thermalDecimals||1);updateAvgLabel();}
+function updateAvgLabel(){const lbl=document.getElementById('avg-label');if(!lbl)return;const w=SETTINGS.avgWindow;if(w==='sync'){lbl.textContent='AVG';return;}const ms=parseInt(w);lbl.textContent=ms<60000?`AVG ${ms/1000}s`:'AVG 1m';}
+function startGearBlink(){const dur=SETTINGS.gearBlinkDuration;if(!dur)return;const btn=document.getElementById('settings-btn');btn.classList.add('blinking');setTimeout(()=>btn.classList.remove('blinking'),dur*1000);}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CORE BARS + DATA
+// ══════════════════════════════════════════════════════════════════════════════
+const STOCK=4300,MAX=5875;
+function clkEnd(clk){return clk>=5500?COLORS.barBoost:clk>=4500?COLORS.barHigh:clk>=3500?COLORS.barMid:COLORS.barLow;}
+function barGrad(clk){return`linear-gradient(90deg,${COLORS.barStart} 0%,${clkEnd(clk)} 100%)`;}
+function tempCol(t){if(t==null)return COLORS.tempVal;return t<60?COLORS.tempLow:t<78?COLORS.tempWarn:COLORS.tempHot;}
+// Dynamic core metadata — built from first data receive
+let CORES_META = [];
+let _barsBuilt = false;
+
+function buildDynamicBars(coresObj, hwInfo) {
+  if (_barsBuilt) return;
+  const keys = Object.keys(coresObj).map(Number).sort((a,b)=>a-b);
+  if (keys.length === 0) return;
+  _barsBuilt = true;
+
+  const isAmd   = hwInfo?.vendor === 'amd';
+  const ccdCnt  = hwInfo?.ccdCount || 0;
+  const hasCcds = isAmd && ccdCnt >= 2 && keys.length === 16;
+
+  CORES_META = keys.map((id, i) => ({
+    id,
+    ccd: hasCcds ? (i < 8 ? 0 : 1) : 0,
+    rank: coresObj[id]?.rank || 0
+  }));
+
+  // Clear containers
+  ['ccd0bars','ccd1bars'].forEach(id => {
+    const el = document.getElementById(id); if(el) el.innerHTML = '';
+  });
+
+  // Update CCD labels
+  const ccd0lbl = document.querySelector('[data-ccd0-lbl]');
+  const ccd1lbl = document.querySelector('[data-ccd1-lbl]');
+  const ccd0type = document.querySelector('[data-ccd0-type]');
+  const ccd1type = document.querySelector('[data-ccd1-type]');
+
+  if (hasCcds) {
+    if (ccd0lbl) ccd0lbl.textContent = 'CCD0';
+    if (ccd1lbl) ccd1lbl.textContent = 'CCD1';
+    if (ccd0type) ccd0type.textContent = 'V-Cache';
+    if (ccd1type) ccd1type.textContent = 'Compute';
+    const ccd1wrap = document.getElementById('ccd1wrap');
+    if (ccd1wrap) ccd1wrap.style.display = '';
+  } else {
+    if (ccd0lbl) ccd0lbl.textContent = 'CORES';
+    if (ccd0type) ccd0type.textContent = hwInfo?.cpu?.toUpperCase() || '';
+    const ccd1wrap = document.getElementById('ccd1wrap');
+    if (ccd1wrap) ccd1wrap.style.display = 'none';
+  }
+
+  buildBars();
+}
+function setText(id,v){const e=document.getElementById(id);if(e)e.textContent=v;}
+function setCol(id,c){const e=document.getElementById(id);if(e)e.style.color=c;}
+function updateClock(){setText('htime',new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}));}
+// ── Sparkline state ──────────────────────────────────────────────────────────
+const SPARKLINE_HISTORY = {}; // coreId → circular buffer of last 60 values
+const SPARKLINE_MAX_PTS = 60;
+let SPARKLINES_VISIBLE = localStorage.getItem('pcm-sparklines') !== '0';
+
+// Init spark toggle button opacity on load
+document.addEventListener('DOMContentLoaded', () => {
+  applySideLayout();
+});
+
+function applySideLayout() {
+  const on = SPARKLINES_VISIBLE;
+  // Spark rows
+  document.querySelectorAll('.spark-row').forEach(el => el.style.display = on ? 'block' : 'none');
+  // Side panels
+  const sl = document.getElementById('side-left');
+  const sr = document.getElementById('side-right');
+  if (sl) { sl.style.display = on ? 'flex' : 'none'; }
+  if (sr) { sr.style.display = on ? 'flex' : 'none'; }
+  // Bottom cards and summary bar
+  const bc = document.getElementById('bottom-cards');
+  const gc = document.getElementById('gpu-card');
+  const sw = document.getElementById('summary-bar-wrap');
+  if (bc) bc.style.display = on ? 'none' : 'grid';
+  if (gc) gc.style.display = on ? 'none' : 'block';
+  if (sw) sw.style.display = on ? 'none' : 'flex';
+  // Toggle button
+  const btn = document.getElementById('spark-toggle');
+  if (btn) { btn.textContent = on ? '▾ SPARK' : '▸ SPARK'; btn.style.opacity = on ? '1' : '0.45'; }
+}
+
+function toggleSparklines() {
+  SPARKLINES_VISIBLE = !SPARKLINES_VISIBLE;
+  localStorage.setItem('pcm-sparklines', SPARKLINES_VISIBLE ? '1' : '0');
+  applySideLayout();
+}
+
+function pushSparkline(id, val) {
+  if (!SPARKLINE_HISTORY[id]) SPARKLINE_HISTORY[id] = [];
+  const h = SPARKLINE_HISTORY[id];
+  h.push(val);
+  if (h.length > SPARKLINE_MAX_PTS) h.shift();
+}
+
+function drawSparkline(id) {
+  const svg = document.getElementById('spark'+id);
+  if (!svg) return;
+  const h = SPARKLINE_HISTORY[id] || [];
+  if (h.length < 2) return;
+  const W=300, H=14;
+  const mn = Math.min(...h), mx = Math.max(...h);
+  const range = mx - mn || 1;
+  const pts = h.map((v,i) => {
+    const x = (i / (SPARKLINE_MAX_PTS-1)) * W;
+    const y = H - ((v - mn) / range) * (H-2) - 1;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  svg.innerHTML = `<polyline points="${pts}" fill="none" stroke="var(--avg-col,#00ffcc)" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" opacity="0.55"/>`;
+}
+
+function buildBars(){
+  [0,1].forEach(ci=>{
+    const el=document.getElementById('ccd'+ci+'bars');
+    CORES_META.filter(c=>c.ccd===ci).forEach(c=>{
+      const wrap=document.createElement('div');
+      wrap.style.cssText='margin-bottom:7px;display:flex;align-items:center;gap:8px';
+      wrap.innerHTML=`
+        <div style="width:30px;text-align:right;font-size:13px;color:var(--core-lbl);flex-shrink:0;font-weight:600;line-height:1">${c.rank===1?'★':''}C${c.id}</div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:1px">
+          <div style="height:14px;background:var(--bar-bg);border-radius:2px;overflow:hidden;border:1px solid var(--border);position:relative">
+            <div id="bar${c.id}" style="position:absolute;inset:0;transition:background .4s,clip-path .4s,opacity .4s;opacity:0.15"></div>
+          </div>
+          <div class="spark-row" style="display:${SPARKLINES_VISIBLE?'block':'none'}">
+            <svg id="spark${c.id}" width="100%" height="14" viewBox="0 0 300 14" preserveAspectRatio="none"
+              style="display:block"></svg>
+          </div>
+        </div>
+        <div id="clk${c.id}" style="width:68px;text-align:right;font-size:13px;font-family:monospace;flex-shrink:0;color:var(--core-lbl);font-weight:600;line-height:1">--</div>`;
+      el.appendChild(wrap);
+    });
+  });
+}
+
+let _lastPulseTime=0;
+function flashPulse(){const now=Date.now(),ms=_lastPulseTime>0?now-_lastPulseTime:0;_lastPulseTime=now;const el=document.getElementById('update-pulse');if(!el)return;el.textContent=ms>0?(ms<1000?ms+'ms':(ms/1000).toFixed(1)+'s'):'···';el.classList.remove('flash');void el.offsetWidth;el.classList.add('flash');}
+
+function showInfoTab(tab) {
+  const wp = document.getElementById('warn-tab');
+  const ip = document.getElementById('intel-info-panel');
+  const wt = document.getElementById('warn-tab');
+  if (!ip) return;
+  if (tab === 'info') {
+    ip.style.display = ip.style.display === 'none' ? 'block' : 'none';
+  }
+}
+
+let pendingData=null,_applyTimer=null;
+function startApplyTimer(){if(_applyTimer)clearInterval(_applyTimer);if(SETTINGS.updateInterval<=250){_applyTimer=null;}else{_applyTimer=setInterval(()=>{if(pendingData){applyData(pendingData);pendingData=null;}},SETTINGS.updateInterval);}}
+function receiveData(data){if(!_applyTimer){applyData(data);}else{pendingData=data;}}
+
+const avgHistory=[];
+function pushAvg(val){const now=Date.now();avgHistory.push({val,t:now});const ms=SETTINGS.avgWindow==='sync'?SETTINGS.updateInterval:parseInt(SETTINGS.avgWindow);const cutoff=now-ms;while(avgHistory.length>1&&avgHistory[0].t<cutoff)avgHistory.shift();return Math.round(avgHistory.reduce((s,x)=>s+x.val,0)/avgHistory.length);}
+
+function applyData(data){
+  applyHwInfo(data.info);
+  // Build bars dynamically on first data with cores
+  if (!_barsBuilt && data.cores && Object.keys(data.cores).length > 0)
+    buildDynamicBars(data.cores, data.info);
+  flashPulse();
+  const cpuT=data.cpu_temp;setText('hcpu',cpuT!=null?parseFloat(cpuT).toFixed(1)+'°C':'--°C');setCol('hcpu',tempCol(cpuT));
+  const c0T=data.ccd0_temp,p0=c0T!=null?Math.max(0,Math.min(100,(c0T-20)/75*100)):0;setText('sccd0',c0T!=null?parseFloat(c0T).toFixed(1)+'°C':'--');document.getElementById('tbar0').style.clipPath=`inset(0 ${100-p0}% 0 0)`;
+  const c1T=data.ccd1_temp,p1=c1T!=null?Math.max(0,Math.min(100,(c1T-20)/75*100)):0;setText('sccd1',c1T!=null?parseFloat(c1T).toFixed(1)+'°C':'--');document.getElementById('tbar1').style.clipPath=`inset(0 ${100-p1}% 0 0)`;
+  const pkg=data.pkg_power;
+  const pkgStr = pkg!=null?Math.round(pkg)+' W':'--';
+  setText('hpwr',pkg!=null?Math.round(pkg)+'W':'--W');
+  setText('pkgpwr', pkgStr); setText('pkgpwr-bot', pkgStr);
+  const gT=data.gpu_temp;setText('sgpuT',gT!=null?gT+'°C':'--');setCol('sgpuT',tempCol(gT));
+  setText('sgpuV',data.gpu_voltage!=null?parseFloat(data.gpu_voltage).toFixed(3)+'V':'--');setText('sgpuP',data.gpu_power!=null?Math.round(data.gpu_power)+'W':'--');setText('sgpuC',data.gpu_clock!=null?Math.round(data.gpu_clock)+'MHz':'--');
+  const cores=data.cores||{};let peak=0,tot=0,cnt=0;
+  CORES_META.forEach(c=>{const cd=cores[String(c.id)]||cores[c.id],clk=cd?cd.clk:0;const bar=document.getElementById('bar'+c.id),clkEl=document.getElementById('clk'+c.id);if(clk>peak)peak=clk;if(clk>0){tot+=clk;cnt++;}const pct=clk<=0?0:clk<=STOCK?(clk/STOCK)*50:50+((clk-STOCK)/(MAX-STOCK))*50;if(bar){bar._lastClk=clk;bar.style.background=barGrad(clk);bar.style.opacity=pct<3?'0.2':String(0.65+pct/100*0.35);bar.style.clipPath=`inset(0 ${100-pct}% 0 0)`;}if(clkEl){clkEl.textContent=clk>0?Math.round(clk)+'MHz':'--';clkEl.style.color=clk>=4500?clkEnd(clk):COLORS.coreLbl;}});
+  // Push sparkline data and redraw visible ones
+  CORES_META.forEach(c=>{
+    const cd=cores[String(c.id)]||cores[c.id];
+    if(cd&&cd.clk>0){ pushSparkline(c.id,cd.clk); if(SPARKLINES_VISIBLE)drawSparkline(c.id); }
+  });
+  // Compute raw avg FIRST so it's available everywhere
+  const raw=data.avg_clk||(cnt>0?Math.round(tot/cnt):0);
+  const pkStr = peak>0?Math.round(peak)+'MHz':'--';
+  const avgStr = raw>0?pushAvg(raw)+'MHz':'--';
+  // Update all instances (side panels + bottom bar)
+  setText('peakclk', pkStr); setText('peakclk-bot', pkStr);
+  setText('avgclk', avgStr);  setText('avgclk-bot', avgStr);
+  // Side panel live stats
+  setText('sl-ccd0', data.ccd0_temp!=null?parseFloat(data.ccd0_temp).toFixed(1)+'°C':'--');
+  setText('sl-ccd1', data.ccd1_temp!=null?parseFloat(data.ccd1_temp).toFixed(1)+'°C':'--');
+  setText('sl-gpu-t', data.gpu_temp!=null?parseFloat(data.gpu_temp).toFixed(1)+'°C':'--');
+  setText('sl-gpu-c', data.gpu_clock!=null?Math.round(data.gpu_clock)+'MHz':'--');
+  // Mini bars in side panel
+  const peakBar=document.getElementById('sl-peak-bar');
+  if(peakBar&&MAX>0) peakBar.style.width=(peak/MAX*100)+'%';
+  const avgBar=document.getElementById('sl-avg-bar');
+  if(avgBar&&MAX>0) avgBar.style.width=(raw/MAX*100)+'%';
+  // CPU load
+  if(data.cpu_load!=null){
+    const ldStr=Math.round(data.cpu_load)+'%';
+    setText('cpuload',ldStr); setText('cpuload-bot',ldStr);
+    const loadBar=document.getElementById('sl-load-bar');
+    if(loadBar) loadBar.style.width=data.cpu_load+'%';
+  }
+  // GPU load
+  if(data.gpu_load!=null){
+    const glStr=Math.round(data.gpu_load)+'%';
+    setText('sl-gpu-l',glStr); setText('gpuload-bot',glStr);
+    const gb=document.getElementById('sl-gpuload-bar');
+    if(gb) gb.style.width=data.gpu_load+'%';
+  }
+  // RAM load
+  if(data.ram_load!=null){
+    const rlStr=Math.round(data.ram_load)+'%';
+    setText('sl-ram-l',rlStr); setText('ramload-bot',rlStr);
+    const rb=document.getElementById('sl-ramload-bar');
+    if(rb) rb.style.width=data.ram_load+'%';
+  }
+}
+
+// ── Boot ───────────────────────────────────────────────────────────────────
+function fitDisplay(){document.documentElement.style.setProperty('--scale',Math.min(window.innerWidth/400,window.innerHeight/800));}
+window.addEventListener('resize',fitDisplay);fitDisplay();
+buildColorPickers();applyAllColors();updateTempBars();updateAvgLabel();
+buildBars();startApplyTimer();setInterval(updateClock,1000);updateClock();
+initDrawerDrag();
+// Gear blink fires after config received from C# (in onConfigReceived)
+// If not in WebView2, start it now
+if (!IS_WEBVIEW) startGearBlink();
+</script>
+</body>
+</html>

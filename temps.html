@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PC Monitor — Temperatures</title>
+<link rel="stylesheet" href="/ui.css?v=8">
+<style>
+  .controls { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .sample-count { font-size:10px; color:var(--label-dim); }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title">◈ Temperatures</div>
+      <div class="page-subtitle" id="t-sub">Waiting for sensors...</div>
+    </div>
+    <div class="row" style="gap:10px">
+      <select class="select" id="s-dec" onchange="setDec(parseInt(this.value))">
+        <option value="0">0 decimal</option>
+        <option value="1" selected>1 decimal</option>
+        <option value="2">2 decimals</option>
+        <option value="3">3 decimals</option>
+      </select>
+      <button class="btn btn-ghost" onclick="resetStats()" style="padding:5px 12px;font-size:9px">RESET</button>
+    </div>
+  </div>
+  <div class="page-body" style="padding:0">
+    <div id="no-data" class="empty-state" style="padding:60px">Waiting for sensor data...</div>
+    <table class="data-table" id="temp-table" style="display:none">
+      <tbody id="temp-body"></tbody>
+    </table>
+  </div>
+</div>
+<script src="/nav.js?v=8" data-page="temps"></script>
+<script>
+let DEC=1; const stats={};  let _all={};
+function setDec(n){DEC=n;render();}
+function fmt(v){return v==null||v===Infinity||v===-Infinity?'--':parseFloat(v).toFixed(DEC)+'°';}
+function tc(t){return t<50?'var(--temp-low)':t<75?'var(--temp-warn)':'var(--temp-hot)';}
+function resetStats(){for(const k of Object.keys(stats)){stats[k].min=Infinity;stats[k].max=-Infinity;stats[k].hist=[];}render();}
+function updateStats(k,v){if(!stats[k])stats[k]={cur:v,min:v,max:v,hist:[]};const s=stats[k];s.cur=v;if(v<s.min)s.min=v;if(v>s.max)s.max=v;s.hist.push(v);if(s.hist.length>120)s.hist.shift();}
+function getAvg(k){const h=stats[k]?.hist;if(!h||!h.length)return null;return h.reduce((a,b)=>a+b,0)/h.length;}
+function render(){
+  const keys=Object.keys(_all); if(!keys.length)return;
+  document.getElementById('no-data').style.display='none';
+  document.getElementById('temp-table').style.display='table';
+  const groups={};
+  for(const k of keys){const[g,...r]=k.split('/');if(!groups[g])groups[g]=[];groups[g].push({k,name:r.join('/')});}
+  let html='';
+  for(const[g,sensors] of Object.entries(groups)){
+    html+=`<tr class="group-row"><td colspan="5">${g}</td></tr>`;
+    html+=`<tr><th>SENSOR</th><th>CURRENT</th><th>MIN</th><th>MAX</th><th>AVG</th></tr>`;
+    for(const{k,name}of sensors){
+      const s=stats[k]; if(!s)continue;
+      const avg=getAvg(k);
+      const pct=Math.min(100,Math.max(0,(s.cur-20)/80*100));
+      html+=`<tr><td style="color:var(--label)">${name}</td>
+        <td style="color:${tc(s.cur)};font-weight:700">${fmt(s.cur)}</td>
+        <td style="color:var(--temp-low)">${fmt(s.min===Infinity?null:s.min)}</td>
+        <td style="color:var(--temp-hot)">${fmt(s.max===-Infinity?null:s.max)}</td>
+        <td style="color:var(--avg-col)">${fmt(avg)}</td></tr>
+      <tr><td colspan="5" style="padding:2px 10px 6px">
+        <div class="bar-wrap"><div class="bar-fill bar-temp" style="width:${pct}%"></div></div>
+      </td></tr>`;
+    }
+  }
+  document.getElementById('temp-body').innerHTML=html;
+}
+let cnt=0;
+function receiveData(data){
+  _all=data.all_temps||{};
+  for(const[k,v]of Object.entries(_all))updateStats(k,v);
+  cnt++;
+  const s=document.getElementById('t-sub');
+  if(s)s.textContent=`${cnt} samples · ${Object.keys(_all).length} sensors`;
+  render();
+}
+function onConfigReceived(cfg){navOnConfig(cfg);}
+if(IS_WEBVIEW){
+  window.chrome.webview.addEventListener('message',e=>{try{const m=JSON.parse(e.data);if(m.type==='config')onConfigReceived(m);else receiveData(m);}catch{}});
+  sendToHost({type:'requestConfig'});
+}
+</script>
+</body>
+</html>

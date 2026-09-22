@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Security Settings</title>
+<link rel="stylesheet" href="/ui.css?v=8">
+<style>
+.sec-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  margin-bottom: 10px;
+  overflow: hidden;
+  transition: border-color .2s;
+}
+.sec-card:hover { border-color: color-mix(in srgb, var(--header-title) 40%, transparent); }
+.sec-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px; cursor: pointer; user-select: none;
+}
+.sec-icon { font-size: 16px; flex-shrink: 0; width: 22px; text-align: center; }
+.sec-title { flex: 1; font-size: 11px; font-family: monospace; letter-spacing: .08em; color: var(--label); }
+.sec-badge {
+  font-size: 8px; font-family: monospace; letter-spacing: .1em;
+  padding: 2px 7px; border-radius: 2px; border: 1px solid;
+  flex-shrink: 0;
+}
+.sec-badge.active   { color: #22c55e; border-color: #22c55e44; background: #22c55e11; }
+.sec-badge.inactive { color: #f59e0b; border-color: #f59e0b44; background: #f59e0b11; }
+.sec-badge.off      { color: var(--label); border-color: var(--border); opacity: .5; }
+.sec-toggle {
+  position: relative; width: 36px; height: 20px; flex-shrink: 0;
+}
+.sec-toggle input { opacity: 0; width: 0; height: 0; }
+.sec-slider {
+  position: absolute; inset: 0; background: rgba(128,128,128,.2);
+  border: 1px solid var(--border); border-radius: 20px;
+  cursor: pointer; transition: all .2s;
+}
+.sec-slider:before {
+  content: ""; position: absolute; width: 14px; height: 14px;
+  left: 2px; top: 2px; background: var(--label); border-radius: 50%;
+  transition: transform .2s; opacity: .6;
+}
+.sec-toggle input:checked + .sec-slider { background: color-mix(in srgb, var(--header-title) 20%, transparent); border-color: var(--header-title); }
+.sec-toggle input:checked + .sec-slider:before { transform: translateX(16px); background: var(--header-title); opacity: 1; }
+
+.sec-body { padding: 0 14px 14px; display: none; }
+.sec-body.open { display: block; }
+.sec-divider { height: 1px; background: var(--border); opacity: .3; margin: 0 14px 12px; }
+
+.sec-row { display: flex; gap: 10px; margin-bottom: 8px; }
+.sec-row-icon { font-size: 11px; flex-shrink: 0; margin-top: 1px; }
+.sec-row-text { font-size: 10px; color: var(--label); line-height: 1.5; opacity: .85; }
+.sec-row-label { font-size: 8px; letter-spacing: .12em; font-family: monospace;
+  color: var(--header-title); opacity: .7; margin-bottom: 3px; text-transform: uppercase; }
+
+.sec-risk { display: inline-flex; align-items: center; gap: 5px; margin-top: 8px;
+  font-size: 8px; font-family: monospace; letter-spacing: .1em; padding: 3px 8px;
+  border-radius: 2px; border: 1px solid; }
+.risk-low    { color: #22c55e; border-color: #22c55e44; background: #22c55e0a; }
+.risk-medium { color: #f59e0b; border-color: #f59e0b44; background: #f59e0b0a; }
+.risk-high   { color: #ef4444; border-color: #ef444444; background: #ef44440a; }
+
+.sec-page-note {
+  background: color-mix(in srgb, var(--header-title) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--header-title) 20%, transparent);
+  border-radius: 3px; padding: 10px 14px; margin-bottom: 14px;
+  font-size: 10px; color: var(--label); line-height: 1.5;
+}
+.sec-firstrun {
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: 4px; padding: 12px 14px; margin-bottom: 12px;
+  display: flex; align-items: center; gap: 12px;
+}
+.sec-apply-btn {
+  background: color-mix(in srgb, var(--header-title) 15%, transparent);
+  border: 1px solid var(--header-title); color: var(--header-title);
+  font-family: monospace; font-size: 10px; letter-spacing: .1em;
+  padding: 7px 16px; border-radius: 3px; cursor: pointer;
+  transition: all .15s; margin-top: 14px;
+}
+.sec-apply-btn:hover { background: color-mix(in srgb, var(--header-title) 25%, transparent); }
+.sec-status-bar {
+  font-size: 9px; font-family: monospace; color: var(--label);
+  opacity: .6; margin-top: 10px; letter-spacing: .06em;
+  min-height: 14px;
+}
+
+/* ── Live console ───────────────────────────────────────────────────────────── */
+.console-wrap {
+  background: #0a0a0a; border: 1px solid var(--border);
+  border-radius: 4px; margin-top: 16px; overflow: hidden;
+}
+.console-toolbar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 12px; background: #111;
+  border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.console-title { font-size: 9px; font-family: monospace; letter-spacing: .14em; color: var(--label); flex: 1; }
+.console-filter {
+  background: rgba(255,255,255,.05); border: 1px solid var(--border);
+  color: var(--label); font-family: monospace; font-size: 9px;
+  padding: 2px 7px; border-radius: 2px; width: 120px; outline: none;
+}
+.console-btn {
+  font-size: 8px; font-family: monospace; letter-spacing: .08em;
+  background: rgba(255,255,255,.04); border: 1px solid var(--border);
+  color: var(--label); padding: 2px 8px; border-radius: 2px; cursor: pointer;
+  transition: all .15s;
+}
+.console-btn:hover { background: rgba(255,255,255,.1); color: var(--header-title); }
+.console-btn.active { background: rgba(255,204,0,.1); color: var(--header-title); border-color: var(--header-title); }
+.console-out {
+  height: 320px; overflow-y: auto; padding: 8px 10px;
+  font-family: 'Courier New', monospace; font-size: 10px; line-height: 1.55;
+}
+.console-out::-webkit-scrollbar { width: 4px; }
+.console-out::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.cl-hw    { color: #4ade80; }
+.cl-orgb  { color: #22d3ee; }
+.cl-fans  { color: #fbbf24; }
+.cl-msi   { color: #fb923c; }
+.cl-pawn  { color: #c084fc; }
+.cl-config{ color: #94a3b8; }
+.cl-rgb   { color: #a78bfa; }
+.cl-log   { color: #64748b; }
+.cl-poll  { color: #334155; }
+.cl-err   { color: #f87171; font-weight: bold; }
+.cl-warn  { color: #fbbf24; }
+.cl-default { color: #6b7280; }
+.cl-time  { color: #334155; }
+</style>
+</head>
+<body>
+<div class="page-root" style="overflow-y:auto;height:100vh">
+  <div class="page-content" style="max-width:680px;padding-bottom:40px">
+
+    <div class="sec-page-note">
+      ⚠ Vexis automatically adjusts certain Windows security settings on startup to
+      enable hardware sensor access. Use this page to control exactly what gets changed —
+      and understand why each setting exists before deciding to turn it off.
+      <br><br>
+      Changes take effect on next restart of Vexis. Some require a Windows reboot.
+    </div>
+
+    <!-- First-run / startup bypass toggle -->
+    <div class="sec-firstrun">
+      <div style="flex:1">
+        <div style="font-size:10px;font-family:monospace;letter-spacing:.08em;color:var(--label);margin-bottom:4px">STARTUP SECURITY SETUP</div>
+        <div style="font-size:9px;color:var(--label);opacity:.7;line-height:1.4">
+          When enabled, Vexis checks and applies your selected security settings every time it starts.
+          Disable this if you want to manage Windows security settings manually.
+        </div>
+      </div>
+      <label class="sec-toggle" style="width:44px;height:24px">
+        <input type="checkbox" id="toggle-startup" checked onchange="savePref('firstRun',!this.checked)">
+        <span class="sec-slider"></span>
+      </label>
+    </div>
+
+    <!-- ═══ MEMORY INTEGRITY ═══════════════════════════════════════════════════ -->
+    <div class="sec-card" id="card-hvci">
+      <div class="sec-header" onclick="toggleCard('hvci')">
+        <span class="sec-icon">🛡</span>
+        <span class="sec-title">MEMORY INTEGRITY (HVCI)</span>
+        <span class="sec-badge inactive" id="badge-hvci">AUTO OFF</span>
+        <label class="sec-toggle" onclick="event.stopPropagation()">
+          <input type="checkbox" id="toggle-hvci" checked onchange="savePref('hvci',this.checked)">
+          <span class="sec-slider"></span>
+        </label>
+      </div>
+      <div class="sec-divider"></div>
+      <div class="sec-body" id="body-hvci">
+        <div class="sec-row">
+          <span class="sec-row-icon">📖</span>
+          <div>
+            <div class="sec-row-label">What it does</div>
+            <div class="sec-row-text">Memory Integrity (formally Hypervisor-Protected Code Integrity / HVCI) uses hardware virtualization to run the Windows kernel code integrity checks inside a protected environment. It prevents unsigned or vulnerable kernel-mode drivers from loading, even if an attacker has modified them.</div>
+          </div>
+        </div>
+        <div class="sec-row">
+          <span class="sec-row-icon">🔒</span>
+          <div>
+            <div class="sec-row-label">Why Microsoft built it</div>
+            <div class="sec-row-text">Protects against rootkits, bootkits, and sophisticated malware that installs itself as a kernel driver. It's one of the core Windows 11 security requirements because modern attacks frequently exploit the kernel rather than user-mode software.</div>
+          </div>
+        </div>
+        <div class="sec-row">
+          <span class="sec-row-icon">⚙</span>
+          <div>
+            <div class="sec-row-label">Why Vexis needs it off</div>
+            <div class="sec-row-text">WinRing0x64.sys — the driver that reads per-core CPU temperatures and clock speeds — is listed on Microsoft's vulnerable driver blocklist. Memory Integrity refuses to load it. Without this driver, Intel per-core temps and clocks are unavailable. AMD systems often work without it.</div>
+          </div>
+        </div>
+        <div class="sec-row">
+          <span class="sec-row-icon">⚠</span>
+          <div>
+            <div class="sec-row-label">What you lose when it's off</div>
+            <div class="sec-row-text">A malicious kernel-mode driver could load and gain full system access. This is a realistic threat vector for targeted attacks, less so for everyday users. Game anti-cheat software (Valorant's Vanguard, FACEIT) may refuse to run without Memory Integrity enabled.</div>
+          </div>
+        </div>
+        <div class="sec-row">
+          <span class="sec-row-icon">🔍</span>
+          <div>
+            <div class="sec-row-label">Things to consider</div>
+            <div class="sec-row-text">If you only play games with kernel-level anti-cheat, keep Memory Integrity ON and accept limited Intel sensor data. If you're on AMD, WinRing0 may not be required at all — AMD SMU access uses a different path that often works without this driver.</div>
+          </div>
+        </div>
+        <span class="sec-risk risk-medium">⬤ MEDIUM RISK when off — primarily a concern for targeted attacks or kernel-level anti-cheat games</span>
+      </div>
+    </div>
+
+    <!-- ═══ VULNERABLE DRIVER BLOCKLIST ════════════════════════════════════════ -->
+    <div class="sec-card" id="card-vdb">
+      <div class="sec-header" onclick="toggleCard('vdb')">
+        <span class="sec-icon">🚫</span>
+        <span class="sec-title">VULNERABLE DRIVER BLOCKLIST</span>
+        <span class="sec-badge inactive" id="badge-vdb">AUTO OFF</span>
+        <label class="sec-toggle" onclick="event.stopPropagation()">
+          <input type="checkbox" id="toggle-vdb" checked onchange="savePref('vdb',this.checked)">
+          <span class="sec-slider"></span>
+        </label>
+      </div>
+      <div class="sec-divider"></div>
+      <div class="sec-body" id="body-vdb">
+        <div class="sec-row">
+          <span class="sec-row-icon">📖</span>
+          <div>
+            <div class="sec-row-label">What it does</div>
+            <div class="sec-row-text">Microsoft maintains a list of drivers known to have security vulnerabilities. The Vulnerable Driver Blocklist prevents these drivers from loading, even if they have valid signatures. The list is updated via Windows Update and covers thousands of known-bad driver versions.</div>
+          </div>
+        </div>
+        <div class="sec-row">
+          <span class="sec-row-icon">🔒</span>
+          <div>
+            <div class="sec-row-label">Why Microsoft built it</div>
+            <div class="sec-row-text">Defends against BYOVD (Bring Your Own Vulnerable Driver) attacks — a technique where attackers drop a legitimate but exploitable driver onto a system to bypass OS protections and escalate privileges. This has been used in real-world ransomware and APT attacks.</div>
+          </div>
+        </div>
+        <div class="sec-row">
+          <span class="sec-row-icon">⚙</span>
+          <div>
+            <div class="sec-row-label">Why Vexis needs it off</div>
+            <div class="sec-row-text">WinRing0x64.sys is on the blocklist. The same driver is used by HWiNFO64, CPU-Z, and MSI Afterburner — they all face the same issue. The blocklist doesn't distinguish between a hardware monitoring app and a malicious use of the same driver.</div>
+          </div>
+        </div>
+        <div class="sec-row">
+          <span class="sec-row-icon">⚠</span>
+          <div>
+            <div class="sec-row-label">What you lose when it's off</div>
+            <div class="sec-row-text">Known-vulnerable drivers can load. An attacker who can drop a file on your system could use one of these drivers to escalate from user to kernel privileges. This is the same technique used by BlackByte, AvosLocker, and other ransomware strains.</div>
+          </div>
+        </div>
+        <div class="sec-row">
+          <span class="sec-row-icon">🔍</span>
+          <div>
+            <div class="sec-row-label">Things to consider</div>
+            <div class="sec-row-text">The practical risk depends on how an attacker gets onto your system in the first place. If you practice good security hygiene (no pirated software, updated Windows, not clicking random links), the residual risk is low. HWiNFO64 is a widely-used alternative that faces the same trade-off.</div>
+          </div>
+        </div>
+        <span class="sec-risk risk-high">⬤ HIGHER RISK when off — BYOVD is a documented real-world attack vector used in ransomware</span>
+      </div>
+    </div>
+
+    <!-- ═══ VBS ═════════════════════════════════════════════════════════════════ -->
+    <div class="sec-card" id="card-vbs">
+      <div class="sec-header" onclick="toggleCard('vbs')">
+        <span class="sec-icon">🔐</span>
+        <span class="sec-title">VIRTUALIZATION-BASED SECURITY (VBS)</span>
+        <span class="sec-badge inactive" id="badge-vbs">AUTO OFF</span>
+        <label class="sec-toggle" onclick="event.stopPropagation()">
+          <input type="checkbox" id="toggle-vbs" checked onchange="savePref('vbs',this.checked)">
+          <span class="sec-slider"></span>
+        </label>
+      </div>
+      <div class="sec-divider"></div>
+      <div class="sec-body" id="body-vbs">
+        <div class="sec-row">
+          <span class="sec-row-icon">📖</span>
+          <div>
+            <div class="sec-row-label">What it does</div>
+            <div class="sec-row-text">VBS uses the CPU's hardware virtualization (Intel VT-x / AMD-V) to create an isolated secure environment called the Virtual Secure Mode (VSM). Critical security components — including credential hashes, kernel code, and key material — are stored inside VSM where even a compromised kernel cannot access them.</div>
+          </div>
+        </div>
+        <div class="sec-row">
+          <span class="sec-row-icon">🔒</span>
+          <div>
+            <div class="sec-row-label">Why Microsoft built it</div>
+            <div class="sec-row-text">Protects against pass-the-hash attacks, credential theft (mimikatz style), and kernel exploits. With VBS on, even full kernel control doesn't give an attacker access to login credentials. It's a core part of Windows 11's security baseline.</div>
+          </div>
+        </div>
+        <div class="sec-row">
+          <span class="sec-row-icon">⚙</span>
+          <div>
+            <div class="sec-row-label">Why Vexis needs it off</div>
+            <div class="sec-row-text">VBS enforces Memory Integrity (HVCI). Disabling VBS is sometimes required when HVCI can't be individually toggled — on some system configurations, VBS and HVCI are linked. Vexis disables this as a fallback if the HVCI key alone is insufficient.</div>
+          </div>
+        </div>
+        <div class="sec-row">
+          <span class="sec-row-icon">⚠</span>
+          <div>
+            <div class="sec-row-label">What you lose when it's off</div>
+            <div class="sec-row-text">Credential Guard is disabled — your NTLM hashes and Kerberos tickets are no longer isolated in VSM. A kernel-level exploit can now extract credentials from LSASS memory. This is the technique used in most enterprise network compromises (pass-the-hash, pass-the-ticket).</div>
+          </div>
+        </div>
+        <div class="sec-row">
+          <span class="sec-row-icon">🔍</span>
+          <div>
+            <div class="sec-row-label">Things to consider</div>
+            <div class="sec-row-text">For home users and gaming PCs, VBS off is the norm — most games and hardware tools require it. The credential theft risk is primarily relevant in domain-joined enterprise environments. If your PC is on a corporate network, consult your IT team before disabling VBS. Requires a reboot to take effect.</div>
+          </div>
+        </div>
+        <span class="sec-risk risk-medium">⬤ MEDIUM RISK for home users — HIGH RISK on domain-joined corporate PCs</span>
+      </div>
+    </div>
+
+    <!-- ═══ WINDOWS DEFENDER EXCLUSION ═════════════════════════════════════════ -->
+    <div class="sec-card" id="card-defender">
+      <div class="sec-header" onclick="toggleCard('defender')">
+        <span class="sec-icon">🛡</span>
+        <span class="sec-title">WINDOWS DEFENDER EXCLUSION</span>
+        <span class="sec-badge active" id="badge-defender">AUTO ON</span>
+        <label class="sec-toggle" onclick="event.stopPropagation()">
+          <input type="checkbox" id="toggle-defender" checked onchange="savePref('defender',this.checked)">
+          <span class="sec-slider"></span>
+        </label>
+      </div>
+      <div class="sec-divider"></div>
+      <div class="sec-body" id="body-defender">
+        <div class="sec-row">
+          <span class="sec-row-icon">📖</span>
+          <div>
+            <div class="sec-row-label">What it does</div>
+            <div class="sec-row-text">Adds Vexis's executable and the hardware sensor driver (LibreHardwareMonitorLib.sys) to Windows Defender's exclusion list. Excluded paths and processes are not scanned for malware in real time.</div>
+          </div>
+        </div>
+        <div class="sec-row">
+          <span class="sec-row-icon">🔒</span>
+          <div>
+            <div class="sec-row-label">Why Microsoft built it</div>
+            <div class="sec-row-text">Defender's exclusions exist to reduce false positives for legitimate software that uses techniques that look similar to malware — such as low-level hardware access, process injection, or kernel drivers.</div>
+          </div>
+        </div>
+        <div class="sec-row">
+          <span class="sec-row-icon">⚙</span>
+          <div>
+            <div class="sec-row-label">Why Vexis needs it</div>
+            <div class="sec-row-text">LibreHardwareMonitorLib.sys triggers Defender's heuristics because it accesses hardware registers at the kernel level — the same technique used by some rootkits. Without the exclusion, Defender may quarantine the driver and prevent sensor readings from working.</div>
+          </div>
+        </div>
+        <div class="sec-row">
+          <span class="sec-row-icon">⚠</span>
+          <div>
+            <div class="sec-row-label">What you lose when it's on (exclusion applied)</div>
+            <div class="sec-row-text">If Vexis's install folder is ever compromised by malware, Defender won't detect it. This is an unlikely scenario if you downloaded Vexis from the official GitHub release, but worth understanding.</div>
+          </div>
+        </div>
+        <div class="sec-row">
+          <span class="sec-row-icon">🔍</span>
+          <div>
+            <div class="sec-row-label">Things to consider</div>
+            <div class="sec-row-text">The exclusion is narrowly scoped to Vexis's process and the LHM driver temp file. It doesn't exclude your entire PC or install folder. If you see Defender alerts about Vexis, that's likely a false positive — but you can verify by checking the file hash against the GitHub release.</div>
+          </div>
+        </div>
+        <span class="sec-risk risk-low">⬤ LOW RISK — narrowly scoped exclusion; only affects the Vexis process and sensor driver</span>
+      </div>
+    </div>
+
+    <!-- ═══ FIREWALL RULE ════════════════════════════════════════════════════════ -->
+    <div class="sec-card" id="card-firewall">
+      <div class="sec-header" onclick="toggleCard('firewall')">
+        <span class="sec-icon">🌐</span>
+        <span class="sec-title">OPENRGB FIREWALL RULE (PORT 6742)</span>
+        <span class="sec-badge active" id="badge-firewall">AUTO ON</span>
+        <label class="sec-toggle" onclick="event.stopPropagation()">
+          <input type="checkbox" id="toggle-firewall" checked onchange="savePref('firewall',this.checked)">
+          <span class="sec-slider"></span>
+        </label>
+      </div>
+      <div class="sec-divider"></div>
+      <div class="sec-body" id="body-firewall">
+        <div class="sec-row">
+          <span class="sec-row-icon">📖</span>
+          <div>
+            <div class="sec-row-label">What it does</div>
+            <div class="sec-row-text">Adds a Windows Firewall inbound rule allowing TCP connections on port 6742 — the port OpenRGB's SDK server listens on. Without this rule, Windows Firewall may block Vexis from connecting to OpenRGB.</div>
+          </div>
+        </div>
+        <div class="sec-row">
+          <span class="sec-row-icon">🔒</span>
+          <div>
+            <div class="sec-row-label">Why Windows Firewall exists</div>
+            <div class="sec-row-text">The Windows Firewall blocks unsolicited inbound connections by default, preventing external hosts from reaching services running on your PC. This is a critical network boundary control.</div>
+          </div>
+        </div>
+        <div class="sec-row">
+          <span class="sec-row-icon">⚙</span>
+          <div>
+            <div class="sec-row-label">Why Vexis needs it</div>
+            <div class="sec-row-text">Vexis communicates with OpenRGB via its local network API (REST on port 6742). If the Firewall blocks this port, the RGB control page can't connect to OpenRGB even though both are running on the same machine.</div>
+          </div>
+        </div>
+        <div class="sec-row">
+          <span class="sec-row-icon">⚠</span>
+          <div>
+            <div class="sec-row-label">What you lose when it's on (rule applied)</div>
+            <div class="sec-row-text">Port 6742 is open to inbound connections. Since OpenRGB binds to 127.0.0.1 (localhost only) by default, external machines on your network cannot reach it. Any process running locally on your PC can connect to OpenRGB and control your RGB devices.</div>
+          </div>
+        </div>
+        <div class="sec-row">
+          <span class="sec-row-icon">🔍</span>
+          <div>
+            <div class="sec-row-label">Things to consider</div>
+            <div class="sec-row-text">The localhost-only binding means this is essentially a local IPC channel, not a network exposure. The realistic threat is another local application taking control of your RGB — not an external attacker. If you don't use the RGB control page, you can safely disable this rule.</div>
+          </div>
+        </div>
+        <span class="sec-risk risk-low">⬤ LOW RISK — localhost only; no external network exposure when OpenRGB uses its default binding</span>
+      </div>
+    </div>
+
+    <button class="sec-apply-btn" onclick="saveAll()">💾 SAVE &amp; APPLY ON NEXT LAUNCH</button>
+    <div class="sec-status-bar" id="sec-status"></div>
+
+    <!-- ── Live console ───────────────────────────────────────────────────── -->
+    <div class="console-wrap">
+      <div class="console-toolbar">
+        <span class="console-title">⬛ LIVE SYSTEM LOG</span>
+        <input class="console-filter" id="con-filter" placeholder="filter..." oninput="applyFilter()">
+        <button class="console-btn" id="con-pause" onclick="togglePause()">⏸ PAUSE</button>
+        <button class="console-btn" onclick="clearConsole()">✕ CLEAR</button>
+        <button class="console-btn" onclick="scrollToBottom()">↓ BOTTOM</button>
+      </div>
+      <div class="console-out" id="con-out"></div>
+    </div>
+
+  </div>
+</div>
+<script src="/nav.js?v=8" data-page="security"></script>
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+const PREFS_KEY = 'pcm-security-prefs';
+
+// Defaults match original auto-apply behaviour
+const defaults = {
+  startup:  true,   // run security setup on startup
+  hvci:     true,   // auto-disable Memory Integrity
+  vdb:      true,   // auto-disable Driver Blocklist
+  vbs:      true,   // auto-disable VBS
+  defender: true,   // auto-add Defender exclusion
+  firewall: true,   // auto-add firewall rule
+};
+
+let prefs = { ...defaults };
+
+// ── Load ─────────────────────────────────────────────────────────────────────
+function loadPrefs() {
+  try {
+    const stored = localStorage.getItem(PREFS_KEY);
+    if (stored) prefs = { ...defaults, ...JSON.parse(stored) };
+  } catch { }
+
+  document.getElementById('toggle-startup').checked  = prefs.startup;
+  document.getElementById('toggle-hvci').checked     = prefs.hvci;
+  document.getElementById('toggle-vdb').checked      = prefs.vdb;
+  document.getElementById('toggle-vbs').checked      = prefs.vbs;
+  document.getElementById('toggle-defender').checked = prefs.defender;
+  document.getElementById('toggle-firewall').checked = prefs.firewall;
+
+  updateBadges();
+}
+
+function savePref(key, val) {
+  prefs[key] = val;
+  updateBadges();
+}
+
+function updateBadges() {
+  setBadge('hvci',     prefs.hvci     && prefs.startup, 'AUTO OFF', 'SKIPPED', 'inactive', 'off');
+  setBadge('vdb',      prefs.vdb      && prefs.startup, 'AUTO OFF', 'SKIPPED', 'inactive', 'off');
+  setBadge('vbs',      prefs.vbs      && prefs.startup, 'AUTO OFF', 'SKIPPED', 'inactive', 'off');
+  setBadge('defender', prefs.defender && prefs.startup, 'AUTO ON',  'SKIPPED', 'active',   'off');
+  setBadge('firewall', prefs.firewall && prefs.startup, 'AUTO ON',  'SKIPPED', 'active',   'off');
+}
+
+function setBadge(id, active, labelOn, labelOff, classOn, classOff) {
+  const b = document.getElementById('badge-' + id);
+  if (!b) return;
+  b.textContent = active ? labelOn : labelOff;
+  b.className   = 'sec-badge ' + (active ? classOn : classOff);
+}
+
+// ── Toggle card body ─────────────────────────────────────────────────────────
+function toggleCard(id) {
+  const body = document.getElementById('body-' + id);
+  if (!body) return;
+  body.classList.toggle('open');
+}
+
+// ── Save all prefs to localStorage + send to C# ──────────────────────────────
+function saveAll() {
+  try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch { }
+
+  // Send to C# so it can update config.json
+  sendToHost({
+    type: 'saveSecurityPrefs',
+    startup:  prefs.startup,
+    hvci:     prefs.hvci,
+    vdb:      prefs.vdb,
+    vbs:      prefs.vbs,
+    defender: prefs.defender,
+    firewall: prefs.firewall,
+  });
+
+  const s = document.getElementById('sec-status');
+  s.textContent = '✓ Saved — changes take effect on next Vexis launch.';
+  setTimeout(() => { s.textContent = ''; }, 4000);
+}
+
+loadPrefs();
+
+// ── Live console ─────────────────────────────────────────────────────────────
+let _logSeq    = 0;
+let _paused    = false;
+let _allLines  = [];   // full buffer for filter replay
+let _pollTimer = null;
+
+function startLogPoll() {
+  if (_pollTimer) return;
+  _pollTimer = setInterval(() => {
+    if (!_paused) sendToHost({ type: 'getLogs', seq: _logSeq });
+  }, 800);
+  // Kick immediately
+  sendToHost({ type: 'getLogs', seq: 0 });
+}
+
+window.updateLogs = function({ lines, seq }) {
+  if (!lines || !lines.length) return;
+  _logSeq = seq;
+  _allLines.push(...lines);
+  if (_allLines.length > 1200) _allLines = _allLines.slice(-1000);
+  if (!_paused) renderLines(lines);
+};
+
+function renderLines(lines) {
+  const out   = document.getElementById('con-out');
+  if (!out) return;
+  const filter = (document.getElementById('con-filter')?.value || '').toLowerCase();
+  const atBottom = out.scrollHeight - out.scrollTop - out.clientHeight < 30;
+
+  lines.forEach(raw => {
+    if (filter && !raw.toLowerCase().includes(filter)) return;
+    const div   = document.createElement('div');
+    div.innerHTML = colorize(raw);
+    out.appendChild(div);
+  });
+
+  // Trim DOM to ~800 nodes
+  while (out.childNodes.length > 800) out.removeChild(out.firstChild);
+  if (atBottom) out.scrollTop = out.scrollHeight;
+}
+
+function colorize(raw) {
+  // Extract timestamp and rest
+  const tsMatch = raw.match(/^(\[\d{2}:\d{2}:\d{2}\.\d{3}\])\s*(.*)/s);
+  const ts   = tsMatch ? tsMatch[1] : '';
+  const body = tsMatch ? tsMatch[2] : raw;
+
+  // Determine color class
+  let cls = 'cl-default';
+  const bl = body.toLowerCase();
+  if (bl.startsWith('[hw]'))     cls = 'cl-hw';
+  else if (bl.startsWith('[orgb]'))  cls = 'cl-orgb';
+  else if (bl.startsWith('[fans]') || bl.startsWith('[fan]')) cls = 'cl-fans';
+  else if (bl.startsWith('[msihid]') || bl.startsWith('[msi]')) cls = 'cl-msi';
+  else if (bl.startsWith('[pawnio]'))cls = 'cl-pawn';
+  else if (bl.startsWith('[config]'))cls = 'cl-config';
+  else if (bl.startsWith('[rgb]'))   cls = 'cl-rgb';
+  else if (bl.startsWith('[log]') || bl.startsWith('[startup]') || bl.startsWith('[update]')) cls = 'cl-log';
+  else if (bl.startsWith('[poll]'))  cls = 'cl-poll';
+  else if (bl.includes('error') || bl.includes('fail') || bl.includes('exception')) cls = 'cl-err';
+  else if (bl.includes('warn'))  cls = 'cl-warn';
+
+  const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return `<span class="cl-time">${esc(ts)} </span><span class="${cls}">${esc(body)}</span>`;
+}
+
+function applyFilter() {
+  const out = document.getElementById('con-out');
+  if (!out) return;
+  out.innerHTML = '';
+  const filter = (document.getElementById('con-filter')?.value || '').toLowerCase();
+  const show   = filter ? _allLines.filter(l => l.toLowerCase().includes(filter)) : _allLines;
+  // Only render last 400 for performance
+  renderLines(show.slice(-400));
+}
+
+function togglePause() {
+  _paused = !_paused;
+  const btn = document.getElementById('con-pause');
+  if (btn) { btn.textContent = _paused ? '▶ RESUME' : '⏸ PAUSE'; btn.classList.toggle('active', _paused); }
+  if (!_paused) applyFilter();
+}
+
+function clearConsole() {
+  _allLines = [];
+  const out = document.getElementById('con-out');
+  if (out) out.innerHTML = '';
+}
+
+function scrollToBottom() {
+  const out = document.getElementById('con-out');
+  if (out) out.scrollTop = out.scrollHeight;
+}
+
+startLogPoll();
+
+// Required by PopoutForm.WaitForReady — security page doesn't use sensor data
+// but needs this defined so the popout can detect the page is ready.
+function receiveData(d) {}
+function onConfigReceived(cfg) { navOnConfig(cfg); }
+</script>
+</body>
+</html>

@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PC Monitor — RGB</title>
+<link rel="stylesheet" href="/ui.css?v=8">
+<style>
+  .rgb-dot{width:8px;height:8px;border-radius:50%;background:#333;flex-shrink:0;transition:background .3s;}
+  .rgb-dot.on{background:#44ff88;box-shadow:0 0 6px #44ff88;}.rgb-dot.err{background:#ff4444;box-shadow:0 0 6px #ff4444;}
+  .device-card{margin-bottom:10px;}
+  .mode-row{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0;}
+  .mode-chip{padding:3px 9px;font-size:9px;letter-spacing:.08em;border-radius:12px;border:1px solid var(--border);color:var(--label-dim);cursor:pointer;background:transparent;font-family:inherit;transition:all .15s;}
+  .mode-chip:hover{border-color:var(--border-bright);color:var(--label);}
+  .mode-chip.active{background:rgba(255,204,0,.1);border-color:var(--border-bright);color:var(--header-title);}
+  .cprow{display:flex;align-items:center;gap:8px;margin:7px 0;}
+  .cprow label{font-size:10px;color:var(--label);flex:1;}
+  .bp{width:36px;height:28px;border:1px solid var(--border);border-radius:3px;cursor:pointer;background:none;padding:2px;flex-shrink:0;}
+  .bp::-webkit-color-swatch-wrapper{padding:0;}.bp::-webkit-color-swatch{border:none;border-radius:2px;}
+  .no-openrgb{text-align:center;padding:40px 20px;}.no-openrgb .big-icon{font-size:36px;opacity:.3;margin-bottom:12px;}
+  .install-steps{text-align:left;font-size:10px;line-height:2;color:var(--label-dim);margin:12px 0;}.install-steps span{color:var(--label);}
+  .qrow{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;}
+  .qcol{width:28px;height:28px;border-radius:4px;cursor:pointer;border:2px solid transparent;transition:border-color .15s,transform .1s;}
+  .qcol:hover{transform:scale(1.15);border-color:rgba(255,255,255,.4);}
+  /* Per-device animation row */
+  .anim-row{display:flex;gap:4px;flex-wrap:wrap;margin:7px 0 4px;align-items:center;}
+  .anim-btn{padding:3px 8px;font-size:8px;letter-spacing:.06em;font-family:monospace;background:rgba(10,8,3,.8);border:1px solid rgba(68,51,0,.3);border-radius:3px;cursor:pointer;color:var(--label-dim);transition:all .15s;}
+  .anim-btn:hover{border-color:rgba(255,204,0,.4);color:var(--label);}
+  .anim-btn.anim-on{border-color:var(--header-title);color:var(--header-title);background:rgba(255,204,0,.08);}
+  .anim-stop{color:#cc4444;border-color:rgba(180,40,40,.3);}
+  .anim-stop:hover{background:rgba(180,40,40,.15);color:#ff6666;}
+  .anim-spd{flex:1;min-width:60px;max-width:120px;accent-color:var(--mem-acc);}
+  .anim-pill{font-size:8px;font-family:monospace;letter-spacing:.08em;padding:1px 6px;border-radius:8px;background:rgba(68,255,100,.1);color:#44ff88;border:1px solid rgba(68,255,100,.3);flex-shrink:0;}
+  /* RAM sync */
+  .rsbar{display:flex;align-items:center;gap:8px;padding:4px 8px;margin-bottom:5px;background:rgba(68,51,0,.12);border:1px solid rgba(68,51,0,.25);border-radius:3px;font-size:9px;font-family:monospace;}
+  .rsd{width:7px;height:7px;border-radius:50%;background:#44ff88;box-shadow:0 0 5px #44ff88;flex-shrink:0;}
+  .rsd.off{background:#444;box-shadow:none;}
+  .rst{padding:2px 7px;font-size:8px;background:rgba(68,51,0,.2);border:1px solid rgba(68,51,0,.4);color:#886600;border-radius:2px;cursor:pointer;font-family:monospace;transition:all .15s;}
+  .rst:hover{background:rgba(255,204,0,.1);color:#ccaa00;}
+  /* LED painter */
+  .ltbtn{width:100%;margin-top:5px;font-size:9px;padding:4px;background:rgba(68,51,0,.1);border:1px dashed rgba(68,51,0,.35);color:var(--label-dim);border-radius:3px;cursor:pointer;font-family:monospace;letter-spacing:.08em;transition:all .15s;text-align:center;}
+  .ltbtn:hover{background:rgba(68,51,0,.25);color:var(--label);}.ltbtn.open{border-style:solid;border-color:rgba(255,204,0,.3);color:var(--label);}
+  .lpanel{margin-top:7px;padding:8px;background:rgba(0,0,0,.35);border:1px solid rgba(68,51,0,.2);border-radius:4px;}
+  .lptb{display:flex;align-items:center;gap:6px;margin-bottom:7px;flex-wrap:wrap;}
+  .lmpick{width:28px;height:22px;border:1px solid var(--border);border-radius:3px;cursor:pointer;background:none;padding:1px;flex-shrink:0;}
+  .lmpick::-webkit-color-swatch-wrapper{padding:0;}.lmpick::-webkit-color-swatch{border:none;border-radius:2px;}
+  .lgrid{display:flex;flex-wrap:wrap;gap:2px;max-height:160px;overflow-y:auto;padding:5px;background:rgba(0,0,0,.4);border-radius:3px;user-select:none;}
+  .lgrid::-webkit-scrollbar{width:3px;}.lgrid::-webkit-scrollbar-thumb{background:rgba(68,51,0,.4);border-radius:2px;}
+  .lcel{border-radius:2px;cursor:crosshair;flex-shrink:0;border:1px solid rgba(255,255,255,.18);box-sizing:border-box;transition:transform .05s,border-color .05s;}
+  .lcel:hover{transform:scale(1.4);border-color:rgba(255,255,255,.7);z-index:5;position:relative;}
+  .lhelp{font-size:8px;color:var(--label-dim);margin-top:4px;letter-spacing:.05em;font-family:monospace;}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title">&#x25D0; RGB Control</div>
+      <div class="page-subtitle" id="rgb-sub">Connecting to OpenRGB...</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;font-size:10px;">
+      <div style="display:flex;gap:4px;align-items:center;margin-right:6px">
+        <div id="sl-notopen" class="rgb-dot" style="background:#555" title="OpenRGB not detected"></div>
+        <div id="sl-noserver" class="rgb-dot" style="background:#555" title="Server not running"></div>
+        <div id="sl-connected" class="rgb-dot" style="background:#555" title="Connected"></div>
+      </div>
+      <div class="rgb-dot" id="rgb-dot"></div>
+      <span id="rgb-status-txt" style="font-size:9px;color:var(--label-dim)">OFFLINE</span>
+      <button class="btn btn-ghost" id="openrgb-gui-btn" onclick="openRgbGui()" style="padding:4px 10px;font-size:9px" title="Open OpenRGB GUI — full plugin/effect support">&#x2699; GUI</button>
+      <button class="btn btn-ghost" onclick="beginRetryWithWait(10);" style="padding:4px 10px;font-size:9px"><span id="retry-btn-txt">RETRY</span></button>
+      <button class="btn btn-danger" onclick="sendToHost({type:'killOpenRGB'})" style="padding:4px 10px;font-size:9px">&#x2715; KILL</button>
+    </div>
+  </div>
+  <div class="page-body">
+    <div id="rgb-offline" class="card no-openrgb">
+      <div class="big-icon">&#x25D0;</div>
+      <div class="page-title" style="margin-bottom:8px">OpenRGB Required</div>
+      <div style="font-size:10px;color:var(--label-dim);line-height:1.7;margin-bottom:10px">PC Monitor uses OpenRGB to control your RGB devices. It's free and open source.</div>
+      <div class="install-steps">
+        <div style="color:#cc9900;margin-bottom:6px">&#x26A0; Follow these steps:</div>
+        <div>1. Click <span>&#x25B6; Launch OpenRGB</span> below — opens as <span>Administrator</span></div>
+        <div>2. Wait ~15 seconds for device detection to complete</div>
+        <div>3. PC Monitor auto-connects, or click <span>RETRY</span></div>
+        <div style="margin-top:5px;color:#886600;font-size:9px">OpenRGB needs admin rights for RAM + I2C access.<br>If you opened it manually without admin, click KILL then Launch.</div>
+      </div>
+      <button class="btn btn-primary" onclick="sendToHost({type:'openUrl',url:'https://openrgb.org'})" style="width:100%;justify-content:center;margin-top:8px">&#x2197; Download OpenRGB</button>
+      <button class="btn btn-ghost" onclick="if(!this._l){this._l=true;this.textContent='&#x25B6; Launching...';sendToHost({type:'launchOpenRGB'});setTimeout(()=>{this._l=false;this.textContent='&#x25B6; Launch OpenRGB (as Admin)';},6000);}" style="width:100%;justify-content:center;margin-top:6px">&#x25B6; Launch OpenRGB (as Admin)</button>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:10px;color:var(--label-dim)">
+        <span>SDK Port:</span>
+        <input type="number" value="6742" min="1024" max="65535" style="width:70px;background:var(--surface2);border:1px solid var(--border);color:var(--label);padding:3px 6px;border-radius:3px;font-family:monospace;font-size:11px" onchange="localStorage.setItem('pcm-rgb-port',this.value);location.reload()">
+        <span style="opacity:.6">default 6742</span>
+      </div>
+    </div>
+    <div id="rgb-online" style="display:none">
+      <!-- Quick colors all devices -->
+      <div class="card">
+        <div class="card-header"><span class="card-title">QUICK COLORS &#x2014; ALL DEVICES</span></div>
+        <div class="qrow" id="quick-colors"></div>
+        <div class="cprow" style="margin-top:10px">
+          <label>CUSTOM COLOR</label>
+          <input type="color" class="bp" id="custom-color" value="#ff0000" onchange="applyAllColor(this.value)">
+          <button class="btn btn-primary" onclick="applyAllColor(document.getElementById('custom-color').value)" style="padding:5px 12px">APPLY ALL</button>
+        </div>
+      </div>
+
+<div id="device-list"></div>
+    </div>
+  </div>
+</div>
+<script src="/nav.js?v=8" data-page="rgb"></script>
+<script>
+const ORGB_PORT=localStorage.getItem('pcm-rgb-port')||'6742';
+let _devices=[],_connected=false,_callCounter=0;
+const _pendingCalls={};
+
+window.orgbProxyResult=function(id,ok,data){const cb=_pendingCalls[id];if(cb){delete _pendingCalls[id];cb(ok,data);}};
+function orgbCall(m,p,b){return new Promise((res,rej)=>{const id=String(++_callCounter);_pendingCalls[id]=(ok,d)=>ok?res(d):rej(new Error(d));setTimeout(()=>{if(_pendingCalls[id]){delete _pendingCalls[id];rej(new Error('Timeout'));}},8000);sendToHost({type:'openrgbProxy',method:m,path:p,body:b||null,port:parseInt(ORGB_PORT),callId:id});});}
+async function orgbGet(p){const r=await orgbCall('GET',p,null);return typeof r==='string'?JSON.parse(r):r;}
+async function orgbPut(p,b){await orgbCall('PUT',p,JSON.stringify(b));}
+
+const QCOLS=[{c:'#ff0000',l:'Red'},{c:'#ff6600',l:'Orange'},{c:'#ffff00',l:'Yellow'},{c:'#00ff00',l:'Green'},{c:'#00ffff',l:'Cyan'},{c:'#0066ff',l:'Blue'},{c:'#aa00ff',l:'Purple'},{c:'#ff00cc',l:'Pink'},{c:'#ffffff',l:'White'},{c:'#888888',l:'Half'},{c:'#222222',l:'Dim'},{c:'#000000',l:'Off'}];
+const ANIMS=[{id:'rainbow',icon:'&#x25C8;',l:'RAINBOW'},{id:'breathing',icon:'&#x25C9;',l:'BREATH'},{id:'comet',icon:'&#x2192;',l:'COMET'},{id:'raindrop',icon:'&#x2193;',l:'RAIN'},{id:'strobe',icon:'&#x26A1;',l:'STROBE'},{id:'wave',icon:'&#x2248;',l:'WAVE'}];
+
+function hexRgb(h){return{r:parseInt(h.slice(1,3),16),g:parseInt(h.slice(3,5),16),b:parseInt(h.slice(5,7),16)};}
+function rgbHex(r,g,b){return'#'+[r,g,b].map(v=>(v||0).toString(16).padStart(2,'0')).join('');}
+function ledCnt(i){
+  const d=_devices[i];
+  if(!d)return 1;
+  // For GPU devices, prefer colors.length (actual device LED count from OpenRGB)
+  // over num_leds which may be artificially set to 1 by our parser
+  if((d.type??-1)===2&&d.colors?.length>1)return d.colors.length;
+  return d.num_leds||(typeof d.leds==='number'?d.leds:0)||(d.colors?.length||0)||1;
+}
+function isRam(i){const n=(_devices[i]?.name||'').toLowerCase();return n.includes('dram')||n.includes('ene');}
+function cleanMode(raw,idx){if(!raw)return'Mode '+idx;const c=raw.replace(/[^\x20-\x7E]/g,'').trim();return(c&&c.length<=32)?c:'Mode '+idx;}
+function staticIdx(i){
+  const d=_devices[i];if(!d?.modes?.length)return 0;
+  const f=d.modes.findIndex(m=>{const n=(m.name||'').toLowerCase();return n.includes('static')||n.includes('direct');});
+  if(f>=0)return f;
+  if(isRam(i))return Math.min(1,d.modes.length-1);
+  return 0;
+}
+
+// ── Per-LED painter ──────────────────────────────────────────────────────────
+const _lc={},_exp=new Set();
+let _pt=false,_pd=-1;
+document.addEventListener('mouseup',()=>{_pt=false;_pd=-1;});
+function initLC(i){const cnt=ledCnt(i),d=_devices[i];_lc[i]=Array.from({length:cnt},(_,li)=>{const c=d.colors?.[li];return c&&(c.r||c.g||c.b)?{r:c.r||0,g:c.g||0,b:c.b||0}:{r:25,g:25,b:25};});}
+function getLC(i){if(!_lc[i])initLC(i);return _lc[i];}
+function toggleLed(i){const p=document.getElementById('lp-'+i),b=document.getElementById('lt-'+i);if(!p)return;if(_exp.has(i)){_exp.delete(i);p.style.display='none';if(b){b.textContent='&#x25C8; INDIVIDUAL LEDs &#x25BC;';b.classList.remove('open');}}else{_exp.add(i);if(!_lc[i])initLC(i);p.style.display='block';if(b){b.textContent='&#x25C8; INDIVIDUAL LEDs &#x25B2;';b.classList.add('open');}renderGrid(i);}}
+function renderGrid(i){const colors=getLC(i),g=document.getElementById('lg-'+i);if(!g)return;const n=colors.length,sz=n>64?11:n>32?13:n>16?16:22;g.innerHTML=colors.map((c,li)=>`<div class="lcel" id="lc${i}_${li}" style="width:${sz}px;height:${sz}px;background:${rgbHex(c.r,c.g,c.b)}" title="LED ${li+1}" onmousedown="event.preventDefault();_pt=true;_pd=${i};paintLed(${i},${li})" onmouseenter="if(_pt&&_pd===${i})paintLed(${i},${li})" oncontextmenu="event.preventDefault();eyedrop(${i},${li})"></div>`).join('');}
+function pickH(i){return document.getElementById('lp-pick-'+i)?.value||'#ff0000';}
+function paintLed(i,li){const{r,g,b}=hexRgb(pickH(i));getLC(i)[li]={r,g,b};const c=document.getElementById('lc'+i+'_'+li);if(c)c.style.background=rgbHex(r,g,b);}
+function eyedrop(i,li){const c=getLC(i)[li]||{r:0,g:0,b:0};const p=document.getElementById('lp-pick-'+i);if(p)p.value=rgbHex(c.r,c.g,c.b);}
+function fillAll(i){const{r,g,b}=hexRgb(pickH(i));getLC(i).fill({r,g,b});renderGrid(i);}
+async function sendLC(i){const btn=document.getElementById('lp-send-'+i);if(btn){btn.textContent='SENDING\u2026';btn.disabled=true;}try{await setDC(i,getLC(i),null);if(btn)btn.textContent='SENT \u2713';setTimeout(()=>{if(btn){btn.textContent='SEND \u25B6';btn.disabled=false;}},1200);}catch(e){if(btn){btn.textContent='ERROR';btn.disabled=false;}}}
+
+// ── RAM sync ─────────────────────────────────────────────────────────────────
+let _ramSync=localStorage.getItem('pcm-ram-sync')!=='0';
+function toggleSync(){_ramSync=!_ramSync;localStorage.setItem('pcm-ram-sync',_ramSync?'1':'0');document.querySelectorAll('.rsd').forEach(e=>e.classList.toggle('off',!_ramSync));document.querySelectorAll('.rsl').forEach(e=>e.textContent=_ramSync?'RAM STICKS SYNCED':'RAM STICKS UNLINKED');}
+async function applyRAM(devIdx,leds,hex){
+  await setDC(devIdx,leds,hex);
+  if(_ramSync){for(let i=0;i<_devices.length;i++){if(i!==devIdx&&isRam(i)&&!_devices[i].skip&&_devices[i].num_leds){const cnt=ledCnt(i),sl=leds.length===cnt?leds:new Array(cnt).fill(leds[0]||hexRgb(hex));await setDC(i,sl,hex);const p=document.getElementById('dev-col-'+i);if(p&&hex)p.value=hex;}}}
+}
+
+// ── Color application ─────────────────────────────────────────────────────────
+// _hold: per-device timer that keeps resending the last static color
+// Stops automatically when an animation starts on the device.
+const _hold={};
+function startHold(devIdx,leds){
+  clearHold(devIdx);
+  const tick=()=>{
+    if(!_connected||_devAnim[devIdx]){clearHold(devIdx);return;}
+    orgbPut('/devices/'+devIdx+'/leds',leds).catch(()=>{});
+    _hold[devIdx]=setTimeout(tick,2000);
+  };
+  _hold[devIdx]=setTimeout(tick,2000);
+}
+function clearHold(devIdx){if(_hold[devIdx]){clearTimeout(_hold[devIdx]);delete _hold[devIdx];}}
+
+async function setDC(devIdx,leds,hex){
+  if(!leds||!leds.length)return;
+  const dev=_devices[devIdx]||{};
+  const devType=dev.type??-1;
+  // Only send SetCustomMode for GPU (type=2) — keyboard/DRAM/Corsair abort the
+  // connection when they receive it, killing all subsequent color sends.
+  if(devType===2){
+    const c=leds[0]||{r:0,g:0,b:0};
+    await orgbPut('/devices/'+devIdx+'/mode',{mode:staticIdx(devIdx),r:c.r,g:c.g,b:c.b});
+  }
+  await orgbPut('/devices/'+devIdx+'/leds',leds);
+  // Keep color alive — fires every 2 s for devices whose hardware may revert
+  startHold(devIdx,leds);
+  if(hex){const{r,g,b}=hexRgb(hex);_lc[devIdx]=new Array(leds.length).fill(null).map(()=>({r,g,b}));if(_exp.has(devIdx))renderGrid(devIdx);}
+}
+let _aTimer=null,_aPend=null;
+function applyAllColor(hex){if(!_connected)return;_aPend=hex;clearTimeout(_aTimer);_aTimer=setTimeout(async()=>{const h=_aPend;if(!h)return;_aPend=null;const{r,g,b}=hexRgb(h);for(let i=0;i<_devices.length;i++){const d=_devices[i];if(d.skip||!d.num_leds)continue;try{await setDC(i,new Array(ledCnt(i)).fill({r,g,b}),h);}catch(e){}}},300);}
+async function setDevMode(devIdx,modeIdx){try{await orgbPut('/devices/'+devIdx+'/mode',{mode:modeIdx});_devices[devIdx]=await orgbGet('/devices/'+devIdx);}catch(e){}}
+
+// ── Per-device animation engine ───────────────────────────────────────────────
+// Time-based: uses performance.now() as the clock source so animation position
+// is always correct regardless of network delays or frame drops.
+// Uses recursive setTimeout so ticks never overlap (each waits for TCP to finish).
+const _devAnim={};
+
+function hsvRgb(h,s,v){const c=v*s,x=c*(1-Math.abs((h/60)%2-1)),m=v-c;let r=0,g=0,b=0;if(h<60){r=c;g=x;}else if(h<120){r=x;g=c;}else if(h<180){g=c;b=x;}else if(h<240){g=x;b=c;}else if(h<300){r=x;b=c;}else{r=c;b=x;}return{r:Math.round((r+m)*255),g:Math.round((g+m)*255),b:Math.round((b+m)*255)};}
+
+function animColor(type,li,total,devIdx,t,speed,c1,c2){
+  // t is wall-clock seconds * speed — always based on real elapsed time
+  const len=Math.max(total,1);
+  switch(type){
+    case'rainbow':{
+      // Smooth hue sweep across LEDs + time — wraps via modulo, no discontinuity
+      const hue=((li/len + t*0.15) % 1)*360;
+      return hsvRgb(hue,1,1);
+    }
+    case'breathing':{
+      // Starts at 0 (off), peaks at 1, returns to 0 — clean loop at 2π boundary
+      const b=(1-Math.cos(t*Math.PI*1.2))/2;
+      return{r:Math.round(c1.r*b),g:Math.round(c1.g*b),b:Math.round(c1.b*b)};
+    }
+    case'comet':{
+      // Larger tail (35% of strip, minimum 4) for smooth wrap
+      const pos=(t*len*0.4)%len;
+      const tail=Math.max(4,Math.floor(len*0.35));
+      let dist=Math.abs(li-pos);
+      if(dist>len/2)dist=len-dist; // wrap-around distance for seamless loop
+      const b=Math.max(0,1-dist/tail)**2;
+      return{r:Math.round(c1.r*b),g:Math.round(c1.g*b),b:Math.round(c1.b*b)};
+    }
+    case'raindrop':{
+      const a=_devAnim[devIdx];if(!a)return{r:0,g:0,b:0};
+      if(!a.drops)a.drops=new Float32Array(len);
+      if(li===0){
+        // Decay all drops every tick
+        for(let i=0;i<len;i++)a.drops[i]=Math.max(0,a.drops[i]-0.08*speed);
+        if(Math.random()<0.22)a.drops[Math.floor(Math.random()*len)]=1.0;
+      }
+      const b=a.drops[li]||0;
+      return{r:Math.round(c1.r*b),g:Math.round(c1.g*b),b:Math.round(c1.b*b)};
+    }
+    case'strobe':{
+      // Square wave at 2Hz×speed — sharp but consistent
+      const on=(t*2*speed)%1 < 0.5;
+      return on?c1:{r:0,g:0,b:0};
+    }
+    case'wave':{
+      // Two-color wave: spatial phase across strip + temporal phase from t
+      const mix=(1+Math.sin(li/Math.max(len-1,1)*Math.PI*2 - t*Math.PI*1.2))/2;
+      return{r:Math.round(c1.r*mix+c2.r*(1-mix)),g:Math.round(c1.g*mix+c2.g*(1-mix)),b:Math.round(c1.b*mix+c2.b*(1-mix))};
+    }
+    default:return{r:0,g:0,b:0};
+  }
+}
+
+// Fire-and-forget animation tick — setInterval fires at fixed rate.
+// a.sending guards prevent concurrent sends per device; if TCP is slow,
+// frames are skipped rather than stacked. No blocking await = smooth playback.
+function animTick(devIdx){
+  const a=_devAnim[devIdx];
+  if(!a||!a.running||!_connected||a.sending)return;
+  const cnt=ledCnt(devIdx);
+  const c1=hexRgb(document.getElementById('anim-c1-'+devIdx)?.value||'#ff0000');
+  const c2=hexRgb(document.getElementById('anim-c2-'+devIdx)?.value||'#0066ff');
+  const spd=parseInt(document.getElementById('anim-spd-'+devIdx)?.value||'5');
+  const t=(performance.now()-a.startTime)*0.001*spd;
+  const leds=Array.from({length:cnt},(_,li)=>animColor(a.type,li,cnt,devIdx,t,spd,c1,c2));
+  a.sending=true;
+  orgbPut('/devices/'+devIdx+'/leds',leds)
+    .catch(()=>{})
+    .finally(()=>{if(_devAnim[devIdx])_devAnim[devIdx].sending=false;});
+}
+
+async function startDevAnim(devIdx,type){
+  stopDevAnim(devIdx);
+  const spd=parseInt(document.getElementById('anim-spd-'+devIdx)?.value||'5');
+  // Speed 1→100ms(10fps), Speed 5→50ms(20fps), Speed 10→25ms(40fps)
+  // spd1→80ms(12fps) spd5→40ms(25fps) spd10→20ms→25ms(40fps)
+  const interval=Math.max(25,85-spd*6);
+  _devAnim[devIdx]={type,startTime:performance.now(),running:true,drops:null,sending:false};
+  updateAnimBtn(devIdx,type);
+  // Set device to direct mode — fire-and-forget so animation starts immediately
+  if((_devices[devIdx]?.type??-1)===2)orgbPut('/devices/'+devIdx+'/mode',{mode:staticIdx(devIdx)}).catch(()=>{});
+  _devAnim[devIdx].timer=setInterval(()=>animTick(devIdx),interval);
+}
+
+function stopDevAnim(devIdx){
+  const a=_devAnim[devIdx];
+  if(a){clearInterval(a.timer);a.running=false;}
+  delete _devAnim[devIdx];
+  clearHold(devIdx); // animation takes over — no need for static hold
+  updateAnimBtn(devIdx,null);
+}
+
+function updateAnimBtn(devIdx,activeType){
+  ANIMS.forEach(({id})=>{
+    const b=document.getElementById('ab-'+devIdx+'-'+id);
+    if(b)b.classList.toggle('anim-on',id===activeType);
+  });
+  const pill=document.getElementById('anim-pill-'+devIdx);
+  if(pill){pill.textContent=activeType?activeType.toUpperCase():'';pill.style.display=activeType?'':'none';}
+}
+
+// ── Render ───────────────────────────────────────────────────────────────────
+function buildQC(){document.getElementById('quick-colors').innerHTML=QCOLS.map(({c,l})=>`<div class="qcol" style="background:${c}" title="${l}" onclick="applyAllColor('${c}');document.getElementById('custom-color').value='${c}'"></div>`).join('');}
+
+function renderDevices(){
+  const list=document.getElementById('device-list');if(!_devices.length){list.innerHTML='';return;}
+  list.innerHTML=_devices.map((d,i)=>{
+    if(d.skip||!d.num_leds)return`<div class="card device-card" id="dev-${i}" style="opacity:.4"><div class="card-header"><span class="card-title">${d.name||'Device '+i}</span><span class="badge badge-warn">UNSUPPORTED</span></div></div>`;
+    const cnt=ledCnt(i),isR=isRam(i);
+    const cHex=d.colors?.[0]?rgbHex(d.colors[0].r||0,d.colors[0].g||0,d.colors[0].b||0):'#ff0000';
+    const modeChips=(d.modes||[]).slice(0,8).map((m,mi)=>`<button class="mode-chip${d.active_mode===mi?' active':''}" onclick="setDevMode(${i},${mi});updateModeChips(${i},${mi})">${cleanMode(m.name,mi)}</button>`).join('');
+    return`<div class="card device-card" id="dev-${i}">
+      <div class="card-header">
+        <span class="card-title">${d.name||'Device '+i}</span>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span class="badge badge-dim">${cnt} LED${cnt!==1?'s':''}</span>
+        </div>
+      </div>
+      ${isR?`<div class="rsbar"><div class="rsd${_ramSync?'':' off'}"></div><span class="rsl" style="flex:1;color:var(--label)">${_ramSync?'RAM STICKS SYNCED':'RAM STICKS UNLINKED'}</span><button class="rst" onclick="toggleSync()">TOGGLE SYNC</button></div>`:''}
+      ${(!isR&&modeChips)?`<div class="mode-row" id="dev-modes-${i}">${modeChips}</div>`:''}
+      <div class="cprow">
+        <label>APPLY ALL LEDS</label>
+        <input type="color" class="bp" id="dev-col-${i}" value="${cHex}" oninput="clearTimeout(this._t);this._t=setTimeout(()=>${isR?'applyRAM':'setDC'}(${i},new Array(${cnt}).fill(hexRgb(this.value)),this.value),200)">
+        <button class="btn btn-primary" onclick="${isR?'applyRAM':'setDC'}(${i},new Array(${cnt}).fill(hexRgb(document.getElementById('dev-col-${i}').value)),document.getElementById('dev-col-${i}').value)" style="padding:5px 10px">APPLY</button>
+      </div>
+
+      <div class="ltbtn" id="lt-${i}" onclick="toggleLed(${i})">&#x25C8; INDIVIDUAL LEDs &#x25BC;</div>
+      <div id="lp-${i}" class="lpanel" style="display:none">
+        <div class="lptb">
+          <input type="color" class="lmpick" id="lp-pick-${i}" value="#ff0000">
+          <button class="btn btn-ghost" onclick="fillAll(${i})" style="font-size:9px;padding:3px 9px">FILL ALL</button>
+          <button class="btn btn-primary" id="lp-send-${i}" onclick="sendLC(${i})" style="font-size:9px;padding:3px 9px;margin-left:auto">SEND &#x25B6;</button>
+        </div>
+        <div class="lgrid" id="lg-${i}"></div>
+        <div class="lhelp">L-CLICK: PAINT &nbsp;&middot;&nbsp; R-CLICK: EYEDROP &nbsp;&middot;&nbsp; DRAG: PAINT MULTIPLE</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+function updateModeChips(devIdx,am){document.querySelectorAll('#dev-modes-'+devIdx+' .mode-chip').forEach((c,mi)=>c.classList.toggle('active',mi===am));}
+
+// ── Status ────────────────────────────────────────────────────────────────────
+function stopAllAnims(){Object.keys(_devAnim).forEach(i=>stopDevAnim(Number(i)));}
+
+// Open OpenRGB in full GUI mode for plugin/effect configuration.
+// PCMonitor pauses direct RGB control while the GUI is open; auto-reconnects
+// in server mode when the user closes OpenRGB.
+let _guiWatchInterval=null;
+function openRgbGui(){
+  // Stop all active holds and animations so PCMonitor stops sending during GUI session
+  Object.keys(_hold).forEach(i=>clearHold(Number(i)));
+  stopAllAnims();
+  stopRetryLoop();
+  _connected=false;
+  const btn=document.getElementById('openrgb-gui-btn');
+  if(btn){btn.textContent='◉ CLOSE GUI';btn.disabled=false;btn.onclick=()=>closeRgbGui();btn.style.color='#ffaa00';}
+  const txt=document.getElementById('rgb-status-txt');
+  if(txt)txt.textContent='GUI MODE';
+  const sub=document.getElementById('rgb-sub');
+  if(sub)sub.textContent='Opening OpenRGB GUI… check your taskbar or ▶ system tray if no window appears';
+  // Kill server first, then launch GUI (C# handler also kills, but belt+suspenders)
+  sendToHost({type:'killOpenRGB'});
+  setTimeout(()=>{
+    sendToHost({type:'launchOpenRGBGui'});
+    if(sub)sub.textContent='OpenRGB GUI is open — configure devices & plugins, then click CLOSE GUI';
+  },700);
+}
+function closeRgbGui(){
+  const btn=document.getElementById('openrgb-gui-btn');
+  if(btn){btn.textContent='⚙ GUI';btn.onclick=()=>openRgbGui();btn.style.color='';}
+  // Kill GUI instance (PCMonitor will relaunch as server via retry)
+  sendToHost({type:'killOpenRGB'});
+  beginRetryWithWait(8);
+}
+function sL(id,on,col){const e=document.getElementById(id);if(!e)return;e.style.background=on?(col||'#44ff88'):'#333';e.style.boxShadow=on?`0 0 6px ${col||'#44ff88'}`:'none';}
+function updLights(s){if(s==='connected'){sL('sl-notopen',true);sL('sl-noserver',true);sL('sl-connected',true);}else if(s==='process_up'){sL('sl-notopen',true);sL('sl-noserver',false);sL('sl-connected',false);}else{sL('sl-notopen',false);sL('sl-noserver',false);sL('sl-connected',false);}}
+function setStatus(state,msg){
+  const dot=document.getElementById('rgb-dot'),txt=document.getElementById('rgb-status-txt'),sub=document.getElementById('rgb-sub'),off=document.getElementById('rgb-offline'),on=document.getElementById('rgb-online');
+  if(state==='online'){_connected=true;dot.className='rgb-dot on';txt.textContent='CONNECTED';const a=_devices.filter(d=>!d.skip&&d.num_leds).length;sub.textContent=`${a} active (${_devices.length} total)`;off.style.display='none';on.style.display='block';buildQC();updLights('connected');}
+  else if(state==='offline'){_connected=false;dot.className='rgb-dot err';txt.textContent='OFFLINE';sub.textContent=msg||'OpenRGB not running';off.style.display='block';on.style.display='none';updLights('none');chkProc();}
+  else{dot.className='rgb-dot';txt.textContent='CONNECTING...';sub.textContent='Trying localhost:6742...';updLights('none');}
+}
+async function chkProc(){if(!IS_WEBVIEW)return;return new Promise(resolve=>{const id=String(++_callCounter);_pendingCalls[id]=(ok,data)=>{try{const d=JSON.parse(typeof data==='string'?data:'{}');if(!_connected)sL('sl-notopen',d.running===true);}catch{}resolve();};setTimeout(()=>{if(_pendingCalls[id]){delete _pendingCalls[id];resolve();}},3000);sendToHost({type:'checkOpenRGB',callId:id});});}
+// ── MSI Mystic Light SDK ─────────────────────────────────────────────────────
+setInterval(()=>{if(!_connected&&IS_WEBVIEW)chkProc();},3000);
+let _retryLoop=null,_countdownTimer=null;
+
+function beginRetryWithWait(waitSec){
+  stopRetryLoop();
+  if(_countdownTimer){clearInterval(_countdownTimer);_countdownTimer=null;}
+  const rb=document.getElementById('retry-btn-txt');
+  let secs=waitSec;
+  if(rb)rb.textContent='WAIT '+secs+'s';
+  _countdownTimer=setInterval(()=>{
+    secs--;
+    if(rb)rb.textContent=secs>0?'WAIT '+secs+'s':'CHECKING';
+    if(secs<=0){clearInterval(_countdownTimer);_countdownTimer=null;startRetryLoop();}
+  },1000);
+}
+
+function startRetryLoop(){
+  stopRetryLoop();
+  let att=0,MAX=25;
+  const rb=document.getElementById('retry-btn-txt');
+  const tick=async()=>{
+    if(_connected){stopRetryLoop();return;}
+    att++;
+    if(rb)rb.textContent='CHECK '+att+'/'+MAX;
+    await connSilent();
+    if(!_connected&&att<MAX)_retryLoop=setTimeout(tick,1500);
+    else if(!_connected){stopRetryLoop();if(rb)rb.textContent='RETRY';}
+  };
+  tick();
+}
+function stopRetryLoop(){if(_retryLoop){clearTimeout(_retryLoop);_retryLoop=null;}}
+let _lastDevCount = -1;
+async function connSilent(){
+  try{
+    _devices=await orgbGet('/devices');
+    if(!Array.isArray(_devices))throw new Error('Bad response');
+    // Keep polling until device count is non-zero AND stable across two polls.
+    // OpenRGB registers devices over 1-2s so we may catch it mid-scan.
+    if(_devices.length===0){setStatus('offline','Detecting devices...');_lastDevCount=-1;return;}
+    if(_devices.length!==_lastDevCount){_lastDevCount=_devices.length;setStatus('offline','Detecting devices...');return;}
+    _lastDevCount=-1;
+    setStatus('online');renderDevices();stopRetryLoop();
+  }catch(e){if(!_retryLoop)setStatus('offline',e.message);}
+}
+function receiveData(){}
+function onConfigReceived(cfg){navOnConfig(cfg);}
+if(IS_WEBVIEW){window.chrome.webview.addEventListener('message',e=>{try{const m=JSON.parse(e.data);if(m.type==='config')onConfigReceived(m);}catch{}});sendToHost({type:'requestConfig'});chkProc();startRetryLoop();}
+</script>
+</body>
+</html>

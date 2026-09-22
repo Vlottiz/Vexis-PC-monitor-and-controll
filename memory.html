@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store">
+<title>PC Monitor — Memory</title>
+<link rel="stylesheet" href="/ui.css?v=8">
+<style>
+  .mem-big    { font-size:42px;font-weight:700;color:var(--mem-acc);line-height:1;font-family:monospace;text-shadow:0 0 20px var(--mem-acc); }
+  .mem-used   { font-size:18px;font-weight:600;color:var(--avg-col);font-family:monospace; }
+  .dimm-card  { display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(68,51,0,.15); }
+  .dimm-card:last-child { border-bottom:none; }
+  .dimm-name  { font-size:11px;color:var(--label);font-weight:500; }
+  .dimm-temp  { font-size:14px;font-weight:700;font-family:monospace; }
+  .load-ring-wrap { display:flex;justify-content:center;padding:10px 0; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title">▦ Memory</div>
+      <div class="page-subtitle" id="mem-sub">Loading...</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:11px;color:var(--label-dim)" id="mem-time">--:--:-- --</div>
+      <div id="mem-load-badge" style="font-size:13px;color:var(--mem-acc);font-weight:700;margin-top:2px">--%</div>
+    </div>
+  </div>
+  <div class="page-body">
+
+    <!-- Installed / Used -->
+    <div class="card" style="text-align:center;padding:20px">
+      <div class="card-title" style="margin-bottom:12px">INSTALLED</div>
+      <div class="mem-big" id="mem-installed">--</div>
+      <div style="margin:10px 0 4px;font-size:11px;color:var(--label-dim)">IN USE</div>
+      <div class="mem-used" id="mem-used">-- GB</div>
+      <div style="margin-top:12px">
+        <div style="height:8px;background:var(--bar-bg);border-radius:4px;overflow:hidden;border:1px solid var(--border)">
+          <div id="mem-load-bar" style="height:100%;background:linear-gradient(90deg,var(--avg-col),var(--mem-acc));width:0%;transition:width .5s;border-radius:4px"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:4px;font-size:9px;color:var(--label-dim)">
+          <span>0%</span>
+          <span id="mem-load-pct" style="color:var(--mem-acc);font-weight:600">--%</span>
+          <span>100%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Specs -->
+    <div class="card">
+      <div class="card-header"><span class="card-title">SPECIFICATIONS</span></div>
+      <div class="info-row"><span class="info-key">Type</span><span class="info-val" id="ms-type" style="color:var(--mem-acc)">--</span></div>
+      <div class="info-row"><span class="info-key">Speed</span><span class="info-val" id="ms-speed" style="color:var(--mem-acc)">--</span></div>
+      <div class="info-row"><span class="info-key">Capacity</span><span class="info-val" id="ms-cap" style="color:var(--mem-acc)">--</span></div>
+      <div class="info-row"><span class="info-key">Socket</span><span class="info-val" id="ms-sock" style="color:var(--mem-acc)">--</span></div>
+    </div>
+
+    <!-- DIMM Temperatures -->
+    <div class="card" id="dimm-card" style="display:none">
+      <div class="card-header"><span class="card-title">DIMM TEMPERATURES</span></div>
+      <div id="dimm-list"></div>
+    </div>
+
+    <!-- Load history sparkline -->
+    <div class="card">
+      <div class="card-header"><span class="card-title">LOAD HISTORY</span><span style="font-size:9px;color:var(--label-dim)">60s</span></div>
+      <svg id="mem-spark" width="100%" height="48" viewBox="0 0 400 48" preserveAspectRatio="none"
+        style="display:block"></svg>
+    </div>
+
+    <!-- Virtual memory -->
+    <div class="card">
+      <div class="card-header"><span class="card-title">VIRTUAL MEMORY</span></div>
+      <div class="info-row"><span class="info-key">Page File Used</span><span class="info-val" id="virt-used" style="color:var(--label)">--</span></div>
+      <div style="margin-top:6px;height:5px;background:var(--bar-bg);border-radius:2px;overflow:hidden;border:1px solid var(--border)">
+        <div id="virt-bar" style="height:100%;background:var(--border-bright);width:0%;transition:width .5s;border-radius:2px"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="/nav.js?v=8" data-page="memory"></script>
+<script>
+const HIST = [];
+const MAX_PTS = 60;
+
+function pushHist(v) {
+  HIST.push(v);
+  if (HIST.length > MAX_PTS) HIST.shift();
+}
+
+function drawSpark() {
+  const svg = document.getElementById('mem-spark');
+  if (!svg || HIST.length < 2) return;
+  const W = 400, H = 48;
+  const pts = HIST.map((v, i) => {
+    const x = (i / (MAX_PTS - 1)) * W;
+    const y = H - (v / 100) * (H - 4) - 2;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  svg.innerHTML = `
+    <defs>
+      <linearGradient id="mg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="var(--mem-acc)" stop-opacity=".3"/>
+        <stop offset="100%" stop-color="var(--mem-acc)" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <polygon points="0,${H} ${pts} ${W},${H}" fill="url(#mg)"/>
+    <polyline points="${pts}" fill="none" stroke="var(--mem-acc)" stroke-width="1.5"
+      stroke-linejoin="round" stroke-linecap="round"/>`;
+}
+
+function setText(id, v) { const el = document.getElementById(id); if (el) el.textContent = v; }
+
+let _hwApplied = false;
+function applyHwInfo(info) {
+  if (!info) return;
+  const sub = document.getElementById('mem-sub');
+  if (sub) sub.textContent = `${info.ramGb || '--'}GB ${info.ramType || ''} · ${info.socket || ''}`;
+  setText('ms-type',  info.ramType || '--');
+  setText('ms-speed', info.ramMhz  ? info.ramMhz + ' MHz' : '--');
+  setText('ms-cap',   info.ramGb   ? info.ramGb + ' GB'   : '--');
+  setText('ms-sock',  info.socket  || '--');
+  setText('mem-installed', info.ramGb ? info.ramGb + 'GB' : '--');
+}
+
+function receiveData(data) {
+  if (data.info) applyHwInfo(data.info);
+
+  // Load
+  const load = data.ram_load;
+  if (load != null) {
+    pushHist(load);
+    const pct = Math.round(load) + '%';
+    setText('mem-load-pct', pct);
+    setText('mem-load-badge', pct);
+    const bar = document.getElementById('mem-load-bar');
+    if (bar) bar.style.width = load + '%';
+    drawSpark();
+  }
+
+  // Used GB
+  if (data.ram_used_gb != null) {
+    setText('mem-used', data.ram_used_gb.toFixed(1) + ' GB');
+  }
+
+  // DIMM temps
+  if (data.dimm_temps && data.dimm_temps.length) {
+    const card = document.getElementById('dimm-card');
+    const list = document.getElementById('dimm-list');
+    if (card) card.style.display = '';
+    if (list) {
+      list.innerHTML = data.dimm_temps.map((t, i) => {
+        const col = t < 40 ? 'var(--temp-low)' : t < 60 ? 'var(--temp-warn)' : 'var(--temp-hot)';
+        return `<div class="dimm-card">
+          <div class="dimm-name">DIMM #${i + 1}</div>
+          <div class="dimm-temp" style="color:${col}">${t.toFixed(1)}°C</div>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  // Virtual memory (from all_temps or separate field)
+  // Just show ram_load as a proxy for virtual memory usage
+  if (load != null) {
+    const info = data.info;
+    const totalGb = info?.ramGb || 0;
+    const usedGb = data.ram_used_gb || (totalGb * load / 100);
+    const virtPct = Math.min(100, load);
+    setText('virt-used', usedGb.toFixed(1) + ' GB');
+    const vb = document.getElementById('virt-bar');
+    if (vb) vb.style.width = virtPct + '%';
+  }
+
+  // Time
+  const t = document.getElementById('mem-time');
+  if (t) t.textContent = new Date().toLocaleTimeString();
+}
+
+function onConfigReceived(cfg) { navOnConfig(cfg); }
+
+if (IS_WEBVIEW) {
+  window.chrome.webview.addEventListener('message', e => {
+    try {
+      const m = JSON.parse(e.data);
+      if (m.type === 'config') onConfigReceived(m);
+      else receiveData(m);
+    } catch {}
+  });
+  sendToHost({type:'requestConfig'});
+}
+</script>
+</body>
+</html>

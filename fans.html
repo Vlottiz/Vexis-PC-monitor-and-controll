@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PC Monitor — Fan Control</title>
+<link rel="stylesheet" href="/ui.css?v=8">
+<style>
+  .fan-rpm-big  { font-size:30px;font-weight:700;color:var(--mem-acc);line-height:1; }
+  .fan-rpm-unit { font-size:11px;color:var(--label-dim);margin-left:2px; }
+  .mode-tabs { display:flex;gap:6px;margin:10px 0 8px; }
+  .mode-tab {
+    flex:1;padding:7px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+    border:1px solid var(--border);background:transparent;color:var(--label-dim);
+    cursor:pointer;border-radius:4px;font-family:inherit;transition:all .15s;
+  }
+  .mode-tab:hover  { color:var(--label);border-color:var(--border-bright); }
+  .mode-tab.active { background:rgba(255,204,0,.1);border-color:var(--border-bright);color:var(--header-title); }
+  .manual-wrap { display:none;margin-top:4px; }
+  .manual-wrap.show { display:block; }
+  .curve-wrap { display:none;margin-top:8px; }
+  .curve-wrap.show { display:block; }
+  .curve-outer { position:relative;padding-left:34px;margin-bottom:4px; }
+  .curve-axis-y {
+    position:absolute;left:0;top:0;bottom:0;width:32px;
+    display:flex;flex-direction:column;justify-content:space-between;
+    font-size:8px;color:var(--label-dim);text-align:right;padding-right:4px;
+  }
+  .curve-graph {
+    width:100%;aspect-ratio:2.2/1;background:var(--bar-bg);
+    border:1px solid var(--border);border-radius:4px;
+    cursor:crosshair;user-select:none;display:block;
+  }
+  .curve-axis-x-labels {
+    display:flex;justify-content:space-between;
+    font-size:9px;color:var(--label-dim);padding:3px 0 0;
+    font-family:monospace;
+  }
+  .curve-y-label {
+    position:absolute;left:-26px;top:50%;transform:translateY(-50%) rotate(-90deg);
+    font-size:8px;color:var(--label-dim);letter-spacing:.1em;white-space:nowrap;
+    font-family:monospace;
+  }
+  .curve-axis-x {
+    display:flex;justify-content:space-between;
+    font-size:8px;color:var(--label-dim);padding:2px 2px 0;margin-top:3px;
+  }
+  .curve-hint { font-size:9px;color:var(--label-dim);text-align:center;margin:5px 0 8px;letter-spacing:.05em; }
+  .curve-src-row { display:flex;align-items:center;gap:10px;margin-bottom:8px; }
+  .curve-src-row label { font-size:10px;color:var(--label);letter-spacing:.06em; }
+  .curve-btns { display:flex;gap:6px;margin-top:6px; }
+  .health-row { display:flex;align-items:center;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border); }
+  .health-status { flex:1;font-size:10px;line-height:1.5; }
+  .no-ctrl { font-size:10px;color:var(--label-dim);padding:6px 0; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title">◎ Fan Control</div>
+      <div class="page-subtitle" id="fan-sub">Loading...</div>
+    </div>
+  </div>
+  <div class="page-body">
+    <div id="no-fans" class="empty-state">Waiting for sensor data...</div>
+    <div id="fan-notice" style="display:none;margin:10px 0;padding:10px 14px;background:rgba(80,60,0,.15);border:1px solid rgba(180,120,0,.3);border-radius:5px;font-size:10px;line-height:1.7;color:#aa8833;">⚠ <strong>Fan control unavailable on this system.</strong><br>Your fans are visible but cannot be controlled — either the hardware driver blocks software control, or your motherboard's fan controller isn't yet supported by the sensor library (LibreHardwareMonitor).<br><span style="color:#665500">Try your motherboard's own software (e.g. MSI Center, ASUS Armoury Crate, Gigabyte EasyTune) for full fan control. Support for more boards is added regularly.</span></div>
+    <div id="fans-list"></div>
+  </div>
+</div>
+<script src="/nav.js?v=8" data-page="fans"></script>
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+const fanStates = {};
+let _built = false;
+let _latestData = null;
+
+function gs(name) {
+  if (!fanStates[name]) fanStates[name] = {
+    mode:'auto', pct:50, tempSrc:'cpu',
+    pts:[{t:30,s:20},{t:50,s:40},{t:70,s:70},{t:85,s:100}]
+  };
+  return fanStates[name];
+}
+
+function sid(name) { return name.replace(/[\s#\-]/g,'_'); }
+
+// ── Mode ──────────────────────────────────────────────────────────────────────
+function setMode(name, mode) {
+  const s = gs(name), id = sid(name);
+  s.mode = mode;
+  document.querySelectorAll(`#fc-${id} .mode-tab`)
+    .forEach(t => t.classList.toggle('active', t.dataset.mode === mode));
+  const mw = document.getElementById(`mw-${id}`);
+  const cw = document.getElementById(`cw-${id}`);
+  if (mw) mw.classList.toggle('show', mode === 'manual');
+  if (cw) cw.classList.toggle('show', mode === 'curve');
+  if (mode === 'auto')  sendToHost({type:'fanSetAuto', fanName:name});
+  if (mode === 'curve') sendToHost({type:'fanSetCurveMode', fanName:name, enabled:true});
+  if (mode === 'manual') sendToHost({type:'fanSetAuto', fanName:name});
+}
+
+function applyManual(name) {
+  const id = sid(name);
+  const sl = document.getElementById(`sl-${id}`);
+  if (!sl) return;
+  const pct = parseInt(sl.value);
+  gs(name).pct = pct;
+  sendToHost({type:'fanSetManual', fanName:name, value:pct});
+}
+
+// ── Health check ──────────────────────────────────────────────────────────────
+function runHealth(name) {
+  const id  = sid(name);
+  const btn = document.getElementById(`hbtn-${id}`);
+  const res = document.getElementById(`hres-${id}`);
+  if (btn) { btn.disabled=true; btn.textContent='TESTING...'; }
+  if (res) { res.textContent='Ramping 30→60→100%  (~8s)'; res.style.color='var(--label-dim)'; }
+  sendToHost({type:'fanHealthCheck', fanName:name});
+}
+
+// ── Curve editor ──────────────────────────────────────────────────────────────
+const PAD = {l:6,r:6,t:8,b:8};
+const TMIN=20, TMAX=100;
+
+function ptToPx(W, H, t, s) {
+  const iw = W - PAD.l - PAD.r;
+  const ih = H - PAD.t - PAD.b;
+  return {
+    x: PAD.l + ((t-TMIN)/(TMAX-TMIN)) * iw,
+    y: PAD.t + ih - (s/100) * ih
+  };
+}
+
+function pxToPt(W, H, px, py) {
+  const iw = W - PAD.l - PAD.r;
+  const ih = H - PAD.t - PAD.b;
+  return {
+    t: Math.round(Math.max(TMIN, Math.min(TMAX, TMIN + ((px-PAD.l)/iw)*(TMAX-TMIN)))),
+    s: Math.round(Math.max(0,   Math.min(100,  100  - ((py-PAD.t)/ih)*100)))
+  };
+}
+
+function interp(pts, t) {
+  const s = [...pts].sort((a,b)=>a.t-b.t);
+  if (t <= s[0].t) return s[0].s;
+  if (t >= s[s.length-1].t) return s[s.length-1].s;
+  for (let i=0;i<s.length-1;i++) {
+    if (t>=s[i].t && t<=s[i+1].t) {
+      const r=(t-s[i].t)/(s[i+1].t-s[i].t);
+      return s[i].s + r*(s[i+1].s-s[i].s);
+    }
+  }
+  return 50;
+}
+
+function renderCurve(name) {
+  const id  = sid(name);
+  const svg = document.getElementById(`csvg-${id}`);
+  if (!svg) return;
+  const state = gs(name);
+  const pts   = [...state.pts].sort((a,b)=>a.t-b.t);
+  const W=300, H=110;
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+
+  // Grid
+  let out = '';
+  for (let t=TMIN;t<=TMAX;t+=20) {
+    const {x} = ptToPx(W,H,t,0);
+    out += `<line x1="${x}" y1="${PAD.t}" x2="${x}" y2="${H-PAD.b}" stroke="rgba(68,51,0,.2)" stroke-width=".5"/>`;
+  }
+  for (let s=0;s<=100;s+=25) {
+    const {y} = ptToPx(W,H,TMIN,s);
+    out += `<line x1="${PAD.l}" y1="${y}" x2="${W-PAD.r}" y2="${y}" stroke="rgba(68,51,0,.2)" stroke-width=".5"/>`;
+  }
+
+  // Fill + line
+  const coords = pts.map(p => { const {x,y}=ptToPx(W,H,p.t,p.s); return `${x},${y}`; }).join(' ');
+  const first  = ptToPx(W,H,pts[0].t,pts[0].s);
+  const last   = ptToPx(W,H,pts[pts.length-1].t,pts[pts.length-1].s);
+  out += `<polygon points="${PAD.l},${H-PAD.b} ${first.x},${first.y} ${coords} ${last.x},${H-PAD.b}"
+    fill="rgba(255,204,0,.07)" stroke="none"/>`;
+  out += `<polyline points="${coords}" fill="none" stroke="var(--header-title,#ffcc00)"
+    stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+
+  // Current temp indicator
+  if (_latestData) {
+    const src  = state.tempSrc;
+    const temp = src==='gpu'  ? _latestData.gpu_temp  :
+                 src==='ccd0' ? _latestData.ccd0_temp :
+                 src==='ccd1' ? _latestData.ccd1_temp :
+                                _latestData.cpu_temp;
+    if (temp != null) {
+      const spd      = interp(pts, temp);
+      const {x,y}   = ptToPx(W,H,temp,spd);
+      const {x:tx}  = ptToPx(W,H,temp,0);
+      out += `<line x1="${tx}" y1="${PAD.t}" x2="${tx}" y2="${H-PAD.b}"
+        stroke="var(--temp-warn,#ffaa00)" stroke-width="1" stroke-dasharray="2,2" opacity=".7"/>`;
+      out += `<circle cx="${x}" cy="${y}" r="3.5" fill="var(--temp-warn,#ffaa00)"
+        stroke="var(--bg,#000)" stroke-width="1.5"/>`;
+    }
+  }
+
+  // Drag handles
+  pts.forEach((p,i) => {
+    const {x,y} = ptToPx(W,H,p.t,p.s);
+    out += `<circle cx="${x}" cy="${y}" r="5" fill="var(--header-title,#ffcc00)"
+      stroke="var(--bg,#000)" stroke-width="1.5" style="cursor:grab"
+      class="cpt" data-n="${name}" data-i="${i}"
+      onmousedown="startDrag(event,'${name}',${i})"
+      oncontextmenu="delPt(event,'${name}',${i})"/>`;
+    out += `<text x="${x}" y="${y-8}" text-anchor="middle"
+      font-size="7" fill="var(--label-dim,#886600)">${p.t}°/${p.s}%</text>`;
+  });
+
+  svg.innerHTML = out;
+}
+
+// Drag
+let _drag = null;
+function startDrag(e, name, i) {
+  e.stopPropagation(); e.preventDefault();
+  _drag = {name, i};
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup',   onUp);
+}
+function onMove(e) {
+  if (!_drag) return;
+  const {name,i} = _drag;
+  const svg = document.getElementById(`csvg-${sid(name)}`);
+  if (!svg) return;
+  const r  = svg.getBoundingClientRect();
+  const W=300, H=110;
+  const px = (e.clientX-r.left)*(W/r.width);
+  const py = (e.clientY-r.top) *(H/r.height);
+  gs(name).pts[i] = pxToPt(W,H,px,py);
+  renderCurve(name);
+}
+function onUp() {
+  _drag = null;
+  document.removeEventListener('mousemove', onMove);
+  document.removeEventListener('mouseup',   onUp);
+}
+function delPt(e, name, i) {
+  e.preventDefault();
+  const pts = gs(name).pts;
+  if (pts.length <= 2) return;
+  pts.splice(i,1);
+  renderCurve(name);
+}
+
+// Click to add
+function svgClick(e, name) {
+  if (e.target.classList.contains('cpt')) return;
+  const svg = document.getElementById(`csvg-${sid(name)}`);
+  if (!svg) return;
+  const r  = svg.getBoundingClientRect();
+  const W=300, H=110;
+  const px = (e.clientX-r.left)*(W/r.width);
+  const py = (e.clientY-r.top) *(H/r.height);
+  const s  = gs(name);
+  if (s.pts.length < 8) { s.pts.push(pxToPt(W,H,px,py)); renderCurve(name); }
+}
+
+function resetCurve(name) {
+  gs(name).pts = [{t:30,s:20},{t:50,s:40},{t:70,s:70},{t:85,s:100}];
+  renderCurve(name);
+}
+
+function saveCurve(name) {
+  const s = gs(name);
+  sendToHost({type:'saveFanCurve', fanCurve:{
+    FanName:name, TempSource:s.tempSrc, Enabled:true,
+    Points: s.pts.map(p=>({Temp:p.t,Speed:p.s}))
+  }});
+  sendToHost({type:'fanSetCurveMode', fanName:name, enabled:true});
+  const btn = document.getElementById(`csave-${sid(name)}`);
+  if (btn) { btn.textContent='✓ SAVED'; setTimeout(()=>btn.textContent='SAVE CURVE',1500); }
+}
+
+// ── Card HTML ─────────────────────────────────────────────────────────────────
+function buildCard(fan) {
+  const id  = sid(fan.name);
+  const s   = gs(fan.name);
+  const pct = Math.min(100,(fan.rpm/3000)*100);
+
+  return `
+  <div class="card" id="fc-${id}" style="margin-bottom:10px">
+    <div class="row-between" style="margin-bottom:8px">
+      <div>
+        <div class="card-title">${fan.name}</div>
+        <div class="stat-sub" style="margin-top:3px">${fan.hasControl?'Software controllable':'BIOS controlled only'}</div>
+      </div>
+      <div style="text-align:right">
+        <span class="fan-rpm-big" id="rpm-${id}">${Math.round(fan.rpm)}</span>
+        <span class="fan-rpm-unit">RPM</span>
+        <div class="stat-sub" id="fpct-${id}" style="margin-top:2px">${fan.pct>0?Math.round(fan.pct)+'%':''}</div>
+      </div>
+    </div>
+    <div class="bar-wrap"><div class="bar-fill bar-mem" id="g-${id}" style="width:${pct}%"></div></div>
+
+    ${fan.hasControl ? `
+    <div class="mode-tabs">
+      <button class="mode-tab ${s.mode==='auto'?'active':''}"   data-mode="auto"   onclick="setMode('${fan.name}','auto')">AUTO</button>
+      <button class="mode-tab ${s.mode==='manual'?'active':''}" data-mode="manual" onclick="setMode('${fan.name}','manual')">MANUAL</button>
+      <button class="mode-tab ${s.mode==='curve'?'active':''}"  data-mode="curve"  onclick="setMode('${fan.name}','curve')">CURVE</button>
+    </div>
+
+    <div class="manual-wrap ${s.mode==='manual'?'show':''}" id="mw-${id}">
+      <div class="label-row">
+        <span class="control-label">Fan Speed</span>
+        <span class="control-value" id="sv-${id}">${s.pct}%</span>
+      </div>
+      <input type="range" class="range-slider" id="sl-${id}" min="0" max="100" value="${s.pct}"
+        oninput="document.getElementById('sv-${id}').textContent=this.value+'%'">
+      <div style="margin-top:10px">
+        <button class="btn btn-primary" onclick="applyManual('${fan.name}')"
+          style="width:100%;justify-content:center">APPLY</button>
+      </div>
+    </div>
+
+    <div class="curve-wrap ${s.mode==='curve'?'show':''}" id="cw-${id}">
+      <div class="curve-src-row">
+        <label>TEMP SOURCE</label>
+        <select class="select" id="tsrc-${id}"
+          onchange="gs('${fan.name}').tempSrc=this.value;renderCurve('${fan.name}')">
+          <option value="cpu"  ${s.tempSrc==='cpu' ?'selected':''}>CPU Package</option>
+          <option value="gpu"  ${s.tempSrc==='gpu' ?'selected':''}>GPU</option>
+          <option value="ccd0" ${s.tempSrc==='ccd0'?'selected':''}>CCD0 (AMD)</option>
+          <option value="ccd1" ${s.tempSrc==='ccd1'?'selected':''}>CCD1 (AMD)</option>
+        </select>
+      </div>
+      <div class="curve-outer">
+        <div class="curve-axis-y">
+          <span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span>
+        </div>
+        <svg id="csvg-${id}" class="curve-graph" viewBox="0 0 300 110"
+          xmlns="http://www.w3.org/2000/svg"
+          onclick="svgClick(event,'${fan.name}')"></svg>
+      </div>
+      <div class="curve-axis-x">
+        <span>20°</span><span>40°</span><span>60°</span><span>80°</span><span>100°</span>
+      </div>
+      <div class="curve-hint">Click to add point · Right-click point to remove · Drag to move · Orange line = current temp</div>
+      <div class="curve-btns">
+        <button class="btn btn-primary" id="csave-${id}" onclick="saveCurve('${fan.name}')"
+          style="flex:1;justify-content:center">SAVE CURVE</button>
+        <button class="btn btn-ghost" onclick="resetCurve('${fan.name}')"
+          style="padding:7px 14px">RESET</button>
+      </div>
+    </div>` : `<div class="no-ctrl">No software control — managed by BIOS</div>`}
+
+    ${fan.hasControl ? `
+    <div class="health-row">
+      <button class="btn btn-ghost" id="hbtn-${id}" onclick="runHealth('${fan.name}')"
+        style="padding:6px 12px;font-size:9px">⚕ Health Check</button>
+      <span class="health-status" id="hres-${id}"></span>
+    </div>` : ''}
+  </div>`;
+}
+
+// ── Data ──────────────────────────────────────────────────────────────────────
+function receiveData(data) {
+  _latestData = data;
+  const fans = data.fans;
+  if (!fans || !fans.length) return;
+
+  document.getElementById('no-fans').style.display = 'none';
+
+  // Show notice only if no fans have software control
+  const anyControllable = fans.some(f => f.hasControl);
+  const allControllable = fans.every(f => f.hasControl);
+  const notice = document.getElementById('fan-notice');
+  if (notice) notice.style.display = anyControllable ? 'none' : 'block';
+
+  const controlled = fans.filter(f => f.hasControl).length;
+  const total      = fans.length;
+  document.getElementById('fan-sub').textContent = allControllable
+    ? `${total} fan${total>1?'s':''} detected`
+    : controlled > 0
+      ? `${total} fan${total>1?'s':''} detected — ${controlled} controllable`
+      : `${total} fan${total>1?'s':''} detected (read-only)`;
+
+  const list = document.getElementById('fans-list');
+  if (!_built) {
+    _built = true;
+    list.innerHTML = fans.map(buildCard).join('');
+    fans.forEach(f => { if (f.hasControl) renderCurve(f.name); });
+  } else {
+    fans.forEach(f => {
+      const id  = sid(f.name);
+      const rpm = document.getElementById(`rpm-${id}`);
+      const g   = document.getElementById(`g-${id}`);
+      const fp  = document.getElementById(`fpct-${id}`);
+      if (rpm) rpm.textContent = Math.round(f.rpm);
+      if (g)   g.style.width   = Math.min(100,(f.rpm/3000)*100)+'%';
+      if (fp)  fp.textContent  = f.pct>0?Math.round(f.pct)+'%':'';
+      if (gs(f.name).mode === 'curve') renderCurve(f.name);
+    });
+  }
+}
+
+
+function onConfigReceived(cfg) {
+  // Load saved fan curves into state
+  if (cfg.fanCurves && cfg.fanCurves.length) {
+    cfg.fanCurves.forEach(c => {
+      const s = gs(c.FanName);
+      s.tempSrc = c.TempSource || 'cpu';
+      if (c.Points && c.Points.length)
+        s.pts = c.Points.map(p => ({t:p.Temp, s:p.Speed}));
+      if (c.Enabled) s.mode = 'curve';
+    });
+  }
+  navOnConfig(cfg);
+}
+
+if (IS_WEBVIEW) {
+  window.chrome.webview.addEventListener('message', e => {
+    try {
+      const m = JSON.parse(e.data);
+      if (m.type === 'config') { onConfigReceived(m); return; }
+      if (m.type === 'healthResult') {
+        const id  = sid(m.fanName);
+        const btn = document.getElementById(`hbtn-${id}`);
+        const res = document.getElementById(`hres-${id}`);
+        if (btn) { btn.disabled=false; btn.textContent='⚕ Health Check'; }
+        if (res) {
+          const c = m.status==='PASS'?'#44aa66':m.status==='WARN'?'#ffaa00':'#ff4444';
+          res.style.color = c;
+          res.textContent = m.message;
+        }
+        return;
+      }
+      receiveData(m);
+    } catch {}
+  });
+  sendToHost({type:'requestConfig'});
+}
+</script>
+</body>
+</html>

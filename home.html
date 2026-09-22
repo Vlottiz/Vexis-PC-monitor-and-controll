@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PC Monitor</title>
+<link rel="stylesheet" href="/ui.css?v=8">
+<style>
+  .hw-name { font-size: 15px; font-weight: 700; letter-spacing: .14em; color: var(--header-title); text-shadow: 0 0 18px var(--title-glow); }
+  .hw-sub  { font-size: 10px; color: var(--label-dim); letter-spacing: .1em; margin-top: 2px; }
+  .temp-indicator { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .status-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .status-pill {
+    flex: 1; min-width: 100px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 6px; padding: 10px 14px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .pill-icon { font-size: 18px; flex-shrink: 0; opacity: .7; }
+  .pill-body { flex: 1; min-width: 0; }
+  .pill-val  { font-size: 18px; font-weight: 700; line-height: 1; }
+  .pill-lbl  { font-size: 9px; color: var(--label-dim); letter-spacing: .1em; margin-top: 2px; }
+  .fan-row   { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(68,51,0,0.15); }
+  .fan-row:last-child { border-bottom: none; }
+  .fan-name  { font-size: 10px; color: var(--label); }
+  .fan-rpm   { font-size: 13px; font-weight: 600; color: var(--mem-acc); }
+
+  /* Responsive grid — more columns on wider windows */
+  .card-grid-2 { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+  .home-nav-grid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="page-header">
+    <div>
+      <div class="hw-name" id="hw-cpu" style="padding-left:32px">PC MONITOR</div>
+      <div class="hw-sub"  id="hw-sub">···</div>
+    </div>
+    <div class="page-time" id="htime"></div>
+  </div>
+
+  <!-- Body -->
+  <div class="page-body">
+    <!-- Driver warning — shown when LHM ring-0 driver is blocked -->
+    <div id="driver-warn" style="display:none;background:rgba(180,120,0,.12);border:1px solid rgba(180,120,0,.35);border-radius:5px;padding:10px 14px;font-size:10px;line-height:1.7;color:#ff8844;">
+      <strong style="letter-spacing:.1em">⚠ SENSOR DRIVER BLOCKED</strong><br>
+      CPU temperatures unavailable — clock speeds showing via fallback mode.<br>
+      <span style="color:#886600">Check Windows Security → Protection History and allow any blocked drivers, then restart.</span>
+    </div>
+
+    <!-- Status pills -->
+    <div class="status-row">
+      <div class="status-pill">
+        <span class="pill-icon" style="color:var(--temp-low)">⬡</span>
+        <div class="pill-body">
+          <div class="pill-val glow" id="p-cpu" style="color:var(--temp-low)">--°</div>
+          <div class="pill-lbl" id="p-cpu-lbl">CPU TEMP</div>
+          <div class="bar-wrap"><div class="bar-fill bar-temp" id="p-cpu-bar" style="width:0%"></div></div>
+        </div>
+      </div>
+      <div class="status-pill" id="p-load-pill" style="display:none">
+        <span class="pill-icon" style="color:var(--avg-col)">▣</span>
+        <div class="pill-body">
+          <div class="pill-val glow" id="p-load" style="color:var(--avg-col)">--%</div>
+          <div class="pill-lbl">CPU LOAD</div>
+          <div class="bar-wrap"><div class="bar-fill bar-clk" id="p-load-bar" style="width:0%"></div></div>
+        </div>
+      </div>
+      <div class="status-pill" id="p-gpuload-pill">
+        <span class="pill-icon" style="color:var(--gpu-acc)">◈</span>
+        <div class="pill-body">
+          <div class="pill-val glow" id="p-gpuload" style="color:var(--gpu-acc)">--%</div>
+          <div class="pill-lbl">GPU LOAD</div>
+          <div class="bar-wrap"><div class="bar-fill" id="p-gpuload-bar" style="width:0%;background:var(--gpu-acc)"></div></div>
+        </div>
+      </div>
+      <div class="status-pill" id="p-ramload-pill">
+        <span class="pill-icon" style="color:var(--mem-acc)">▦</span>
+        <div class="pill-body">
+          <div class="pill-val glow" id="p-ramload" style="color:var(--mem-acc)">--%</div>
+          <div class="pill-lbl">RAM LOAD</div>
+          <div class="bar-wrap"><div class="bar-fill" id="p-ramload-bar" style="width:0%;background:var(--mem-acc)"></div></div>
+        </div>
+      </div>
+      <div class="status-pill">
+        <span class="pill-icon" style="color:var(--gpu-acc)">⬡</span>
+        <div class="pill-body">
+          <div class="pill-val glow" id="p-gpu" style="color:var(--gpu-acc)">--°</div>
+          <div class="pill-lbl">GPU TEMP</div>
+          <div class="bar-wrap"><div class="bar-fill bar-gpu" id="p-gpu-bar" style="width:0%"></div></div>
+        </div>
+      </div>
+      <div class="status-pill">
+        <span class="pill-icon" style="color:var(--pwr-col)">⚡</span>
+        <div class="pill-body">
+          <div class="pill-val glow" id="p-pkg" style="color:var(--pwr-col)">--W</div>
+          <div class="pill-lbl">CPU POWER</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CPU + GPU cards -->
+    <div class="card-grid card-grid-2">
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">CPU</span>
+          <span class="badge badge-dim" id="cpu-badge">···</span>
+        </div>
+        <div class="card-grid card-grid-2" style="gap:10px;">
+          <div class="stat">
+            <span class="stat-label">PEAK CLK</span>
+            <span class="stat-value sm glow" id="h-peak" style="color:var(--peak-col)">--</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">AVG CLK</span>
+            <span class="stat-value sm glow" id="h-avg" style="color:var(--avg-col)">--</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">CCD0 TEMP</span>
+            <span class="stat-value sm" id="h-ccd0" style="color:var(--temp-val)">--</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">CCD1 TEMP</span>
+            <span class="stat-value sm" id="h-ccd1" style="color:var(--temp-val)">--</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title" id="gpu-title">GPU</span>
+          <span class="badge badge-dim" id="gpu-badge">···</span>
+        </div>
+        <div class="card-grid card-grid-2" style="gap:10px;">
+          <div class="stat">
+            <span class="stat-label">VCORE</span>
+            <span class="stat-value sm glow" id="h-gv" style="color:var(--gpu-acc)">--</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">GPU CLK</span>
+            <span class="stat-value sm glow" id="h-gclk" style="color:var(--gpu-acc)">--</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">POWER</span>
+            <span class="stat-value sm" id="h-gpwr" style="color:var(--pwr-col)">--</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">VRAM</span>
+            <span class="stat-value sm" id="h-vram" style="color:var(--mem-acc)">--</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Memory + Fans -->
+    <div class="card-grid card-grid-2">
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">MEMORY</span></div>
+        <div class="stat" style="margin-bottom:12px">
+          <span class="stat-label">INSTALLED</span>
+          <span class="stat-value lg glow" id="h-ram" style="color:var(--mem-acc)">--</span>
+        </div>
+        <div class="info-row"><span class="info-key">TYPE</span><span class="info-val" id="h-rtype" style="color:var(--mem-acc)">···</span></div>
+        <div class="info-row"><span class="info-key">SPEED</span><span class="info-val" id="h-rspd" style="color:var(--mem-acc)">···</span></div>
+        <div class="info-row"><span class="info-key">SOCKET</span><span class="info-val" id="h-sock" style="color:var(--mem-acc)">···</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">FANS</span></div>
+        <div id="h-fans"><div class="empty-state">Waiting...</div></div>
+      </div>
+
+    </div>
+
+    <!-- Quick nav tiles with live data -->
+    <div class="home-nav-grid">
+
+      <button class="nav-tile" onclick="navView('index.html')"
+        style="display:flex;flex-direction:column;align-items:flex-start;padding:12px 14px;text-align:left;height:auto">
+        <div style="display:flex;align-items:center;gap:8px;width:100%;margin-bottom:8px">
+          <span style="font-size:16px;color:var(--peak-col)">▣</span>
+          <span class="nav-tile-label" style="font-size:10px">PERFORMANCE</span>
+        </div>
+        <div style="font-size:18px;font-weight:700;color:var(--peak-col)" id="nt-peakclk">-- MHz</div>
+        <div style="font-size:9px;color:var(--label-dim);margin-top:2px">PEAK CLOCK</div>
+      </button>
+
+      <button class="nav-tile" onclick="navView('temps.html')"
+        style="display:flex;flex-direction:column;align-items:flex-start;padding:12px 14px;text-align:left;height:auto">
+        <div style="display:flex;align-items:center;gap:8px;width:100%;margin-bottom:8px">
+          <span style="font-size:16px;color:var(--temp-val)">◈</span>
+          <span class="nav-tile-label" style="font-size:10px">TEMPERATURES</span>
+        </div>
+        <div style="font-size:18px;font-weight:700;color:var(--temp-val)" id="nt-gputemp">-- °C</div>
+        <div style="font-size:9px;color:var(--label-dim);margin-top:2px">GPU TEMP</div>
+      </button>
+
+      <button class="nav-tile" onclick="navView('fans.html')"
+        style="display:flex;flex-direction:column;align-items:flex-start;padding:12px 14px;text-align:left;height:auto">
+        <div style="display:flex;align-items:center;gap:8px;width:100%;margin-bottom:8px">
+          <span style="font-size:16px;color:var(--mem-acc)">◎</span>
+          <span class="nav-tile-label" style="font-size:10px">FAN CONTROL</span>
+        </div>
+        <div style="font-size:18px;font-weight:700;color:var(--mem-acc)" id="nt-fanrpm">-- RPM</div>
+        <div style="font-size:9px;color:var(--label-dim);margin-top:2px">GPU FAN</div>
+      </button>
+
+      <button class="nav-tile" onclick="navView('rgb.html')"
+        style="display:flex;flex-direction:column;align-items:flex-start;padding:12px 14px;text-align:left;height:auto">
+        <div style="display:flex;align-items:center;gap:8px;width:100%;margin-bottom:8px">
+          <span style="font-size:16px;color:var(--gpu-acc)">◐</span>
+          <span class="nav-tile-label" style="font-size:10px">RGB CONTROL</span>
+        </div>
+        <div style="font-size:18px;font-weight:700;color:var(--gpu-acc)">OpenRGB</div>
+        <div style="font-size:9px;color:var(--label-dim);margin-top:2px">500+ DEVICES</div>
+      </button>
+
+    </div>
+
+    <!-- Info strip -->
+    <div class="card" style="padding:10px 14px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:9px;color:var(--label-dim);letter-spacing:.1em">PC MONITOR v2.0 · Vlottiz</div>
+        <button onclick="navView('info.html')"
+          style="font-size:9px;font-family:monospace;background:none;border:1px solid var(--border);color:var(--label-dim);padding:3px 10px;border-radius:2px;cursor:pointer;letter-spacing:.06em">
+          ◌ INFO & SUPPORT
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="/nav.js?v=8" data-page="home"></script>
+<script>
+setInterval(()=>{ const e=document.getElementById('htime'); if(e)e.textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}); },1000);
+
+let _hwDone=false;
+function applyHwInfo(info){
+  const warn = document.getElementById('driver-warn');
+  if (warn && info) {
+    if (info.driverOk === false) {
+      if (typeof navSetDriverWarning === 'function')
+        navSetDriverWarning('CPU sensor driver blocked');
+      const dismissed = sessionStorage.getItem('pcm-warn-dismissed') === '1';
+      if (!dismissed) {
+        warn.style.display = 'block'; warn.style.opacity = '1'; warn.style.transition = '';
+        if (!window._warnTimerStarted) {
+          window._warnTimerStarted = true;
+          setTimeout(() => {
+            sessionStorage.setItem('pcm-warn-dismissed','1');
+            warn.style.transition = 'opacity 1.2s ease'; warn.style.opacity = '0';
+            setTimeout(() => { warn.style.display = 'none'; }, 1200);
+          }, 10000);
+        }
+      }
+    } else {
+      warn.style.display = 'none';
+      if (typeof navSetDriverWarning === 'function') navSetDriverWarning(null);
+    }
+  }
+  if(!info||_hwDone||(!info.cpu&&!info.gpu))return; _hwDone=true;
+  const s=(id,v)=>{const e=document.getElementById(id);if(e&&v!=null)e.textContent=v;};
+  s('hw-cpu',info.cpu?.toUpperCase());
+  const parts=[];
+  if(info.cores)parts.push(info.cores+'C'); if(info.threads)parts.push(info.threads+'T');
+  if(info.socket)parts.push(info.socket); if(info.ramType&&info.ramMhz)parts.push(info.ramType+'-'+info.ramMhz);
+  s('hw-sub',parts.join(' · '));
+  s('gpu-title',info.gpu?'GPU · '+info.gpu.toUpperCase():'GPU');
+  s('h-ram',info.ramGb?info.ramGb+'GB':'--');
+  s('h-rtype',info.ramType||'···'); s('h-rspd',info.ramMhz?info.ramMhz+'MHz':'···');
+  s('h-sock',info.socket||'···');
+  if(info.gpuVram)s('h-vram',info.gpuVram+'GB VRAM');
+}
+
+function tc(t){if(t==null)return'var(--label)'; return t<60?'var(--temp-low)':t<78?'var(--temp-warn)':'var(--temp-hot)';}
+function tempBadge(t){if(t==null)return'badge-dim'; return t<60?'badge-ok':t<78?'badge-warn':'badge-hot';}
+function sv(id,v){const e=document.getElementById(id);if(e)e.textContent=v;}
+function sc(id,c){const e=document.getElementById(id);if(e)e.style.color=c;}
+function sw(id,w){const e=document.getElementById(id);if(e)e.style.width=w+'%';}
+
+function receiveData(data){
+  // Update quick-nav tiles with live data
+  const cores=data.cores||{}; let peakClk=0;
+  Object.values(cores).forEach(c=>{ if(c.clk>peakClk)peakClk=c.clk; });
+  const ntP=document.getElementById('nt-peakclk');
+  if(ntP)ntP.textContent=peakClk>0?Math.round(peakClk)+' MHz':'-- MHz';
+  const ntG=document.getElementById('nt-gputemp');
+  if(ntG)ntG.textContent=data.gpu_temp!=null?data.gpu_temp.toFixed(1)+' °C':'-- °C';
+  const ntF=document.getElementById('nt-fanrpm');
+  if(ntF&&data.fans&&data.fans.length)ntF.textContent=Math.round(data.fans[0].rpm)+' RPM';
+
+  if(data.info)applyHwInfo(data.info);
+  if(data.fans&&data.fans.length>0){
+    const div=document.getElementById('h-fans');
+    div.innerHTML=data.fans.map(f=>`<div class="fan-row"><span class="fan-name">${f.name}</span><span class="fan-rpm">${Math.round(f.rpm)} <span style="font-size:9px;color:var(--label-dim)">RPM</span></span></div>`).join('');
+  }
+  const ct=data.cpu_temp;
+  const cpuFmt=ct!=null?ct.toFixed(1)+'°C':'--°C';
+  sv('p-cpu',cpuFmt); sc('p-cpu',tc(ct)); sw('p-cpu-bar',ct!=null?Math.min(100,(ct-20)/80*100):0);
+  const gt=data.gpu_temp;
+  const gpuFmt=gt!=null?gt.toFixed(1)+'°C':'--°C';
+  sv('p-gpu',gpuFmt); sc('p-gpu',tc(gt)); sw('p-gpu-bar',gt!=null?Math.min(100,(gt-20)/80*100):0);
+  sv('p-pkg',data.pkg_power!=null?Math.round(data.pkg_power)+'W':'--W');
+  if(data.gpu_load!=null){
+    sv('p-gpuload',Math.round(data.gpu_load)+'%');
+    const gb=document.getElementById('p-gpuload-bar');
+    if(gb)gb.style.width=Math.round(data.gpu_load)+'%';
+  }
+  if(data.ram_load!=null){
+    sv('p-ramload',Math.round(data.ram_load)+'%');
+    const rb=document.getElementById('p-ramload-bar');
+    if(rb)rb.style.width=Math.round(data.ram_load)+'%';
+  }
+  // CPU load — show pill when temp is unavailable (Intel fallback)
+  if (data.cpu_load != null) {
+    const lp = document.getElementById('p-load-pill');
+    const lb = document.getElementById('p-load-bar');
+    const lv = document.getElementById('p-load');
+    if (lp) lp.style.display = data.cpu_temp == null ? '' : 'none';
+    if (lv) lv.textContent = Math.round(data.cpu_load) + '%';
+    if (lb) lb.style.width = Math.round(data.cpu_load) + '%';
+  }
+  const b=document.getElementById('cpu-badge');
+  if(b){b.textContent=ct!=null?ct.toFixed(1)+'°C':'···'; b.className='badge '+tempBadge(ct);}
+  const gb=document.getElementById('gpu-badge');
+  if(gb){gb.textContent=gt!=null?gt.toFixed(1)+'°C':'···'; gb.className='badge '+tempBadge(gt);}
+  let peak=0,tot=0,cnt=0;
+  Object.values(cores).forEach(c=>{if(c.clk>peak)peak=c.clk;if(c.clk>0){tot+=c.clk;cnt++;}});
+  sv('h-peak',peak>0?Math.round(peak)+' MHz':'--');
+  sv('h-avg',cnt>0?Math.round(tot/cnt)+' MHz':'--');
+  sv('h-ccd0',data.ccd0_temp!=null?data.ccd0_temp.toFixed(1)+'°C':'--');
+  sv('h-ccd1',data.ccd1_temp!=null?data.ccd1_temp.toFixed(1)+'°C':'--');
+  sv('h-gv',data.gpu_voltage!=null?data.gpu_voltage.toFixed(3)+'V':'--');
+  sv('h-gclk',data.gpu_clock!=null?Math.round(data.gpu_clock)+' MHz':'--');
+  sv('h-gpwr',data.gpu_power!=null?Math.round(data.gpu_power)+'W':'--');
+}
+
+function onConfigReceived(cfg){navOnConfig(cfg);}
+if(IS_WEBVIEW){
+  window.chrome.webview.addEventListener('message',e=>{try{const m=JSON.parse(e.data);if(m.type==='config')onConfigReceived(m);else receiveData(m);}catch{}});
+  sendToHost({type:'requestConfig'});
+}
+</script>
+</body>
+</html>
