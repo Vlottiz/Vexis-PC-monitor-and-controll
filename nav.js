@@ -219,6 +219,11 @@ function updateProfileUI() {
 let NAV_SETTINGS = {};
 
 window.navOnConfig = function(cfg) {
+  if (cfg.appVersion) {
+    window.NAV_APP_VERSION = cfg.appVersion;
+    const v = document.getElementById('nv-version');
+    if (v) v.textContent = 'v' + cfg.appVersion;
+  }
   // Restore settings
   if (cfg.settings) {
     NAV_SETTINGS = cfg.settings;
@@ -558,8 +563,7 @@ function buildPanelHTML() {
       <div style="padding:8px 0;border-bottom:1px solid rgba(68,51,0,.2)">
         <div style="font-size:10px;color:var(--label);margin-bottom:6px">Security Settings</div>
         <div style="font-size:9px;color:var(--label);opacity:.7;line-height:1.4;margin-bottom:8px">
-          Control which Windows security features Vexis adjusts on startup —
-          with full explanations for each one.
+          Sensor driver (PawnIO) status and Windows protection status.
         </div>
         <button onclick="sendToHost({type:'navigate',file:'security.html'});closeNav();"
           class="nvc-reset-all" style="width:100%;justify-content:center">
@@ -569,7 +573,7 @@ function buildPanelHTML() {
 
       <div style="padding:8px 0;border-bottom:1px solid rgba(68,51,0,.2)">
         <div style="font-size:10px;color:var(--label);margin-bottom:4px">Version</div>
-        <div style="font-size:11px;color:var(--mem-acc);font-family:monospace">v2.5</div>
+        <div id="nv-version" style="font-size:11px;color:var(--mem-acc);font-family:monospace">v${window.NAV_APP_VERSION||'?'}</div>
       </div>
 
       <button onclick="sendToHost({type:'openUrl',url:'https://github.com/Vlottiz/vexis'})"

@@ -44,8 +44,10 @@ public class SensorData
 
 public class CoreInfo
 {
-    public float clk  { get; set; }
-    public int   rank { get; set; }  // 0 = no rank info (Intel/generic)
+    public float  clk  { get; set; }
+    public int    rank { get; set; }  // 0 = no rank info (Intel/generic)
+    public float? temp { get; set; }  // per-core temp (Intel; AMD Zen only exposes CCD temps)
+    public float? load { get; set; }  // per-core load % (busiest thread of the core)
 }
 
 public class SensorService : IDisposable
@@ -76,8 +78,9 @@ public class SensorService : IDisposable
     // Matches: "Core #1", "CPU Core #1", "P-Core #1", "E-Core #1" (Intel 12th gen+)
     private static readonly Regex CoreClockRe = new(
         @"^(?:CPU |P-|E-)?Core #?(\d+)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-    private static readonly Regex CoreLoadRe  = new(
-        @"^(?:CPU Core|P-Core|E-Core) #?(\d+)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    // Per-thread suffix on load sensors, e.g. "CPU Core #3 Thread #2"
+    private static readonly Regex ThreadSuffixRe = new(
+        @" Thread #\d+$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private AppConfig? _config;
 
@@ -94,194 +97,23 @@ public class SensorService : IDisposable
             IsNetworkEnabled     = false,
             IsStorageEnabled     = false
         };
-        // ── Step 0: Remove ALL Windows security blocks on the sensor driver ───────
-        // Intel CPUs need WinRing0 for MSR access (temps + clocks).
-        // Three separate Windows features can block it — we fix all three at once.
-        if (_config?.Settings?.ContainsKey("disableSecurityBypass") == true &&
-            _config.Settings["disableSecurityBypass"] == "true")
-        {
-            Console.WriteLine("[hw] Security bypass disabled by user preference.");
-        }
-        else
-        try
-        {
-            bool needsRestart = false;
-
-            // Block 1: Memory Integrity (HVCI)
-            try
-            {
-                using var hvci = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
-                    @"SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity",
-                    writable: true);
-                if (hvci != null && hvci.GetValue("Enabled") is int hvciVal && hvciVal == 1)
-                { hvci.SetValue("Enabled", 0, Microsoft.Win32.RegistryValueKind.DWord); needsRestart = true; Console.WriteLine("[hw] Fixed: Memory Integrity disabled."); }
-                else Console.WriteLine("[hw] OK: Memory Integrity already off.");
-            }
-            catch (Exception ex) { Console.WriteLine($"[hw] HVCI check failed: {ex.Message}"); }
-
-            // Block 2: Vulnerable Driver Blocklist (blocks WinRing0 on Win11 22H2+)
-            try
-            {
-                var vdb = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
-                    @"SYSTEM\CurrentControlSet\Control\CI\Config", writable: true)
-                    ?? Microsoft.Win32.Registry.LocalMachine.CreateSubKey(
-                    @"SYSTEM\CurrentControlSet\Control\CI\Config");
-                if (vdb != null)
-                {
-                    var cur = vdb.GetValue("VulnerableDriverBlocklistEnable");
-                    if (cur == null || cur is int cv && cv != 0)
-                    { vdb.SetValue("VulnerableDriverBlocklistEnable", 0, Microsoft.Win32.RegistryValueKind.DWord); needsRestart = true; Console.WriteLine("[hw] Fixed: Vulnerable Driver Blocklist disabled."); }
-                    else Console.WriteLine("[hw] OK: Driver Blocklist already off.");
-                    vdb.Dispose();
-                }
-            }
-            catch (Exception ex) { Console.WriteLine($"[hw] VDB check failed: {ex.Message}"); }
-
-            // Block 3: Virtualization Based Security
-            try
-            {
-                using var dg = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
-                    @"SYSTEM\CurrentControlSet\Control\DeviceGuard", writable: true);
-                if (dg != null && dg.GetValue("EnableVirtualizationBasedSecurity") is int vbs && vbs == 1)
-                { dg.SetValue("EnableVirtualizationBasedSecurity", 0, Microsoft.Win32.RegistryValueKind.DWord); needsRestart = true; Console.WriteLine("[hw] Fixed: VBS disabled."); }
-                else Console.WriteLine("[hw] OK: VBS already off.");
-            }
-            catch (Exception ex) { Console.WriteLine($"[hw] VBS check failed: {ex.Message}"); }
-
-            if (needsRestart)
-            {
-                var res = System.Windows.Forms.MessageBox.Show(
-                    "PC Monitor has updated your security settings to enable\n" +
-                    "hardware sensor access (CPU temps, clock speeds).\n\n" +
-                    "This is a ONE-TIME change. Your PC needs to restart.\n\nRestart now?",
-                    "PC Monitor — One-Time Setup",
-                    System.Windows.Forms.MessageBoxButtons.YesNo,
-                    System.Windows.Forms.MessageBoxIcon.Information);
-                if (res == System.Windows.Forms.DialogResult.Yes)
-                {
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                    { FileName="shutdown.exe", Arguments="-r -t 5", UseShellExecute=false, CreateNoWindow=true });
-                    System.Windows.Forms.Application.Exit();
-                    return;
-                }
-            }
-            else Console.WriteLine("[hw] All security blocks already cleared.");
-        }
-        catch (Exception ex) { Console.WriteLine($"[hw] Security setup error: {ex.Message}"); }
-
-        // ── Step 1: Add Defender exclusions ─────────────────────────────────────
-        try
-        {
-            string sysTmp = Path.Combine(Path.GetTempPath(), "LibreHardwareMonitorLib.sys");
-            string args   = $"-NoProfile -WindowStyle Hidden -Command \"Add-MpPreference" +
-                            $" -ExclusionPath '{sysTmp}'" +
-                            $" -ExclusionProcess 'Pcmonitor2.0.exe' -ErrorAction SilentlyContinue\"";
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "powershell.exe", Arguments = args,
-                UseShellExecute = false, CreateNoWindow = true
-            })?.WaitForExit(5000);
-            Console.WriteLine("[hw] Defender exclusion applied.");
-        }
-        catch (Exception ex) { Console.WriteLine($"[hw] Defender exclusion skipped: {ex.Message}"); }
-
-        // ── Step 2: Install WHQL-signed WinRing0 driver ──────────────────────────
-        // WinRing0x64.sys from OpenHardwareMonitor is MIT licensed and WHQL-signed
-        // by Microsoft — meaning Windows loads it regardless of Memory Integrity.
-        // This is the same approach used by CPU-Z, HWiNFO, and MSI Afterburner.
-        // Source: https://github.com/openhardwaremonitor/openhardwaremonitor
-        try
-        {
-            string sysPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "WinRing0x64.sys");
-
-            // Download the signed driver if not already present
-            if (!File.Exists(sysPath))
-            {
-                Console.WriteLine("[hw] Downloading WHQL-signed WinRing0x64.sys...");
-                using var http   = new System.Net.Http.HttpClient();
-                http.Timeout     = TimeSpan.FromSeconds(15);
-                // OHM release on GitHub — MIT licensed, WHQL signed
-                var url   = "https://raw.githubusercontent.com/openhardwaremonitor/openhardwaremonitor/master/Hardware/WinRing0x64.sys";
-                var bytes = http.GetByteArrayAsync(url).GetAwaiter().GetResult();
-                File.WriteAllBytes(sysPath, bytes);
-                Console.WriteLine($"[hw] Downloaded WinRing0x64.sys ({bytes.Length} bytes)");
-            }
-            else
-            {
-                Console.WriteLine("[hw] WinRing0x64.sys already present.");
-            }
-
-            if (File.Exists(sysPath))
-            {
-                // Stop and delete existing service — must wait between each step
-                void RunSc(string scArgs) {
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                    { FileName="sc.exe", Arguments=scArgs,
-                      UseShellExecute=false, CreateNoWindow=true })?.WaitForExit(3000);
-                }
-                RunSc("stop WinRing0_1_2_0");
-                Thread.Sleep(600);
-                RunSc("delete WinRing0_1_2_0");
-                Thread.Sleep(1000); // must wait for SCM to fully release the service record
-                RunSc("stop PawnIO");
-                RunSc("delete PawnIO");
-                Thread.Sleep(300);
-
-                // Create and start fresh
-                RunSc($"create WinRing0_1_2_0 type= kernel start= demand binPath= \"{sysPath}\"");
-                Thread.Sleep(300);
-                var sc = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                { FileName="sc.exe", Arguments="start WinRing0_1_2_0",
-                  UseShellExecute=false, CreateNoWindow=true });
-                sc?.WaitForExit(3000);
-                Console.WriteLine($"[hw] WinRing0 service started (exit={sc?.ExitCode}).");
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[hw] WinRing0 setup failed: {ex.Message}");
-        }
-
-        // ── Step 2b: Clean up stale PawnIO — let LHM manage it ─────────────────
-        try
-        {
-            void RunScClean(string scArgs) {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                { FileName="sc.exe", Arguments=scArgs,
-                  UseShellExecute=false, CreateNoWindow=true })?.WaitForExit(3000);
-            }
-            RunScClean("stop PawnIO");
-            Thread.Sleep(800);
-            RunScClean("delete PawnIO");
-            Thread.Sleep(1200);
-            Console.WriteLine("[pawnio] Stale PawnIO cleared — LHM will register on Open().");
-            var lhmAsm = typeof(Computer).Assembly;
-            var binRes = lhmAsm.GetManifestResourceNames().Where(n => n.Contains("PawnIo")).ToList();
-            Console.WriteLine($"[pawnio] PawnIO resources: {string.Join(", ", binRes)}");
-        }
-        catch (Exception ex) { Console.WriteLine($"[pawnio] Cleanup failed: {ex.Message}"); }
-
-        Console.WriteLine("[pawnio] Waiting for drivers to stabilize before Open()...");
-        Thread.Sleep(2000);
+        // ── Sensor driver ────────────────────────────────────────────────────────
+        // LHM 0.9.6 reads per-core temps/clocks, SMU, SuperIO fans and DIMM temps
+        // through PawnIO. It works with Memory Integrity / VBS / the driver blocklist
+        // left ON, so Vexis no longer changes any Windows security settings.
+        DriverSetup.CleanupLegacyWinRing0();
+        DriverSetup.EnsurePawnIo();
 
         try
         {
             _computer.Open();
-            Thread.Sleep(2000);
-        }
-        catch (MissingMethodException ex) when (ex.Message.Contains("Mutex"))
-        {
-            // LHM 0.9.6 uses a Mutex constructor overload not available in this
-            // .NET 8 runtime. This is a known LHM/NET8 self-contained incompatibility.
-            // The app will run in WMI-only mode (clock speed + load, no temps).
-            Console.WriteLine($"[hw] LHM Mutex API unavailable — falling back to WMI-only mode. ({ex.Message})");
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[hw] LHM Open() failed: {ex.Message}");
         }
 
-                ScanHardware();
+        ScanHardware();
         _timer = new Timer(Poll, null, Timeout.Infinite, Timeout.Infinite);
     }
 
@@ -472,9 +304,19 @@ public class SensorService : IDisposable
     }
 
 
+    private int _polling; // 1 while a poll is running — LHM Update() is not re-entrant
+
     private void Poll(object? _)
     {
         if (_paused) return; // LHM SMBus released for OpenRGB
+        if (Interlocked.Exchange(ref _polling, 1) == 1) return; // previous poll still running
+        try { PollCore(); }
+        catch (Exception ex) { Console.WriteLine($"[poll] {ex.Message}"); }
+        finally { Volatile.Write(ref _polling, 0); }
+    }
+
+    private void PollCore()
+    {
         var data = new SensorData { info = _hwInfo };
 
         foreach (var hw in _computer.Hardware)
@@ -683,8 +525,23 @@ public class SensorService : IDisposable
     }
 
 
+    // Maps an LHM core sensor name to the key used in _coreMap (-1 = not a core sensor)
+    private static int CoreKey(string name)
+    {
+        var pm = PCoreClockRe.Match(name);
+        if (pm.Success && int.TryParse(pm.Groups[1].Value, out int pi)) return pi;
+        var em = ECoreClockRe.Match(name);
+        if (em.Success && int.TryParse(em.Groups[1].Value, out int ei)) return 1000 + ei;
+        var gm = CoreClockRe.Match(name);
+        if (gm.Success && int.TryParse(gm.Groups[1].Value, out int gi)) return gi;
+        return -1;
+    }
+
     private void ReadCpu(IHardware hw, SensorData data)
     {
+        var coreTemps = new Dictionary<int, float>();
+        var coreLoads = new Dictionary<int, float>();
+
         foreach (var s in hw.Sensors)
         {
             if (s.Value is null || s.Value.Value == 0f) continue;
@@ -692,9 +549,22 @@ public class SensorService : IDisposable
 
             switch (s.SensorType)
             {
+                case SensorType.Load:
+                {
+                    int key = CoreKey(ThreadSuffixRe.Replace(s.Name, ""));
+                    if (key >= 0 && _coreMap.TryGetValue(key, out var li))
+                        coreLoads[li.displayId] = Math.Max(v, coreLoads.GetValueOrDefault(li.displayId));
+                    break;
+                }
+
                 case SensorType.Temperature:
                     string n = s.Name;
                     bool isCcd = n.Contains("CCD") || n.Contains("Ccd");
+
+                    // Per-core temps (Intel "Core #N", "P-Core #N", "E-Core #N")
+                    int tkey = isCcd ? -1 : CoreKey(n);
+                    if (tkey >= 0 && _coreMap.TryGetValue(tkey, out var ti))
+                        coreTemps[ti.displayId] = v;
 
                     // CPU package/die temp — AMD and Intel variants
                     if (!isCcd && (n.Contains("Tctl") || n.Contains("Tdie") || n.Contains("Package") ||
@@ -721,18 +591,18 @@ public class SensorService : IDisposable
 
                 case SensorType.Clock:
                 {
-                    int mapKey = -1;
-                    var pm = PCoreClockRe.Match(s.Name);
-                    var em = ECoreClockRe.Match(s.Name);
-                    var gm = CoreClockRe.Match(s.Name);
-                    if      (pm.Success && int.TryParse(pm.Groups[1].Value, out int pi)) mapKey = pi;
-                    else if (em.Success && int.TryParse(em.Groups[1].Value, out int ei)) mapKey = 1000 + ei;
-                    else if (gm.Success && int.TryParse(gm.Groups[1].Value, out int gi)) mapKey = gi;
+                    int mapKey = CoreKey(s.Name);
                     if (mapKey >= 0 && _coreMap.TryGetValue(mapKey, out var cinfo))
                         data.cores[cinfo.displayId] = new CoreInfo { clk = v, rank = cinfo.rank };
                     break;
                 }
             }
+        }
+
+        foreach (var (id, core) in data.cores)
+        {
+            if (coreTemps.TryGetValue(id, out float t)) core.temp = t;
+            if (coreLoads.TryGetValue(id, out float l)) core.load = l;
         }
     }
 
@@ -778,21 +648,5 @@ public class SensorService : IDisposable
         _timer.Dispose();
         _computer.Close();
         _perfCounter?.Dispose();
-
-        // Clean up the WinRing0 service on exit
-        try
-        {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "sc.exe", Arguments = "stop WinRing0_1_2_0",
-                UseShellExecute = false, CreateNoWindow = true
-            })?.WaitForExit(2000);
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "sc.exe", Arguments = "delete WinRing0_1_2_0",
-                UseShellExecute = false, CreateNoWindow = true
-            })?.WaitForExit(2000);
-        }
-        catch { }
     }
 }

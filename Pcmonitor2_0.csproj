@@ -5,7 +5,8 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>Vexis</AssemblyName>
     <Product>Vexis Hardware Monitoring</Product>
-    <Version>2.0.0</Version>
+    <!-- Bump this for every release. build-installer.bat reads it for the installer too. -->
+    <Version>2.1.0</Version>
     <ApplicationIcon>vexis.ico</ApplicationIcon>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -13,9 +14,8 @@
   <ItemGroup>
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
 		<PackageReference Include="System.Threading.AccessControl" Version="10.0.8" />
-		<Reference Include="LibreHardwareMonitorLib">
-		<HintPath>LibreHardwareMonitorLib.dll</HintPath>
-		</Reference>
+    <!-- NuGet (not a loose DLL) so its dependencies — HidSharp, RAMSPDToolkit, etc. — ship too -->
+    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
     <PackageReference Include="System.Management" Version="10.0.8" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3967.48" />
   </ItemGroup>
@@ -30,6 +30,15 @@
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
     <Content Include="*.css">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <!-- PawnIO sensor driver installer (downloaded by build-installer.bat; redistributable unmodified) -->
+    <Content Include="PawnIO_setup.exe" Condition="Exists('PawnIO_setup.exe')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="hidapi.dll" Condition="Exists('hidapi.dll')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>

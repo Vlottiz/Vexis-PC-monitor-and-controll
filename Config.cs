@@ -18,18 +18,6 @@ public class FanCurve
     public int              MinSpeed   { get; set; } = 0;        // % floor — fan never drops below this
 }
 
-// ─── Security preferences ─────────────────────────────────────────────────────
-public class SecurityPrefs
-{
-    // Auto-apply on startup toggles
-    public bool AutoMemoryIntegrity    { get; set; } = true;  // disable HVCI
-    public bool AutoDriverBlocklist    { get; set; } = true;  // disable Vulnerable Driver Blocklist
-    public bool AutoVbs                { get; set; } = true;  // disable VBS
-    public bool AutoDefenderExclusion  { get; set; } = true;  // add Defender exclusion
-    public bool AutoFirewallRule       { get; set; } = true;  // allow port 6742 for OpenRGB
-    public bool FirstRunDone           { get; set; } = false; // suppress first-run dialog
-}
-
 // ─── Main config ───────────────────────────────────────────────────────────────
 public class AppConfig
 {
@@ -47,11 +35,6 @@ public class AppConfig
 
     // Saved color profiles (slot 1-3)
     public Dictionary<int, Dictionary<string, string>> ColorProfiles { get; set; } = new();
-
-    // ─── Security preferences ─────────────────────────────────────────────────
-    // Each flag controls whether Vexis auto-applies that change on startup.
-    // All default true (original behaviour) — user can opt out per-feature.
-    public SecurityPrefs Security { get; set; } = new();
 
     // ─── Paths ────────────────────────────────────────────────────────────────
     private static string ConfigDir =>

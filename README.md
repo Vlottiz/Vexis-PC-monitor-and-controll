@@ -87,22 +87,20 @@ The installer:
 
 - **Windows 10 or 11** (64-bit)
 - **Administrator privileges** — required for hardware sensor access (the app auto-elevates)
-- **Internet** on first launch — downloads the hardware sensor driver (~14KB)
+- **PawnIO sensor driver** — installed automatically by the installer (or on first launch)
 - **WebView2** — pre-installed on Windows 11; Windows 10 users may need to install it from [Microsoft](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)
 
-### Intel CPU Note
+### Sensor driver (PawnIO)
 
-Intel CPUs require a kernel-mode driver (`WinRing0`) to read per-core temperatures and clock speeds. On most modern Windows 11 systems this driver is blocked by the **Vulnerable Driver Blocklist** (a Windows security feature).
+Per-core temperatures and clocks, motherboard fan sensors and DIMM temperatures are read through
+[PawnIO](https://pawnio.eu), the driver used by LibreHardwareMonitor 0.9.6+. PawnIO is signed and
+works with **Memory Integrity, VBS and the Vulnerable Driver Blocklist left ON** — Vexis does not
+change any Windows security settings.
 
-**What you get on Intel without the driver:**
-- ✅ All-core average clock speed (accurate, reflects Turbo Boost)
-- ✅ CPU load percentage
-- ✅ GPU temperature, clock, power
-- ✅ RAM, fans, all other sensors
-- ❌ Per-core individual temps/clocks
+Older Vexis versions used WinRing0 and switched those protections off. If you ran one of them, open
+**Security** in Vexis and click **Restore Windows Protections**, then restart Windows.
 
-**To unlock full Intel sensor support:**
-> Windows Security → Device Security → Core Isolation → Microsoft Vulnerable Driver Blocklist → **OFF** → Restart
+If CPU data shows as unavailable: **Security → Install / Repair PawnIO**, then restart Vexis.
 
 ---
 
@@ -162,20 +160,31 @@ All settings persist across sessions.
 
 ## Building from Source
 
-```bash
-# Prerequisites:
-# - .NET 8 SDK: https://dotnet.microsoft.com/download
-# - NSIS (for installer): https://nsis.sourceforge.io
+Prerequisites (one-time):
+- [.NET 8 SDK](https://dotnet.microsoft.com/download)
+- [NSIS](https://nsis.sourceforge.io/Download) — builds the installer `.exe`
 
+```bash
 git clone https://github.com/Vlottiz/vexis.git
 cd vexis
 
 # Run in development (admin PowerShell)
 dotnet run
-
-# Build installer
-.\build-installer.bat
 ```
+
+### Making a new installer after changes
+
+1. Bump `<Version>` in `Pcmonitor2_0.csproj` (e.g. `2.1.0` → `2.1.1`). This is the only place the
+   version lives — the app, the update check and the installer all read it.
+2. Double-click `build-installer.bat` (or run it from a terminal). It will:
+   - download `PawnIO_setup.exe` if it is missing,
+   - `dotnet publish` the app into `publish\`,
+   - run NSIS to produce **`VexisHM-Setup.exe`** in the project folder.
+3. Create a GitHub release tagged `v<version>` (e.g. `v2.1.1`) and attach `VexisHM-Setup.exe`.
+   Installed copies will show the update badge on next launch.
+
+Running the new installer over an existing install updates it in place (settings in
+`%AppData%\Vexis` are kept).
 
 ---
 

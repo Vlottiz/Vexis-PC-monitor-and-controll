@@ -118,13 +118,13 @@ body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;backgr
         title="Why am I seeing this?">ℹ</div>
     </div>
     <div id="intel-info-panel" style="display:none;background:rgba(0,0,0,.3);border:1px solid rgba(0,100,200,.25);border-radius:0 0 4px 4px;padding:8px 10px;font-size:9px;line-height:1.7;color:#6699bb;font-family:monospace">
-      <strong style="color:#4499cc;letter-spacing:.1em">INTEL CPU DETECTED</strong><br>
-      Intel processors require a kernel-mode driver to read per-core temps and individual clock speeds.
-      This driver is blocked by Windows security on most modern systems.<br><br>
+      <strong style="color:#4499cc;letter-spacing:.1em">SENSOR DRIVER NOT LOADED</strong><br>
+      Per-core temps and clock speeds are read through the PawnIO driver. It works with
+      Memory Integrity and the driver blocklist left ON — no security changes needed.<br><br>
       <span style="color:#886600">What you ARE getting:</span> Real-time all-core average clock via Windows
-      Performance Counters — this accurately reflects Turbo Boost activity and load.<br><br>
-      <span style="color:#886600">What requires a paid cert (~$300/yr):</span> Per-core temps, per-core
-      individual clock speeds. Same limitation affects CPU-Z and similar free tools.
+      Performance Counters.<br><br>
+      <span style="color:#886600">To fix:</span> open the Security page and click
+      <b>Install / Repair PawnIO</b>, then restart Vexis.
     </div>
   </div>
   <div style="text-align:center;padding:0 44px 8px 44px;border-bottom:1px solid var(--border);margin-bottom:8px;position:relative;flex-shrink:0">
@@ -698,7 +698,7 @@ function applyData(data){
   const gT=data.gpu_temp;setText('sgpuT',gT!=null?gT+'°C':'--');setCol('sgpuT',tempCol(gT));
   setText('sgpuV',data.gpu_voltage!=null?parseFloat(data.gpu_voltage).toFixed(3)+'V':'--');setText('sgpuP',data.gpu_power!=null?Math.round(data.gpu_power)+'W':'--');setText('sgpuC',data.gpu_clock!=null?Math.round(data.gpu_clock)+'MHz':'--');
   const cores=data.cores||{};let peak=0,tot=0,cnt=0;
-  CORES_META.forEach(c=>{const cd=cores[String(c.id)]||cores[c.id],clk=cd?cd.clk:0;const bar=document.getElementById('bar'+c.id),clkEl=document.getElementById('clk'+c.id);if(clk>peak)peak=clk;if(clk>0){tot+=clk;cnt++;}const pct=clk<=0?0:clk<=STOCK?(clk/STOCK)*50:50+((clk-STOCK)/(MAX-STOCK))*50;if(bar){bar._lastClk=clk;bar.style.background=barGrad(clk);bar.style.opacity=pct<3?'0.2':String(0.65+pct/100*0.35);bar.style.clipPath=`inset(0 ${100-pct}% 0 0)`;}if(clkEl){clkEl.textContent=clk>0?Math.round(clk)+'MHz':'--';clkEl.style.color=clk>=4500?clkEnd(clk):COLORS.coreLbl;}});
+  CORES_META.forEach(c=>{const cd=cores[String(c.id)]||cores[c.id],clk=cd?cd.clk:0;const bar=document.getElementById('bar'+c.id),clkEl=document.getElementById('clk'+c.id);if(clk>peak)peak=clk;if(clk>0){tot+=clk;cnt++;}const pct=clk<=0?0:clk<=STOCK?(clk/STOCK)*50:50+((clk-STOCK)/(MAX-STOCK))*50;if(bar){bar._lastClk=clk;bar.style.background=barGrad(clk);bar.style.opacity=pct<3?'0.2':String(0.65+pct/100*0.35);bar.style.clipPath=`inset(0 ${100-pct}% 0 0)`;}if(clkEl){clkEl.textContent=clk>0?Math.round(clk)+'MHz':'--';clkEl.style.color=clk>=4500?clkEnd(clk):COLORS.coreLbl;const tip=[];if(cd&&cd.load!=null)tip.push('Load '+Math.round(cd.load)+'%');if(cd&&cd.temp!=null)tip.push('Temp '+cd.temp.toFixed(1)+'°C');clkEl.title=tip.join(' · ');}});
   // Push sparkline data and redraw visible ones
   CORES_META.forEach(c=>{
     const cd=cores[String(c.id)]||cores[c.id];
