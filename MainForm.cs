@@ -52,6 +52,25 @@ public class MainForm : Form
 
     private async void OnLoad(object? sender, EventArgs e)
     {
+        // The whole UI is WebView2. Windows 11 always has it; some Windows 10
+        // machines don't (the installer adds it, but a copied folder won't).
+        if (!IsWebView2Installed())
+        {
+            Console.WriteLine("[startup] WebView2 runtime not found.");
+            var answer = MessageBox.Show(
+                "Vexis needs the Microsoft Edge WebView2 Runtime, which isn't installed on this PC.\n\n" +
+                "Open the download page now? (Choose \"Evergreen Bootstrapper\", install it, then start Vexis again.)",
+                "Vexis — WebView2 required", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+            if (answer == DialogResult.Yes)
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "https://developer.microsoft.com/microsoft-edge/webview2/",
+                    UseShellExecute = true
+                });
+            Application.Exit();
+            return;
+        }
+
         _config = AppConfig.Load();
         _sensor = new SensorService(_config);
         _fans   = new FanController();
@@ -168,6 +187,17 @@ public class MainForm : Form
             foreach (var p in _popouts.Values)
                 if (!p.IsDisposed) _ = p.ExecuteScriptAsync(script);
         });
+    }
+
+    private static bool IsWebView2Installed()
+    {
+        try
+        {
+            return !string.IsNullOrEmpty(
+                Microsoft.Web.WebView2.Core.CoreWebView2Environment.GetAvailableBrowserVersionString());
+        }
+        catch (Microsoft.Web.WebView2.Core.WebView2RuntimeNotFoundException) { return false; }
+        catch { return true; } // unexpected error — let CreateAsync report it
     }
 
     private async Task SendConfigViaScript()

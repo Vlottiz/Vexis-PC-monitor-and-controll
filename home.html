@@ -274,7 +274,7 @@ function applyHwInfo(info){
   s('hw-sub',parts.join(' · '));
   s('gpu-title',info.gpu?'GPU · '+info.gpu.toUpperCase():'GPU');
   s('h-ram',info.ramGb?info.ramGb+'GB':'--');
-  s('h-rtype',info.ramType||'···'); s('h-rspd',info.ramMhz?info.ramMhz+'MHz':'···');
+  s('h-rtype',info.ramType||'···'); s('h-rspd',info.ramMhz?info.ramMhz+' MT/s':'···');
   s('h-sock',info.socket||'···');
   if(info.gpuVram)s('h-vram',info.gpuVram+'GB VRAM');
 }

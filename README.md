@@ -76,19 +76,38 @@ The installer:
 - Adds a Windows Defender exclusion to prevent false positives from low-level hardware monitoring components
 - Appears in Add/Remove Programs for clean uninstall
 
-### Option B — Manual
+### Option B — Build it yourself
 
-1. Download and extract `Vexis-portable.zip` from releases
-2. Run `Pcmonitor2.0.exe` as Administrator
+See [Building from Source](#building-from-source).
 
 ---
 
 ## Requirements
 
-- **Windows 10 or 11** (64-bit)
-- **Administrator privileges** — required for hardware sensor access (the app auto-elevates)
-- **PawnIO sensor driver** — installed automatically by the installer (or on first launch)
-- **WebView2** — pre-installed on Windows 11; Windows 10 users may need to install it from [Microsoft](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)
+- **Windows 10 or 11, 64-bit (x64)** — Intel or AMD processor
+- **Administrator rights** — Vexis asks for them when it starts (needed for hardware sensors)
+- **No .NET install needed** — the runtime is bundled
+- **WebView2 Runtime** — built into Windows 11; the installer adds it on Windows 10 if missing (needs internet once)
+- **PawnIO sensor driver** — installed by the installer
+
+## Compatibility
+
+| | Works | Notes |
+|---|---|---|
+| **Intel CPUs** | Temps, per-core clocks & load, power | 12th gen+ P-cores and E-cores shown separately |
+| **AMD Ryzen** | Tctl/Tdie, CCD temps, per-core clocks & load, power | Dual-CCD X3D parts show V-Cache / Compute groups |
+| **GPUs** | NVIDIA, AMD, Intel Arc | Temp, clock, load, power, VRAM, fan |
+| **Motherboards** | Most ASUS, MSI, Gigabyte, ASRock boards | Fans and board temps depend on [LibreHardwareMonitor support](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) for the SuperIO chip |
+| **RAM** | Usage, DDR5 DIMM temps | DIMM temps need sticks with a thermal sensor |
+
+**Not supported**
+- **Windows on ARM** (Snapdragon laptops) — the sensor driver can't run there.
+- **Windows 7 / 8.1**, 32-bit Windows.
+
+**Known limitations**
+- **Fans missing?** Motherboard fan chips are shared. If **MSI Center, HWiNFO, AIDA64, Armoury Crate** or similar is running, Vexis may not be able to read them — close those apps and restart Vexis.
+- **First download warnings.** Vexis isn't code-signed yet, so Windows SmartScreen may show *"Windows protected your PC"* → **More info → Run anyway**. Antivirus machine-learning scanners can also flag new, unsigned hardware tools.
+- **Anti-cheat.** Some game anti-cheat systems restrict kernel drivers used by hardware monitors. If a game complains, close Vexis while playing.
 
 ### Sensor driver (PawnIO)
 

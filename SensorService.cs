@@ -17,6 +17,7 @@ public class HwInfo
     public int    ramMhz  { get; set; }
     public string ramType { get; set; } = "";
     public int    ccdCount  { get; set; } = 0;   // AMD CCDs, 0 for Intel/other
+    public bool   x3d       { get; set; } = false; // AMD 3D V-Cache part
     public bool   driverOk  { get; set; } = false; // true = LHM ring-0 driver reading OK
 }
 
@@ -50,6 +51,7 @@ public class CoreInfo
     public int    rank { get; set; }  // 0 = no rank info (Intel/generic)
     public float? temp { get; set; }  // per-core temp (Intel; AMD Zen only exposes CCD temps)
     public float? load { get; set; }  // per-core load % (busiest thread of the core)
+    public string? kind { get; set; } // "P" / "E" on Intel hybrid CPUs, null otherwise
 }
 
 public class SensorService : IDisposable
@@ -69,13 +71,6 @@ public class SensorService : IDisposable
 
     public IEnumerable<IHardware> AllHardware => _computer.Hardware;
     public SensorData GetLatestData() => _latest;
-
-    // AMD 9950X3D specific rank table
-    private static readonly Dictionary<int, (int displayId, int rank)> _amd9950x3dMap = new()
-    {
-        {1,(0,12)},{2,(1,11)},{3,(2,8)},{4,(3,10)},{5,(4,13)},{6,(5,9)},{7,(6,15)},{8,(7,14)},
-        {9,(8,2)},{10,(9,1)},{11,(10,3)},{12,(11,5)},{13,(12,4)},{14,(13,1)},{15,(14,6)},{16,(15,7)}
-    };
 
     // Matches: "Core #1", "CPU Core #1", "P-Core #1", "E-Core #1" (Intel 12th gen+)
     private static readonly Regex CoreClockRe = new(
@@ -191,12 +186,12 @@ public class SensorService : IDisposable
                 // CCD count for AMD
                 if (_hwInfo.vendor == "amd")
                 {
-                    var ccdTemps = hw.Sensors
+                    // One "CCDn (Tdie)" sensor per CCD — don't count "CCDs Max/Average"
+                    _hwInfo.ccdCount = hw.Sensors
                         .Where(s => s.SensorType == SensorType.Temperature &&
-                                    (s.Name.Contains("CCD") || s.Name.Contains("Ccd")))
-                        .Select(s => s.Name)
-                        .Distinct().Count();
-                    _hwInfo.ccdCount = ccdTemps;
+                                    Regex.IsMatch(s.Name, @"^CCD\d+", RegexOptions.IgnoreCase))
+                        .Select(s => s.Name).Distinct().Count();
+                    _hwInfo.x3d = name.Contains("X3D", StringComparison.OrdinalIgnoreCase);
                 }
 
                 // Check if driver loaded OK (any temp sensor has a real value)
@@ -233,12 +228,12 @@ public class SensorService : IDisposable
 
         try
         {
-            using var q = new ManagementObjectSearcher("SELECT Speed,SMBIOSMemoryType,Capacity FROM Win32_PhysicalMemory");
+            using var q = new ManagementObjectSearcher("SELECT Speed,ConfiguredClockSpeed,SMBIOSMemoryType,Capacity FROM Win32_PhysicalMemory");
             long total = 0;
             foreach (ManagementObject obj in q.Get())
             {
                 total += Convert.ToInt64(obj["Capacity"]);
-                if (_hwInfo.ramMhz == 0) _hwInfo.ramMhz = Convert.ToInt32(obj["Speed"]);
+                if (_hwInfo.ramMhz == 0) _hwInfo.ramMhz = RamSpeedMts(obj);
                 if (string.IsNullOrEmpty(_hwInfo.ramType))
                     _hwInfo.ramType = Convert.ToInt32(obj["SMBIOSMemoryType"]) switch
                     { 34=>"DDR5", 26=>"DDR4", 24=>"DDR3", _=>"DDR" };
@@ -251,6 +246,7 @@ public class SensorService : IDisposable
         {
             using var q = new ManagementObjectSearcher("SELECT SocketDesignation FROM Win32_Processor");
             foreach (ManagementObject obj in q.Get()) { _hwInfo.socket = obj["SocketDesignation"]?.ToString() ?? ""; break; }
+            _hwInfo.socket = NormalizeSocket(_hwInfo.socket, _hwInfo.cpu, _hwInfo.vendor);
         }
         catch { }
 
@@ -259,10 +255,66 @@ public class SensorService : IDisposable
         Console.WriteLine($"[hw] RAM: {_hwInfo.ramGb}GB {_hwInfo.ramType}-{_hwInfo.ramMhz}");
     }
 
+    // RAM speed in MT/s (what Task Manager shows as "Speed"). ConfiguredClockSpeed is
+    // the running speed (XMP/EXPO applied); Speed is the module rating. Some boards
+    // report DDR5 values doubled (12800 for DDR5-6400) — no DDR4/DDR5 kit runs above
+    // ~10000 MT/s, so halve anything beyond that.
+    private static int RamSpeedMts(ManagementObject obj)
+    {
+        int Read(string prop) { try { return Convert.ToInt32(obj[prop] ?? 0); } catch { return 0; } }
+        int mts = Read("ConfiguredClockSpeed");
+        if (mts <= 0) mts = Read("Speed");
+        while (mts > 10000) mts /= 2;
+        return mts;
+    }
+
+    // SocketDesignation is whatever the board vendor typed into SMBIOS — often a real
+    // socket ("AM5", "LGA1700") but sometimes a slot label like "U3E1" or "CPU 1".
+    // Keep it if it looks like a socket, otherwise infer it from the CPU model.
+    private static readonly Regex SocketLikeRe = new(
+        @"^(FC)?LGA\s?\d{3,4}|^(FC)?BGA|^FP\d|^AM[2-5]\+?$|^s?TR[X]?\d|^SP\d|^FM\d|^Socket\s+(AM|LGA|FM|TR|\d{3,4})", RegexOptions.IgnoreCase);
+
+    private static string NormalizeSocket(string raw, string cpu, string vendor)
+    {
+        raw = raw.Trim();
+        if (SocketLikeRe.IsMatch(raw))
+        {
+            raw = Regex.Replace(raw, @"^Socket\s+", "", RegexOptions.IgnoreCase);
+            return raw.StartsWith("FCLGA", StringComparison.OrdinalIgnoreCase) ? raw[2..] : raw;
+        }
+
+        if (vendor == "intel")
+        {
+            if (Regex.IsMatch(cpu, @"Ultra\s*\d\s*2\d\d[A-Z]*$", RegexOptions.IgnoreCase)) return "LGA1851";
+            var m = Regex.Match(cpu, @"i\d-(\d{4,5})");
+            if (m.Success)
+            {
+                string n = m.Groups[1].Value;
+                int gen = n.Length == 5 ? int.Parse(n[..2]) : int.Parse(n[..1]);
+                return gen switch
+                {
+                    >= 12 and <= 14 => "LGA1700",
+                    10 or 11        => "LGA1200",
+                    8 or 9          => "LGA1151",
+                    _               => ""
+                };
+            }
+        }
+        else if (vendor == "amd")
+        {
+            if (cpu.Contains("Threadripper", StringComparison.OrdinalIgnoreCase)) return "";
+            var m = Regex.Match(cpu, @"Ryzen\s+\d\s+(\d)\d{3}");
+            if (m.Success) return m.Groups[1].Value[0] >= '7' ? "AM5" : "AM4";
+        }
+        return ""; // unknown — show nothing rather than a board slot label
+    }
+
     // ── Build dynamic core map for any CPU ─────────────────────────────────────
     // Separate regex for Intel hybrid P-Core/E-Core (12th gen+)
     private static readonly Regex PCoreClockRe = new(@"^P-Core #?(\d+)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex ECoreClockRe = new(@"^E-Core #?(\d+)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private bool _hybrid; // Intel P-core + E-core CPU
 
     private void BuildCoreMap(IHardware hw)
     {
@@ -292,6 +344,7 @@ public class SensorService : IDisposable
             foreach (int idx in eCores)
                 _coreMap[1000 + idx] = (displayId++, 0);  // offset prevents collision
             _hwInfo.cores = pCores.Count + eCores.Count;
+            _hybrid = true;
             Console.WriteLine($"[hw]   --> Intel hybrid: {pCores.Count} P-Cores + {eCores.Count} E-Cores = {_hwInfo.cores} total");
             return;
         }
@@ -303,13 +356,6 @@ public class SensorService : IDisposable
             .OrderBy(i => i).ToList();
 
         _hwInfo.cores = genericIndices.Count;
-
-        if (_hwInfo.cpu.Contains("9950") && genericIndices.Count == 16)
-        {
-            _coreMap = new(_amd9950x3dMap);
-            Console.WriteLine("[hw]   --> Using AMD 9950X3D rank map");
-            return;
-        }
 
         int did = 0;
         foreach (int idx in genericIndices)
@@ -623,7 +669,11 @@ public class SensorService : IDisposable
                 {
                     int mapKey = CoreKey(s.Name);
                     if (mapKey >= 0 && _coreMap.TryGetValue(mapKey, out var cinfo))
-                        data.cores[cinfo.displayId] = new CoreInfo { clk = v, rank = cinfo.rank };
+                        data.cores[cinfo.displayId] = new CoreInfo
+                        {
+                            clk  = v, rank = cinfo.rank,
+                            kind = !_hybrid ? null : mapKey >= 1000 ? "E" : "P"
+                        };
                     break;
                 }
             }

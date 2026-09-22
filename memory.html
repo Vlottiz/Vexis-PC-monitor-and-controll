@@ -118,9 +118,9 @@ let _hwApplied = false;
 function applyHwInfo(info) {
   if (!info) return;
   const sub = document.getElementById('mem-sub');
-  if (sub) sub.textContent = `${info.ramGb || '--'}GB ${info.ramType || ''} · ${info.socket || ''}`;
+  if (sub) sub.textContent = `${info.ramGb || '--'}GB ${info.ramType || ''}` + (info.socket ? ` · ${info.socket}` : '');
   setText('ms-type',  info.ramType || '--');
-  setText('ms-speed', info.ramMhz  ? info.ramMhz + ' MHz' : '--');
+  setText('ms-speed', info.ramMhz  ? info.ramMhz + ' MT/s' : '--');
   setText('ms-cap',   info.ramGb   ? info.ramGb + ' GB'   : '--');
   setText('ms-sock',  info.socket  || '--');
   setText('mem-installed', info.ramGb ? info.ramGb + 'GB' : '--');

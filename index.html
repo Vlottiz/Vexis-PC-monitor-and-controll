@@ -441,7 +441,7 @@ function applyHwInfo(info) {
     sub.textContent = parts.join(' · ');
   }
   if (gpu) gpu.textContent = 'GPU · ' + (info.gpuVram ? `${info.gpu.toUpperCase()} · ${info.gpuVram}GB` : info.gpu.toUpperCase());
-  if (clk) clk.textContent = info.ramMhz ? info.ramMhz + 'MHz' : '···';
+  if (clk) clk.textContent = info.ramMhz ? info.ramMhz + ' MT/s' : '···';
   if (typ) typ.textContent = info.ramType || '···';
   if (sz)  sz.textContent  = info.ramGb   ? info.ramGb + 'GB'  : '···';
 }
@@ -541,13 +541,22 @@ function buildDynamicBars(coresObj, hwInfo) {
 
   const isAmd   = hwInfo?.vendor === 'amd';
   const ccdCnt  = hwInfo?.ccdCount || 0;
-  const hasCcds = isAmd && ccdCnt >= 2 && keys.length === 16;
+  // Two CCDs with an even core split (e.g. 6+6, 8+8). Cores are numbered CCD by CCD.
+  const hasCcds = isAmd && ccdCnt === 2 && keys.length >= 4 && keys.length % 2 === 0;
+  const perCcd  = hasCcds ? keys.length / 2 : keys.length;
 
-  CORES_META = keys.map((id, i) => ({
-    id,
-    ccd: hasCcds ? (i < 8 ? 0 : 1) : 0,
-    rank: coresObj[id]?.rank || 0
-  }));
+  // Intel hybrid: label P-cores P0.. and E-cores E0.. (numbered within each kind)
+  const kindIdx = {};
+  CORES_META = keys.map((id, i) => {
+    const kind = coresObj[id]?.kind || '';
+    const n = kind ? (kindIdx[kind] = (kindIdx[kind] ?? -1) + 1) : id;
+    return {
+      id,
+      ccd: hasCcds ? (i < perCcd ? 0 : 1) : 0,
+      rank: coresObj[id]?.rank || 0,
+      label: (kind || 'C') + n
+    };
+  });
 
   // Clear containers
   ['ccd0bars','ccd1bars'].forEach(id => {
@@ -563,8 +572,9 @@ function buildDynamicBars(coresObj, hwInfo) {
   if (hasCcds) {
     if (ccd0lbl) ccd0lbl.textContent = 'CCD0';
     if (ccd1lbl) ccd1lbl.textContent = 'CCD1';
-    if (ccd0type) ccd0type.textContent = 'V-Cache';
-    if (ccd1type) ccd1type.textContent = 'Compute';
+    // Dual-CCD X3D parts have the 3D V-Cache on CCD0 only
+    if (ccd0type) ccd0type.textContent = hwInfo?.x3d ? 'V-Cache' : '';
+    if (ccd1type) ccd1type.textContent = hwInfo?.x3d ? 'Compute' : '';
     const ccd1wrap = document.getElementById('ccd1wrap');
     if (ccd1wrap) ccd1wrap.style.display = '';
   } else {
@@ -646,7 +656,7 @@ function buildBars(){
       const wrap=document.createElement('div');
       wrap.style.cssText='margin-bottom:7px;display:flex;align-items:center;gap:8px';
       wrap.innerHTML=`
-        <div style="width:30px;text-align:right;font-size:13px;color:var(--core-lbl);flex-shrink:0;font-weight:600;line-height:1">${c.rank===1?'★':''}C${c.id}</div>
+        <div style="width:30px;text-align:right;font-size:13px;color:var(--core-lbl);flex-shrink:0;font-weight:600;line-height:1">${c.rank===1?'★':''}${c.label||'C'+c.id}</div>
         <div style="flex:1;display:flex;flex-direction:column;gap:1px">
           <div style="height:14px;background:var(--bar-bg);border-radius:2px;overflow:hidden;border:1px solid var(--border);position:relative">
             <div id="bar${c.id}" style="position:absolute;inset:0;transition:background .4s,clip-path .4s,opacity .4s;opacity:0.15"></div>
