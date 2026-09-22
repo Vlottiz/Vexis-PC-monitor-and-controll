@@ -4,14 +4,14 @@
 <meta charset="UTF-8">
 <meta http-equiv="Cache-Control" content="no-cache, no-store">
 <title>PC Monitor — Memory</title>
-<link rel="stylesheet" href="/ui.css?v=8">
+<link rel="stylesheet" href="/ui.css?v=9">
 <style>
-  .mem-big    { font-size:42px;font-weight:700;color:var(--mem-acc);line-height:1;font-family:monospace;text-shadow:0 0 20px var(--mem-acc); }
-  .mem-used   { font-size:18px;font-weight:600;color:var(--avg-col);font-family:monospace; }
+  .mem-big    { font-size:calc(42px*var(--fs-base,1)*var(--data-scale,1));font-weight:700;color:var(--mem-acc);line-height:1;font-family:monospace;text-shadow:0 0 20px var(--mem-acc); }
+  .mem-used   { font-size:calc(18px*var(--fs-base,1));font-weight:600;color:var(--avg-col);font-family:monospace; }
   .dimm-card  { display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(68,51,0,.15); }
   .dimm-card:last-child { border-bottom:none; }
-  .dimm-name  { font-size:11px;color:var(--label);font-weight:500; }
-  .dimm-temp  { font-size:14px;font-weight:700;font-family:monospace; }
+  .dimm-name  { font-size:calc(11px*var(--fs-base,1));color:var(--label);font-weight:500; }
+  .dimm-temp  { font-size:calc(14px*var(--fs-base,1));font-weight:700;font-family:monospace; }
   .load-ring-wrap { display:flex;justify-content:center;padding:10px 0; }
 </style>
 </head>
@@ -23,8 +23,8 @@
       <div class="page-subtitle" id="mem-sub">Loading...</div>
     </div>
     <div style="text-align:right">
-      <div style="font-size:11px;color:var(--label-dim)" id="mem-time">--:--:-- --</div>
-      <div id="mem-load-badge" style="font-size:13px;color:var(--mem-acc);font-weight:700;margin-top:2px">--%</div>
+      <div style="font-size:calc(11px*var(--fs-base,1));color:var(--label-dim)" id="mem-time">--:--:-- --</div>
+      <div id="mem-load-badge" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--mem-acc);font-weight:700;margin-top:2px">--%</div>
     </div>
   </div>
   <div class="page-body">
@@ -33,13 +33,13 @@
     <div class="card" style="text-align:center;padding:20px">
       <div class="card-title" style="margin-bottom:12px">INSTALLED</div>
       <div class="mem-big" id="mem-installed">--</div>
-      <div style="margin:10px 0 4px;font-size:11px;color:var(--label-dim)">IN USE</div>
+      <div style="margin:10px 0 4px;font-size:calc(11px*var(--fs-base,1));color:var(--label-dim)">IN USE</div>
       <div class="mem-used" id="mem-used">-- GB</div>
       <div style="margin-top:12px">
         <div style="height:8px;background:var(--bar-bg);border-radius:4px;overflow:hidden;border:1px solid var(--border)">
           <div id="mem-load-bar" style="height:100%;background:linear-gradient(90deg,var(--avg-col),var(--mem-acc));width:0%;transition:width .5s;border-radius:4px"></div>
         </div>
-        <div style="display:flex;justify-content:space-between;margin-top:4px;font-size:9px;color:var(--label-dim)">
+        <div style="display:flex;justify-content:space-between;margin-top:4px;font-size:calc(9px*var(--fs-base,1));color:var(--label-dim)">
           <span>0%</span>
           <span id="mem-load-pct" style="color:var(--mem-acc);font-weight:600">--%</span>
           <span>100%</span>
@@ -64,7 +64,7 @@
 
     <!-- Load history sparkline -->
     <div class="card">
-      <div class="card-header"><span class="card-title">LOAD HISTORY</span><span style="font-size:9px;color:var(--label-dim)">60s</span></div>
+      <div class="card-header"><span class="card-title">LOAD HISTORY</span><span style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim)">60s</span></div>
       <svg id="mem-spark" width="100%" height="48" viewBox="0 0 400 48" preserveAspectRatio="none"
         style="display:block"></svg>
     </div>
@@ -81,7 +81,7 @@
   </div>
 </div>
 
-<script src="/nav.js?v=8" data-page="memory"></script>
+<script src="/nav.js?v=9" data-page="memory"></script>
 <script>
 const HIST = [];
 const MAX_PTS = 60;

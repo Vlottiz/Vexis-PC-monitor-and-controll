@@ -5,10 +5,10 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PC Monitor</title>
-<link rel="stylesheet" href="/ui.css?v=8">
+<link rel="stylesheet" href="/ui.css?v=9">
 <style>
-  .hw-name { font-size: 15px; font-weight: 700; letter-spacing: .14em; color: var(--header-title); text-shadow: 0 0 18px var(--title-glow); }
-  .hw-sub  { font-size: 10px; color: var(--label-dim); letter-spacing: .1em; margin-top: 2px; }
+  .hw-name { font-size:calc(15px*var(--fs-base,1)); font-weight: 700; letter-spacing: .14em; color: var(--header-title); text-shadow: 0 0 18px var(--title-glow); }
+  .hw-sub  { font-size:calc(10px*var(--fs-base,1)); color: var(--label-dim); letter-spacing: .1em; margin-top: 2px; }
   .temp-indicator { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
   .status-row { display: flex; gap: 8px; flex-wrap: wrap; }
   .status-pill {
@@ -16,14 +16,14 @@
     border-radius: 6px; padding: 10px 14px;
     display: flex; align-items: center; gap: 12px;
   }
-  .pill-icon { font-size: 18px; flex-shrink: 0; opacity: .7; }
+  .pill-icon { font-size:calc(18px*var(--fs-base,1)); flex-shrink: 0; opacity: .7; }
   .pill-body { flex: 1; min-width: 0; }
-  .pill-val  { font-size: 18px; font-weight: 700; line-height: 1; }
-  .pill-lbl  { font-size: 9px; color: var(--label-dim); letter-spacing: .1em; margin-top: 2px; }
+  .pill-val  { font-size:calc(18px*var(--fs-base,1)*var(--data-scale,1)); font-weight: 700; line-height: 1; }
+  .pill-lbl  { font-size:calc(9px*var(--fs-base,1)); color: var(--label-dim); letter-spacing: .1em; margin-top: 2px; }
   .fan-row   { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(68,51,0,0.15); }
   .fan-row:last-child { border-bottom: none; }
-  .fan-name  { font-size: 10px; color: var(--label); }
-  .fan-rpm   { font-size: 13px; font-weight: 600; color: var(--mem-acc); }
+  .fan-name  { font-size:calc(10px*var(--fs-base,1)); color: var(--label); }
+  .fan-rpm   { font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1)); font-weight: 600; color: var(--mem-acc); }
 
   /* Responsive grid — more columns on wider windows */
   .card-grid-2 { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
@@ -45,7 +45,7 @@
   <!-- Body -->
   <div class="page-body">
     <!-- Driver warning — shown when LHM ring-0 driver is blocked -->
-    <div id="driver-warn" style="display:none;background:rgba(180,120,0,.12);border:1px solid rgba(180,120,0,.35);border-radius:5px;padding:10px 14px;font-size:10px;line-height:1.7;color:#ff8844;">
+    <div id="driver-warn" style="display:none;background:rgba(180,120,0,.12);border:1px solid rgba(180,120,0,.35);border-radius:5px;padding:10px 14px;font-size:calc(10px*var(--fs-base,1));line-height:1.7;color:#ff8844;">
       <strong style="letter-spacing:.1em">⚠ SENSOR DRIVER BLOCKED</strong><br>
       CPU temperatures unavailable — clock speeds showing via fallback mode.<br>
       <span style="color:#886600">Open the Security page → Install / Repair PawnIO, then restart Vexis.</span>
@@ -184,41 +184,41 @@
       <button class="nav-tile" onclick="navView('index.html')"
         style="display:flex;flex-direction:column;align-items:flex-start;padding:12px 14px;text-align:left;height:auto">
         <div style="display:flex;align-items:center;gap:8px;width:100%;margin-bottom:8px">
-          <span style="font-size:16px;color:var(--peak-col)">▣</span>
-          <span class="nav-tile-label" style="font-size:10px">PERFORMANCE</span>
+          <span style="font-size:calc(16px*var(--fs-base,1));color:var(--peak-col)">▣</span>
+          <span class="nav-tile-label" style="font-size:calc(10px*var(--fs-base,1))">PERFORMANCE</span>
         </div>
-        <div style="font-size:18px;font-weight:700;color:var(--peak-col)" id="nt-peakclk">-- MHz</div>
-        <div style="font-size:9px;color:var(--label-dim);margin-top:2px">PEAK CLOCK</div>
+        <div style="font-size:calc(18px*var(--fs-base,1)*var(--data-scale,1));font-weight:700;color:var(--peak-col)" id="nt-peakclk">-- MHz</div>
+        <div style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);margin-top:2px">PEAK CLOCK</div>
       </button>
 
       <button class="nav-tile" onclick="navView('temps.html')"
         style="display:flex;flex-direction:column;align-items:flex-start;padding:12px 14px;text-align:left;height:auto">
         <div style="display:flex;align-items:center;gap:8px;width:100%;margin-bottom:8px">
-          <span style="font-size:16px;color:var(--temp-val)">◈</span>
-          <span class="nav-tile-label" style="font-size:10px">TEMPERATURES</span>
+          <span style="font-size:calc(16px*var(--fs-base,1));color:var(--temp-val)">◈</span>
+          <span class="nav-tile-label" style="font-size:calc(10px*var(--fs-base,1))">TEMPERATURES</span>
         </div>
-        <div style="font-size:18px;font-weight:700;color:var(--temp-val)" id="nt-gputemp">-- °C</div>
-        <div style="font-size:9px;color:var(--label-dim);margin-top:2px">GPU TEMP</div>
+        <div style="font-size:calc(18px*var(--fs-base,1)*var(--data-scale,1));font-weight:700;color:var(--temp-val)" id="nt-gputemp">-- °C</div>
+        <div style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);margin-top:2px">GPU TEMP</div>
       </button>
 
       <button class="nav-tile" onclick="navView('fans.html')"
         style="display:flex;flex-direction:column;align-items:flex-start;padding:12px 14px;text-align:left;height:auto">
         <div style="display:flex;align-items:center;gap:8px;width:100%;margin-bottom:8px">
-          <span style="font-size:16px;color:var(--mem-acc)">◎</span>
-          <span class="nav-tile-label" style="font-size:10px">FAN CONTROL</span>
+          <span style="font-size:calc(16px*var(--fs-base,1));color:var(--mem-acc)">◎</span>
+          <span class="nav-tile-label" style="font-size:calc(10px*var(--fs-base,1))">FAN CONTROL</span>
         </div>
-        <div style="font-size:18px;font-weight:700;color:var(--mem-acc)" id="nt-fanrpm">-- RPM</div>
-        <div style="font-size:9px;color:var(--label-dim);margin-top:2px">GPU FAN</div>
+        <div style="font-size:calc(18px*var(--fs-base,1)*var(--data-scale,1));font-weight:700;color:var(--mem-acc)" id="nt-fanrpm">-- RPM</div>
+        <div style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);margin-top:2px">GPU FAN</div>
       </button>
 
       <button class="nav-tile" onclick="navView('rgb.html')"
         style="display:flex;flex-direction:column;align-items:flex-start;padding:12px 14px;text-align:left;height:auto">
         <div style="display:flex;align-items:center;gap:8px;width:100%;margin-bottom:8px">
-          <span style="font-size:16px;color:var(--gpu-acc)">◐</span>
-          <span class="nav-tile-label" style="font-size:10px">RGB CONTROL</span>
+          <span style="font-size:calc(16px*var(--fs-base,1));color:var(--gpu-acc)">◐</span>
+          <span class="nav-tile-label" style="font-size:calc(10px*var(--fs-base,1))">RGB CONTROL</span>
         </div>
-        <div style="font-size:18px;font-weight:700;color:var(--gpu-acc)">OpenRGB</div>
-        <div style="font-size:9px;color:var(--label-dim);margin-top:2px">500+ DEVICES</div>
+        <div style="font-size:calc(18px*var(--fs-base,1));font-weight:700;color:var(--gpu-acc)">OpenRGB</div>
+        <div style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);margin-top:2px">500+ DEVICES</div>
       </button>
 
     </div>
@@ -226,9 +226,9 @@
     <!-- Info strip -->
     <div class="card" style="padding:10px 14px">
       <div style="display:flex;justify-content:space-between;align-items:center">
-        <div style="font-size:9px;color:var(--label-dim);letter-spacing:.1em">VEXIS <span id="home-ver"></span> · Vlottiz</div>
+        <div style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);letter-spacing:.1em">VEXIS <span id="home-ver"></span> · Vlottiz</div>
         <button onclick="navView('info.html')"
-          style="font-size:9px;font-family:monospace;background:none;border:1px solid var(--border);color:var(--label-dim);padding:3px 10px;border-radius:2px;cursor:pointer;letter-spacing:.06em">
+          style="font-size:calc(9px*var(--fs-base,1));font-family:monospace;background:none;border:1px solid var(--border);color:var(--label-dim);padding:3px 10px;border-radius:2px;cursor:pointer;letter-spacing:.06em">
           ◌ INFO & SUPPORT
         </button>
       </div>
@@ -237,7 +237,7 @@
   </div>
 </div>
 
-<script src="/nav.js?v=8" data-page="home"></script>
+<script src="/nav.js?v=9" data-page="home"></script>
 <script>
 setInterval(()=>{ const e=document.getElementById('htime'); if(e)e.textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}); },1000);
 
@@ -299,7 +299,7 @@ function receiveData(data){
   if(data.info)applyHwInfo(data.info);
   if(data.fans&&data.fans.length>0){
     const div=document.getElementById('h-fans');
-    div.innerHTML=data.fans.map(f=>`<div class="fan-row"><span class="fan-name">${f.name}</span><span class="fan-rpm">${Math.round(f.rpm)} <span style="font-size:9px;color:var(--label-dim)">RPM</span></span></div>`).join('');
+    div.innerHTML=data.fans.map(f=>`<div class="fan-row"><span class="fan-name">${f.name}</span><span class="fan-rpm">${Math.round(f.rpm)} <span style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim)">RPM</span></span></div>`).join('');
   }
   const ct=data.cpu_temp;
   const cpuFmt=ct!=null?ct.toFixed(1)+'°C':'--°C';

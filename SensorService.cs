@@ -18,6 +18,7 @@ public class HwInfo
     public string ramType { get; set; } = "";
     public int    ccdCount  { get; set; } = 0;   // AMD CCDs, 0 for Intel/other
     public bool   x3d       { get; set; } = false; // AMD 3D V-Cache part
+    public int    baseMhz   { get; set; } = 0;     // rated base clock (scales the core bars)
     public bool   driverOk  { get; set; } = false; // true = LHM ring-0 driver reading OK
 }
 
@@ -244,8 +245,13 @@ public class SensorService : IDisposable
 
         try
         {
-            using var q = new ManagementObjectSearcher("SELECT SocketDesignation FROM Win32_Processor");
-            foreach (ManagementObject obj in q.Get()) { _hwInfo.socket = obj["SocketDesignation"]?.ToString() ?? ""; break; }
+            using var q = new ManagementObjectSearcher("SELECT SocketDesignation, MaxClockSpeed FROM Win32_Processor");
+            foreach (ManagementObject obj in q.Get())
+            {
+                _hwInfo.socket  = obj["SocketDesignation"]?.ToString() ?? "";
+                _hwInfo.baseMhz = Convert.ToInt32(obj["MaxClockSpeed"] ?? 0);
+                break;
+            }
             _hwInfo.socket = NormalizeSocket(_hwInfo.socket, _hwInfo.cpu, _hwInfo.vendor);
         }
         catch { }

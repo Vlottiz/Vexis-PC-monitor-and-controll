@@ -5,41 +5,41 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PC Monitor — RGB</title>
-<link rel="stylesheet" href="/ui.css?v=8">
+<link rel="stylesheet" href="/ui.css?v=9">
 <style>
   .rgb-dot{width:8px;height:8px;border-radius:50%;background:#333;flex-shrink:0;transition:background .3s;}
   .rgb-dot.on{background:#44ff88;box-shadow:0 0 6px #44ff88;}.rgb-dot.err{background:#ff4444;box-shadow:0 0 6px #ff4444;}
   .device-card{margin-bottom:10px;}
   .mode-row{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0;}
-  .mode-chip{padding:3px 9px;font-size:9px;letter-spacing:.08em;border-radius:12px;border:1px solid var(--border);color:var(--label-dim);cursor:pointer;background:transparent;font-family:inherit;transition:all .15s;}
+  .mode-chip{padding:3px 9px;font-size:calc(9px*var(--fs-base,1));letter-spacing:.08em;border-radius:12px;border:1px solid var(--border);color:var(--label-dim);cursor:pointer;background:transparent;font-family:inherit;transition:all .15s;}
   .mode-chip:hover{border-color:var(--border-bright);color:var(--label);}
   .mode-chip.active{background:rgba(255,204,0,.1);border-color:var(--border-bright);color:var(--header-title);}
   .cprow{display:flex;align-items:center;gap:8px;margin:7px 0;}
-  .cprow label{font-size:10px;color:var(--label);flex:1;}
+  .cprow label{font-size:calc(10px*var(--fs-base,1));color:var(--label);flex:1;}
   .bp{width:36px;height:28px;border:1px solid var(--border);border-radius:3px;cursor:pointer;background:none;padding:2px;flex-shrink:0;}
   .bp::-webkit-color-swatch-wrapper{padding:0;}.bp::-webkit-color-swatch{border:none;border-radius:2px;}
-  .no-openrgb{text-align:center;padding:40px 20px;}.no-openrgb .big-icon{font-size:36px;opacity:.3;margin-bottom:12px;}
-  .install-steps{text-align:left;font-size:10px;line-height:2;color:var(--label-dim);margin:12px 0;}.install-steps span{color:var(--label);}
+  .no-openrgb{text-align:center;padding:40px 20px;}.no-openrgb .big-icon{font-size:calc(36px*var(--fs-base,1));opacity:.3;margin-bottom:12px;}
+  .install-steps{text-align:left;font-size:calc(10px*var(--fs-base,1));line-height:2;color:var(--label-dim);margin:12px 0;}.install-steps span{color:var(--label);}
   .qrow{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;}
   .qcol{width:28px;height:28px;border-radius:4px;cursor:pointer;border:2px solid transparent;transition:border-color .15s,transform .1s;}
   .qcol:hover{transform:scale(1.15);border-color:rgba(255,255,255,.4);}
   /* Per-device animation row */
   .anim-row{display:flex;gap:4px;flex-wrap:wrap;margin:7px 0 4px;align-items:center;}
-  .anim-btn{padding:3px 8px;font-size:8px;letter-spacing:.06em;font-family:monospace;background:rgba(10,8,3,.8);border:1px solid rgba(68,51,0,.3);border-radius:3px;cursor:pointer;color:var(--label-dim);transition:all .15s;}
+  .anim-btn{padding:3px 8px;font-size:calc(8px*var(--fs-base,1));letter-spacing:.06em;font-family:monospace;background:rgba(10,8,3,.8);border:1px solid rgba(68,51,0,.3);border-radius:3px;cursor:pointer;color:var(--label-dim);transition:all .15s;}
   .anim-btn:hover{border-color:rgba(255,204,0,.4);color:var(--label);}
   .anim-btn.anim-on{border-color:var(--header-title);color:var(--header-title);background:rgba(255,204,0,.08);}
   .anim-stop{color:#cc4444;border-color:rgba(180,40,40,.3);}
   .anim-stop:hover{background:rgba(180,40,40,.15);color:#ff6666;}
   .anim-spd{flex:1;min-width:60px;max-width:120px;accent-color:var(--mem-acc);}
-  .anim-pill{font-size:8px;font-family:monospace;letter-spacing:.08em;padding:1px 6px;border-radius:8px;background:rgba(68,255,100,.1);color:#44ff88;border:1px solid rgba(68,255,100,.3);flex-shrink:0;}
+  .anim-pill{font-size:calc(8px*var(--fs-base,1));font-family:monospace;letter-spacing:.08em;padding:1px 6px;border-radius:8px;background:rgba(68,255,100,.1);color:#44ff88;border:1px solid rgba(68,255,100,.3);flex-shrink:0;}
   /* RAM sync */
-  .rsbar{display:flex;align-items:center;gap:8px;padding:4px 8px;margin-bottom:5px;background:rgba(68,51,0,.12);border:1px solid rgba(68,51,0,.25);border-radius:3px;font-size:9px;font-family:monospace;}
+  .rsbar{display:flex;align-items:center;gap:8px;padding:4px 8px;margin-bottom:5px;background:rgba(68,51,0,.12);border:1px solid rgba(68,51,0,.25);border-radius:3px;font-size:calc(9px*var(--fs-base,1));font-family:monospace;}
   .rsd{width:7px;height:7px;border-radius:50%;background:#44ff88;box-shadow:0 0 5px #44ff88;flex-shrink:0;}
   .rsd.off{background:#444;box-shadow:none;}
-  .rst{padding:2px 7px;font-size:8px;background:rgba(68,51,0,.2);border:1px solid rgba(68,51,0,.4);color:#886600;border-radius:2px;cursor:pointer;font-family:monospace;transition:all .15s;}
+  .rst{padding:2px 7px;font-size:calc(8px*var(--fs-base,1));background:rgba(68,51,0,.2);border:1px solid rgba(68,51,0,.4);color:#886600;border-radius:2px;cursor:pointer;font-family:monospace;transition:all .15s;}
   .rst:hover{background:rgba(255,204,0,.1);color:#ccaa00;}
   /* LED painter */
-  .ltbtn{width:100%;margin-top:5px;font-size:9px;padding:4px;background:rgba(68,51,0,.1);border:1px dashed rgba(68,51,0,.35);color:var(--label-dim);border-radius:3px;cursor:pointer;font-family:monospace;letter-spacing:.08em;transition:all .15s;text-align:center;}
+  .ltbtn{width:100%;margin-top:5px;font-size:calc(9px*var(--fs-base,1));padding:4px;background:rgba(68,51,0,.1);border:1px dashed rgba(68,51,0,.35);color:var(--label-dim);border-radius:3px;cursor:pointer;font-family:monospace;letter-spacing:.08em;transition:all .15s;text-align:center;}
   .ltbtn:hover{background:rgba(68,51,0,.25);color:var(--label);}.ltbtn.open{border-style:solid;border-color:rgba(255,204,0,.3);color:var(--label);}
   .lpanel{margin-top:7px;padding:8px;background:rgba(0,0,0,.35);border:1px solid rgba(68,51,0,.2);border-radius:4px;}
   .lptb{display:flex;align-items:center;gap:6px;margin-bottom:7px;flex-wrap:wrap;}
@@ -49,7 +49,7 @@
   .lgrid::-webkit-scrollbar{width:3px;}.lgrid::-webkit-scrollbar-thumb{background:rgba(68,51,0,.4);border-radius:2px;}
   .lcel{border-radius:2px;cursor:crosshair;flex-shrink:0;border:1px solid rgba(255,255,255,.18);box-sizing:border-box;transition:transform .05s,border-color .05s;}
   .lcel:hover{transform:scale(1.4);border-color:rgba(255,255,255,.7);z-index:5;position:relative;}
-  .lhelp{font-size:8px;color:var(--label-dim);margin-top:4px;letter-spacing:.05em;font-family:monospace;}
+  .lhelp{font-size:calc(8px*var(--fs-base,1));color:var(--label-dim);margin-top:4px;letter-spacing:.05em;font-family:monospace;}
 </style>
 </head>
 <body>
@@ -59,36 +59,36 @@
       <div class="page-title">&#x25D0; RGB Control</div>
       <div class="page-subtitle" id="rgb-sub">Connecting to OpenRGB...</div>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;font-size:10px;">
+    <div style="display:flex;align-items:center;gap:8px;font-size:calc(10px*var(--fs-base,1));">
       <div style="display:flex;gap:4px;align-items:center;margin-right:6px">
         <div id="sl-notopen" class="rgb-dot" style="background:#555" title="OpenRGB not detected"></div>
         <div id="sl-noserver" class="rgb-dot" style="background:#555" title="Server not running"></div>
         <div id="sl-connected" class="rgb-dot" style="background:#555" title="Connected"></div>
       </div>
       <div class="rgb-dot" id="rgb-dot"></div>
-      <span id="rgb-status-txt" style="font-size:9px;color:var(--label-dim)">OFFLINE</span>
-      <button class="btn btn-ghost" id="openrgb-gui-btn" onclick="openRgbGui()" style="padding:4px 10px;font-size:9px" title="Open OpenRGB GUI — full plugin/effect support">&#x2699; GUI</button>
-      <button class="btn btn-ghost" onclick="beginRetryWithWait(10);" style="padding:4px 10px;font-size:9px"><span id="retry-btn-txt">RETRY</span></button>
-      <button class="btn btn-danger" onclick="sendToHost({type:'killOpenRGB'})" style="padding:4px 10px;font-size:9px">&#x2715; KILL</button>
+      <span id="rgb-status-txt" style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim)">OFFLINE</span>
+      <button class="btn btn-ghost" id="openrgb-gui-btn" onclick="openRgbGui()" style="padding:4px 10px;font-size:calc(9px*var(--fs-base,1))" title="Open OpenRGB GUI — full plugin/effect support">&#x2699; GUI</button>
+      <button class="btn btn-ghost" onclick="beginRetryWithWait(10);" style="padding:4px 10px;font-size:calc(9px*var(--fs-base,1))"><span id="retry-btn-txt">RETRY</span></button>
+      <button class="btn btn-danger" onclick="sendToHost({type:'killOpenRGB'})" style="padding:4px 10px;font-size:calc(9px*var(--fs-base,1))">&#x2715; KILL</button>
     </div>
   </div>
   <div class="page-body">
     <div id="rgb-offline" class="card no-openrgb">
       <div class="big-icon">&#x25D0;</div>
       <div class="page-title" style="margin-bottom:8px">OpenRGB Required</div>
-      <div style="font-size:10px;color:var(--label-dim);line-height:1.7;margin-bottom:10px">PC Monitor uses OpenRGB to control your RGB devices. It's free and open source.</div>
+      <div style="font-size:calc(10px*var(--fs-base,1));color:var(--label-dim);line-height:1.7;margin-bottom:10px">PC Monitor uses OpenRGB to control your RGB devices. It's free and open source.</div>
       <div class="install-steps">
         <div style="color:#cc9900;margin-bottom:6px">&#x26A0; Follow these steps:</div>
         <div>1. Click <span>&#x25B6; Launch OpenRGB</span> below — opens as <span>Administrator</span></div>
         <div>2. Wait ~15 seconds for device detection to complete</div>
         <div>3. PC Monitor auto-connects, or click <span>RETRY</span></div>
-        <div style="margin-top:5px;color:#886600;font-size:9px">OpenRGB needs admin rights for RAM + I2C access.<br>If you opened it manually without admin, click KILL then Launch.</div>
+        <div style="margin-top:5px;color:#886600;font-size:calc(9px*var(--fs-base,1))">OpenRGB needs admin rights for RAM + I2C access.<br>If you opened it manually without admin, click KILL then Launch.</div>
       </div>
       <button class="btn btn-primary" onclick="sendToHost({type:'openUrl',url:'https://openrgb.org'})" style="width:100%;justify-content:center;margin-top:8px">&#x2197; Download OpenRGB</button>
       <button class="btn btn-ghost" onclick="if(!this._l){this._l=true;this.textContent='&#x25B6; Launching...';sendToHost({type:'launchOpenRGB'});setTimeout(()=>{this._l=false;this.textContent='&#x25B6; Launch OpenRGB (as Admin)';},6000);}" style="width:100%;justify-content:center;margin-top:6px">&#x25B6; Launch OpenRGB (as Admin)</button>
-      <div style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:10px;color:var(--label-dim)">
+      <div style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:calc(10px*var(--fs-base,1));color:var(--label-dim)">
         <span>SDK Port:</span>
-        <input type="number" value="6742" min="1024" max="65535" style="width:70px;background:var(--surface2);border:1px solid var(--border);color:var(--label);padding:3px 6px;border-radius:3px;font-family:monospace;font-size:11px" onchange="localStorage.setItem('pcm-rgb-port',this.value);location.reload()">
+        <input type="number" value="6742" min="1024" max="65535" style="width:70px;background:var(--surface2);border:1px solid var(--border);color:var(--label);padding:3px 6px;border-radius:3px;font-family:monospace;font-size:calc(11px*var(--fs-base,1))" onchange="localStorage.setItem('pcm-rgb-port',this.value);location.reload()">
         <span style="opacity:.6">default 6742</span>
       </div>
     </div>
@@ -108,7 +108,7 @@
     </div>
   </div>
 </div>
-<script src="/nav.js?v=8" data-page="rgb"></script>
+<script src="/nav.js?v=9" data-page="rgb"></script>
 <script>
 const ORGB_PORT=localStorage.getItem('pcm-rgb-port')||'6742';
 let _devices=[],_connected=false,_callCounter=0;
@@ -331,8 +331,8 @@ function renderDevices(){
       <div id="lp-${i}" class="lpanel" style="display:none">
         <div class="lptb">
           <input type="color" class="lmpick" id="lp-pick-${i}" value="#ff0000">
-          <button class="btn btn-ghost" onclick="fillAll(${i})" style="font-size:9px;padding:3px 9px">FILL ALL</button>
-          <button class="btn btn-primary" id="lp-send-${i}" onclick="sendLC(${i})" style="font-size:9px;padding:3px 9px;margin-left:auto">SEND &#x25B6;</button>
+          <button class="btn btn-ghost" onclick="fillAll(${i})" style="font-size:calc(9px*var(--fs-base,1));padding:3px 9px">FILL ALL</button>
+          <button class="btn btn-primary" id="lp-send-${i}" onclick="sendLC(${i})" style="font-size:calc(9px*var(--fs-base,1));padding:3px 9px;margin-left:auto">SEND &#x25B6;</button>
         </div>
         <div class="lgrid" id="lg-${i}"></div>
         <div class="lhelp">L-CLICK: PAINT &nbsp;&middot;&nbsp; R-CLICK: EYEDROP &nbsp;&middot;&nbsp; DRAG: PAINT MULTIPLE</div>

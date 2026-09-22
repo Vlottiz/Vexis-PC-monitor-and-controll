@@ -3,7 +3,8 @@
 
 :root {
   /* ── Font Scale System ── */
-  --fs-base: 1;          /* user-controlled multiplier, default 1 */
+  --fs-base: 1;          /* "Page UI Font" slider multiplier, default 1 */
+  --data-scale: 1;       /* "Data Text" slider multiplier for live readings */
   --fs-xs:   calc(8px  * var(--fs-base));
   --fs-sm:   calc(9px  * var(--fs-base));
   --fs-md:   calc(11px * var(--fs-base));
@@ -52,7 +53,7 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px 0 44px;
+  padding: 0 84px 0 44px;   /* right: clear the fixed ⛶ / ⚙ buttons from nav.js */
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
@@ -139,13 +140,13 @@ html, body {
   color: var(--label-dim);
 }
 .stat-value {
-  font-size: var(--fs-2xl);
+  font-size: calc(var(--fs-2xl) * var(--data-scale, 1));
   font-weight: 700;
   line-height: 1.1;
   letter-spacing: .02em;
 }
-.stat-value.sm { font-size: var(--fs-lg); }
-.stat-value.lg { font-size: var(--fs-3xl); }
+.stat-value.sm { font-size: calc(var(--fs-lg) * var(--data-scale, 1)); }
+.stat-value.lg { font-size: calc(var(--fs-3xl) * var(--data-scale, 1)); }
 .stat-unit {
   font-size: var(--fs-md);
   color: var(--label-dim);
@@ -233,7 +234,7 @@ html, body {
   border-bottom: 1px solid var(--border);
 }
 .data-table th:not(:first-child) { text-align: right; }
-.data-table td { padding: 7px 10px; font-size: var(--fs-md); border-bottom: 1px solid rgba(68,51,0,0.2); }
+.data-table td { padding: 7px 10px; font-size: calc(var(--fs-md) * var(--data-scale, 1)); border-bottom: 1px solid rgba(68,51,0,0.2); }
 .data-table td:not(:first-child) { text-align: right; }
 .data-table tr:hover td { background: rgba(68,51,0,0.15); }
 .data-table .group-row td {
@@ -264,7 +265,7 @@ html, body {
   margin-bottom: 6px;
 }
 .control-label { font-size: var(--fs-md); color: var(--label); }
-.control-value { font-size: var(--fs-md); color: var(--mem-acc); font-weight: 600; }
+.control-value { font-size: calc(var(--fs-md) * var(--data-scale, 1)); color: var(--mem-acc); font-weight: 600; }
 
 /* ── Quick nav tiles ── */
 .nav-tiles {
@@ -294,7 +295,7 @@ html, body {
 }
 .info-row:last-child { border-bottom: none; }
 .info-key { font-size: var(--fs-md); color: var(--label-dim); }
-.info-val { font-size: var(--fs-md); color: var(--text); font-weight: 500; }
+.info-val { font-size: calc(var(--fs-md) * var(--data-scale, 1)); color: var(--text); font-weight: 500; }
 
 /* ── Empty state ── */
 .empty-state {

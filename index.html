@@ -21,86 +21,87 @@
 }
 *{margin:0;padding:0;box-sizing:border-box;}
 html,body{height:100%;overflow:hidden;}
-body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;background:var(--bg);color:#eeddff;font-family:monospace;padding:8px;display:flex;flex-direction:column;transform:scale(var(--scale));transform-origin:top left;width:calc((100vw - 24px)/var(--scale));height:calc(100vh/var(--scale));padding-right:24px;}
+body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;background:var(--bg);color:var(--text,#eeddff);font-family:monospace;padding:8px;display:flex;flex-direction:column;transform:scale(var(--scale));transform-origin:top left;width:calc((100vw - 24px)/var(--scale));height:calc(100vh/var(--scale));padding-right:24px;}
 #root{flex:1;display:flex;flex-direction:column;overflow:hidden;}
 .divider{display:flex;align-items:center;gap:8px;margin:6px 0 4px;}
 .divider-line{flex:1;height:1px;background:var(--divider-line);}
-.divider-label{font-size:10px;color:var(--divider-lbl);letter-spacing:.15em;}
+.divider-label{font-size:calc(10px*var(--fs-base,1));color:var(--divider-lbl);letter-spacing:.15em;}
 .stat-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;}
-.stat-label{font-size:10px;color:var(--label);text-transform:uppercase;letter-spacing:.05em;}
-.stat-val{font-size:12px;font-weight:600;text-shadow:0 0 8px var(--glow-col);}
+.stat-label{font-size:calc(10px*var(--fs-base,1));color:var(--label);text-transform:uppercase;letter-spacing:.05em;}
+.stat-val{font-size:calc(12px*var(--fs-base,1)*var(--data-scale,1));font-weight:600;text-shadow:0 0 8px var(--glow-col);}
 .card{background:var(--card-bg);border:1px solid var(--border);border-radius:3px;padding:8px 10px;}
-.card-title{font-size:9px;color:var(--card-title);letter-spacing:.12em;margin-bottom:6px;text-align:center;}
+.card-title{font-size:calc(9px*var(--fs-base,1));color:var(--card-title);letter-spacing:.12em;margin-bottom:6px;text-align:center;}
 #hcpu,#hpwr,#peakclk,#avgclk,#pkgpwr,#sgpuT,#sgpuV,#sgpuP,#sgpuC{text-shadow:0 0 14px var(--glow-col),0 0 5px var(--glow-col);}
 .accent-line{height:1px;background:linear-gradient(90deg,transparent,var(--line-col1),var(--line-col2),var(--line-col1),transparent);}
-#status{position:fixed;bottom:6px;right:8px;font-size:8px;letter-spacing:.08em;color:#2a0a3a;}
-#status.ok{color:#2a0a3a;}
-#update-pulse{text-align:center;font-size:7px;font-family:monospace;color:#3a1540;letter-spacing:.12em;margin:-1px 0 3px;opacity:0.18;transition:opacity 0.6s ease;flex-shrink:0;}
+#status{position:fixed;bottom:6px;right:8px;font-size:calc(8px*var(--fs-base,1));letter-spacing:.08em;color:var(--label-dim,#2a0a3a);opacity:.5;}
+#status.ok{color:var(--label-dim,#2a0a3a);}
+#update-pulse{text-align:center;font-size:calc(7px*var(--fs-base,1));font-family:monospace;color:var(--label-dim,#3a1540);letter-spacing:.12em;margin:-1px 0 3px;opacity:0.18;transition:opacity 0.6s ease;flex-shrink:0;}
 #update-pulse.flash{opacity:0.55;transition:opacity 0s;}
-#settings-btn{position:fixed;top:6px;right:8px;z-index:1500;background:none;border:none;cursor:pointer;font-size:14px;color:#cc88aa;padding:4px;line-height:1;opacity:0.2;transition:opacity .2s;}
+#settings-btn{position:fixed;top:6px;right:8px;z-index:1500;background:none;border:none;cursor:pointer;font-size:calc(14px*var(--fs-base,1));color:#cc88aa;padding:4px;line-height:1;opacity:0.2;transition:opacity .2s;}
 #settings-btn:hover{opacity:0.9;}
 @keyframes gearBlink{0%,100%{opacity:0.2;}50%{opacity:1;text-shadow:0 0 8px var(--glow-col),0 0 16px var(--line-col1);}}
 #settings-btn.blinking{animation:gearBlink 0.7s ease-in-out infinite;}
-#settings-drawer{position:fixed;left:0;right:0;bottom:0;top:0;z-index:1600;background:rgba(0,0,0,0.94);backdrop-filter:blur(10px);display:flex;flex-direction:column;transform:translateY(100%);transition:transform 0.3s ease;}
+/* Legacy customize drawer — replaced by the shared nav panel (☰ / ⚙), kept hidden */
+#settings-drawer{display:none !important;position:fixed;left:0;right:0;bottom:0;top:0;z-index:1600;background:rgba(0,0,0,0.94);backdrop-filter:blur(10px);display:flex;flex-direction:column;transform:translateY(100%);transition:transform 0.3s ease;}
 #settings-drawer.open{transform:translateY(0);}
 #drawer-handle{height:22px;display:flex;align-items:center;justify-content:center;cursor:ns-resize;flex-shrink:0;background:rgba(0,0,0,0.6);border-bottom:1px solid #1a0828;user-select:none;touch-action:none;}
-#drawer-grip{font-size:14px;color:#2a0a3a;letter-spacing:6px;transition:color .2s;}
+#drawer-grip{font-size:calc(14px*var(--fs-base,1));color:#2a0a3a;letter-spacing:6px;transition:color .2s;}
 #drawer-handle:hover #drawer-grip{color:var(--line-col1);}
 #settings-header{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;border-bottom:1px solid #3a1540;flex-shrink:0;background:rgba(0,0,0,0.7);}
-#settings-header>span{font-size:11px;color:#cc88aa;letter-spacing:.2em;}
+#settings-header>span{font-size:calc(11px*var(--fs-base,1));color:#cc88aa;letter-spacing:.2em;}
 #settings-header-btns{display:flex;gap:5px;}
-#settings-header-btns button{background:#1a0828;border:1px solid #5c2278;color:#cc88aa;font-size:8px;padding:4px 8px;border-radius:2px;cursor:pointer;letter-spacing:.08em;font-family:monospace;}
+#settings-header-btns button{background:#1a0828;border:1px solid #5c2278;color:#cc88aa;font-size:calc(8px*var(--fs-base,1));padding:4px 8px;border-radius:2px;cursor:pointer;letter-spacing:.08em;font-family:monospace;}
 #settings-header-btns button:hover{background:#2a0a3a;}
 #settings-header-btns button.active{background:#3a0060;border-color:var(--line-col1);color:#dd88ff;}
 .tab-bar{display:flex;border-bottom:1px solid #2a0a2a;flex-shrink:0;background:rgba(0,0,0,0.7);}
-.tab-btn{flex:1;padding:7px 4px;font-size:9px;color:#4a1a4a;background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;letter-spacing:.1em;font-family:monospace;transition:color .2s,border-color .2s;}
+.tab-btn{flex:1;padding:7px 4px;font-size:calc(9px*var(--fs-base,1));color:#4a1a4a;background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;letter-spacing:.1em;font-family:monospace;transition:color .2s,border-color .2s;}
 .tab-btn:hover{color:#8a4a6a;}
 .tab-btn.active{color:#cc88aa;border-bottom-color:var(--line-col1);}
 .tab-panel{display:none;flex:1;overflow-y:auto;padding:10px 14px;}
 .tab-panel.active{display:block;}
 .settings-section{margin-bottom:14px;}
-.settings-section-title{font-size:9px;color:#8a3a5a;letter-spacing:.2em;margin-bottom:8px;text-transform:uppercase;display:flex;align-items:center;gap:8px;}
+.settings-section-title{font-size:calc(9px*var(--fs-base,1));color:#8a3a5a;letter-spacing:.2em;margin-bottom:8px;text-transform:uppercase;display:flex;align-items:center;gap:8px;}
 .settings-section-title::after{content:'';flex:1;height:1px;background:#2a0a2a;}
 .grad-preview{width:100%;height:10px;border-radius:3px;margin-bottom:8px;border:1px solid #2a0a2a;}
 .grad-row{display:flex;align-items:center;gap:6px;background:#0f060f;border:1px solid #2a0a2a;border-radius:3px;padding:6px 8px;margin-bottom:4px;}
-.grad-row label{font-size:8px;color:#9a6a8a;flex:1;}
+.grad-row label{font-size:calc(8px*var(--fs-base,1));color:#9a6a8a;flex:1;}
 .grad-row input[type=color]{width:22px;height:18px;border:1px solid #5c2278;border-radius:2px;cursor:pointer;background:none;padding:1px;flex-shrink:0;}
-.grad-row .c-reset{background:none;border:none;color:#4a1a4a;cursor:pointer;font-size:10px;padding:0 1px;transition:color .15s;}
+.grad-row .c-reset{background:none;border:none;color:#4a1a4a;cursor:pointer;font-size:calc(10px*var(--fs-base,1));padding:0 1px;transition:color .15s;}
 .grad-row .c-reset:hover{color:#cc88aa;}
 .color-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
 .color-row{background:#0f060f;border:1px solid #2a0a2a;border-radius:3px;padding:5px 8px;transition:border-color .2s;}
 .color-row:hover{border-color:#5c2278;}
 .color-row-top{display:flex;align-items:center;gap:5px;}
-.color-row label{font-size:8px;color:#9a6a8a;flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
-.c-preview{width:20px;height:16px;border-radius:2px;flex-shrink:0;border:1px solid #2a0a2a;font-size:7px;display:flex;align-items:center;justify-content:center;overflow:hidden;}
-.c-reset{background:none;border:none;color:#4a1a4a;cursor:pointer;font-size:10px;padding:0 1px;transition:color .15s;flex-shrink:0;}
+.color-row label{font-size:calc(8px*var(--fs-base,1));color:#9a6a8a;flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.c-preview{width:20px;height:16px;border-radius:2px;flex-shrink:0;border:1px solid #2a0a2a;font-size:calc(7px*var(--fs-base,1));display:flex;align-items:center;justify-content:center;overflow:hidden;}
+.c-reset{background:none;border:none;color:#4a1a4a;cursor:pointer;font-size:calc(10px*var(--fs-base,1));padding:0 1px;transition:color .15s;flex-shrink:0;}
 .c-reset:hover{color:#cc88aa;}
 .color-row input[type=color]{width:22px;height:18px;border:1px solid #5c2278;border-radius:2px;cursor:pointer;background:none;padding:1px;flex-shrink:0;}
 .bright-wrap{margin-top:4px;}
 .bright-slider{width:100%;height:3px;-webkit-appearance:none;appearance:none;border-radius:2px;cursor:pointer;outline:none;background:linear-gradient(90deg,#000,transparent 50%,#fff);}
 .bright-slider::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;border-radius:50%;background:#cc88aa;cursor:pointer;border:1px solid #5c2278;}
 .setting-row{display:flex;align-items:center;justify-content:space-between;background:#0f060f;border:1px solid #2a0a2a;border-radius:3px;padding:6px 10px;gap:8px;margin-bottom:6px;}
-.setting-row label{font-size:9px;color:#9a6a8a;flex:1;}
-.setting-row select{background:#1a0828;border:1px solid #5c2278;color:#cc88aa;font-size:9px;padding:3px 6px;border-radius:2px;font-family:monospace;cursor:pointer;outline:none;}
+.setting-row label{font-size:calc(9px*var(--fs-base,1));color:#9a6a8a;flex:1;}
+.setting-row select{background:#1a0828;border:1px solid #5c2278;color:#cc88aa;font-size:calc(9px*var(--fs-base,1));padding:3px 6px;border-radius:2px;font-family:monospace;cursor:pointer;outline:none;}
 .preset-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:14px;}
 .preset-btn{background:#0f060f;border:1px solid #2a0a2a;border-radius:3px;padding:6px 4px;cursor:pointer;text-align:center;transition:border-color .2s,background .2s;display:flex;flex-direction:column;align-items:center;gap:4px;}
 .preset-btn:hover{border-color:#5c2278;background:#1a0828;}
-.preset-name{font-size:7px;color:#9a6a8a;letter-spacing:.08em;font-family:monospace;}
+.preset-name{font-size:calc(7px*var(--fs-base,1));color:#9a6a8a;letter-spacing:.08em;font-family:monospace;}
 .preset-swatch{display:flex;gap:2px;}
 .preset-dot{width:7px;height:7px;border-radius:50%;}
 .profile-card{background:#0f060f;border:1px solid #2a0a2a;border-radius:3px;padding:8px 10px;margin-bottom:8px;}
 .profile-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
-.profile-name{font-size:10px;color:#8a4a6a;letter-spacing:.12em;flex:1;}
+.profile-name{font-size:calc(10px*var(--fs-base,1));color:#8a4a6a;letter-spacing:.12em;flex:1;}
 .profile-dots{display:flex;gap:3px;}
 .profile-dot{width:10px;height:10px;border-radius:50%;border:1px solid rgba(255,255,255,0.1);}
 .profile-btns{display:flex;gap:5px;}
-.pbtn{background:#1a0828;border:1px solid #3a1540;color:#7a4a6a;font-size:8px;padding:3px 8px;border-radius:2px;cursor:pointer;font-family:monospace;letter-spacing:.06em;transition:all .15s;}
+.pbtn{background:#1a0828;border:1px solid #3a1540;color:#7a4a6a;font-size:calc(8px*var(--fs-base,1));padding:3px 8px;border-radius:2px;cursor:pointer;font-family:monospace;letter-spacing:.06em;transition:all .15s;}
 .pbtn:hover:not(:disabled){background:#2a0a3a;border-color:#5c2278;color:#cc88aa;}
 .pbtn.load{border-color:#5c2278;color:#aa66cc;}
 .pbtn.danger{border-color:#3a1520;color:#6a2a3a;}
 .pbtn.danger:hover{background:#2a0010;border-color:#8a2255;color:#ff4488;}
 .pbtn:disabled{opacity:0.3;cursor:default;}
-.profile-empty{font-size:8px;color:#3a1540;letter-spacing:.08em;}
+.profile-empty{font-size:calc(8px*var(--fs-base,1));color:#3a1540;letter-spacing:.08em;}
 </style>
 </head>
 <body>
@@ -109,15 +110,15 @@ body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;backgr
   <div id="driver-warn" style="display:none;flex-shrink:0;margin-bottom:4px;padding-left:36px">
     <div style="display:flex;gap:4px">
       <div id="warn-tab" onclick="showInfoTab('warn')"
-        style="flex:1;background:rgba(180,120,0,.15);border:1px solid rgba(180,120,0,.4);border-radius:4px 0 0 4px;padding:6px 10px;cursor:pointer;font-size:9px;color:#cc9900;font-family:monospace;letter-spacing:.05em;line-height:1.5">
+        style="flex:1;background:rgba(180,120,0,.15);border:1px solid rgba(180,120,0,.4);border-radius:4px 0 0 4px;padding:6px 10px;cursor:pointer;font-size:calc(9px*var(--fs-base,1));color:#cc9900;font-family:monospace;letter-spacing:.05em;line-height:1.5">
         ⚠ CPU TEMPS UNAVAILABLE<br>
-        <span style="color:#886600;font-size:8px">Clock speeds via Windows fallback</span>
+        <span style="color:#886600;font-size:calc(8px*var(--fs-base,1))">Clock speeds via Windows fallback</span>
       </div>
       <div id="info-tab" onclick="showInfoTab('info')"
-        style="width:32px;background:rgba(0,100,200,.12);border:1px solid rgba(0,100,200,.3);border-radius:0 4px 4px 0;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;color:#4499cc"
+        style="width:32px;background:rgba(0,100,200,.12);border:1px solid rgba(0,100,200,.3);border-radius:0 4px 4px 0;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:calc(14px*var(--fs-base,1)*var(--data-scale,1));color:#4499cc"
         title="Why am I seeing this?">ℹ</div>
     </div>
-    <div id="intel-info-panel" style="display:none;background:rgba(0,0,0,.3);border:1px solid rgba(0,100,200,.25);border-radius:0 0 4px 4px;padding:8px 10px;font-size:9px;line-height:1.7;color:#6699bb;font-family:monospace">
+    <div id="intel-info-panel" style="display:none;background:rgba(0,0,0,.3);border:1px solid rgba(0,100,200,.25);border-radius:0 0 4px 4px;padding:8px 10px;font-size:calc(9px*var(--fs-base,1));line-height:1.7;color:#6699bb;font-family:monospace">
       <strong style="color:#4499cc;letter-spacing:.1em">SENSOR DRIVER NOT LOADED</strong><br>
       Per-core temps and clock speeds are read through the PawnIO driver. It works with
       Memory Integrity and the driver blocklist left ON — no security changes needed.<br><br>
@@ -129,20 +130,20 @@ body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;backgr
   </div>
   <div style="text-align:center;padding:0 44px 8px 44px;border-bottom:1px solid var(--border);margin-bottom:8px;position:relative;flex-shrink:0">
     <div class="accent-line" style="position:absolute;top:0;left:0;right:0"></div>
-    <div id="hw-cpu" style="padding-left:36px;font-size:15px;color:var(--header-title);font-weight:600;letter-spacing:.1em;text-shadow:0 0 12px var(--title-glow),0 0 4px var(--header-title)">···</div>
-    <div id="hw-sub" style="font-size:13px;color:var(--header-sub);margin-top:2px;letter-spacing:.12em">···</div>
+    <div id="hw-cpu" style="padding-left:36px;font-size:calc(15px*var(--fs-base,1));color:var(--header-title);font-weight:600;letter-spacing:.1em;text-shadow:0 0 12px var(--title-glow),0 0 4px var(--header-title)">···</div>
+    <div id="hw-sub" style="font-size:calc(13px*var(--fs-base,1));color:var(--header-sub);margin-top:2px;letter-spacing:.12em">···</div>
     <div style="display:flex;justify-content:center;gap:24px;margin-top:7px">
-      <span id="hcpu" style="font-size:15px;font-weight:600">--°C</span>
-      <span id="hpwr" style="font-size:15px;color:var(--header-acc);font-weight:600">--W</span>
-      <span id="htime" style="font-size:14px;color:var(--header-time)"></span>
+      <span id="hcpu" style="font-size:calc(15px*var(--fs-base,1)*var(--data-scale,1));font-weight:600">--°C</span>
+      <span id="hpwr" style="font-size:calc(15px*var(--fs-base,1)*var(--data-scale,1));color:var(--header-acc);font-weight:600">--W</span>
+      <span id="htime" style="font-size:calc(14px*var(--fs-base,1));color:var(--header-time)"></span>
     </div>
   </div>
   <!-- Divider with spark toggle -->
   <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-top:0">
     <div style="flex:1;height:1px;background:var(--divider-line)"></div>
-    <span style="font-size:9px;color:var(--divider-lbl);letter-spacing:.18em;white-space:nowrap">CPU CORES</span>
+    <span data-collapse data-collapse-key="cpu-cores" data-collapse-target="#spark-layout" style="font-size:calc(9px*var(--fs-base,1));color:var(--divider-lbl);letter-spacing:.18em;white-space:nowrap">CPU CORES</span>
     <button id="spark-toggle" onclick="toggleSparklines()"
-      style="font-size:8px;font-family:monospace;letter-spacing:.08em;background:rgba(0,255,204,.08);border:1px solid rgba(0,255,204,.2);color:var(--avg-col);padding:1px 6px;border-radius:2px;cursor:pointer">
+      style="font-size:calc(8px*var(--fs-base,1));font-family:monospace;letter-spacing:.08em;background:rgba(0,255,204,.08);border:1px solid rgba(0,255,204,.2);color:var(--avg-col);padding:1px 6px;border-radius:2px;cursor:pointer">
       ▾ SPARK
     </button>
     <div style="flex:1;height:1px;background:var(--divider-line)"></div>
@@ -153,69 +154,69 @@ body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;backgr
   <div id="spark-layout" style="display:flex;gap:6px;flex:1;min-height:0;overflow:hidden">
 
     <!-- LEFT SIDE PANEL (hidden when spark off) -->
-    <div id="side-left" style="display:none;width:88px;flex-shrink:0;flex-direction:column;gap:4px;justify-content:space-evenly">
+    <div id="side-left" style="display:none;width:calc(88px*var(--fs-base,1)*var(--data-scale,1));flex-shrink:0;flex-direction:column;gap:4px;justify-content:space-evenly">
       <div class="card" style="padding:8px;flex-shrink:0">
-        <div style="font-size:8px;color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">PEAK</div>
-        <div id="peakclk" style="font-size:13px;color:var(--peak-col);font-weight:700;font-family:monospace">--</div>
+        <div style="font-size:calc(8px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">PEAK</div>
+        <div id="peakclk" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--peak-col);font-weight:700;font-family:monospace">--</div>
         <div style="height:3px;background:var(--bar-bg);border-radius:2px;margin-top:4px;overflow:hidden;border:1px solid var(--border)"><div id="sl-peak-bar" style="height:100%;background:var(--peak-col);width:0%;transition:width .5s"></div></div>
       </div>
       <div class="card" style="padding:8px;flex-shrink:0">
-        <div id="avg-label" style="font-size:8px;color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">AVG</div>
-        <div id="avgclk" style="font-size:13px;color:var(--avg-col);font-weight:700;font-family:monospace">--</div>
+        <div id="avg-label" style="font-size:calc(8px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">AVG</div>
+        <div id="avgclk" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--avg-col);font-weight:700;font-family:monospace">--</div>
         <div style="height:3px;background:var(--bar-bg);border-radius:2px;margin-top:4px;overflow:hidden;border:1px solid var(--border)"><div id="sl-avg-bar" style="height:100%;background:var(--avg-col);width:0%;transition:width .5s"></div></div>
       </div>
       <div class="card" style="padding:8px;flex-shrink:0" id="sl-ccd0-card">
-        <div style="font-size:8px;color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">CCD0</div>
-        <div id="sl-ccd0" style="font-size:13px;color:var(--temp-val);font-weight:700;font-family:monospace">--</div>
+        <div style="font-size:calc(8px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">CCD0</div>
+        <div id="sl-ccd0" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--temp-val);font-weight:700;font-family:monospace">--</div>
       </div>
       <div class="card" style="padding:8px;flex-shrink:0" id="sl-ccd1-card">
-        <div style="font-size:8px;color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">CCD1</div>
-        <div id="sl-ccd1" style="font-size:13px;color:var(--temp-val);font-weight:700;font-family:monospace">--</div>
+        <div style="font-size:calc(8px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">CCD1</div>
+        <div id="sl-ccd1" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--temp-val);font-weight:700;font-family:monospace">--</div>
       </div>
     </div>
 
     <!-- CENTER: CORE BARS (always visible) -->
     <div id="cores-center" style="flex:1;display:flex;flex-direction:column;min-width:0">
       <div style="margin-bottom:4px;display:flex;justify-content:space-between;flex-shrink:0">
-        <div style="font-size:13px;color:var(--ccd-lbl);font-weight:600" data-ccd0-lbl>CCD0</div>
-        <div style="font-size:13px;color:var(--ccd-lbl);font-weight:600" data-ccd0-type>V-Cache</div>
+        <div style="font-size:calc(13px*var(--fs-base,1));color:var(--ccd-lbl);font-weight:600" data-ccd0-lbl>CCD0</div>
+        <div style="font-size:calc(13px*var(--fs-base,1));color:var(--ccd-lbl);font-weight:600" data-ccd0-type>V-Cache</div>
       </div>
       <div id="ccd0bars" style="flex-shrink:0"></div>
       <div id="ccd1wrap" style="margin:8px 0 4px;display:flex;justify-content:space-between;flex-shrink:0">
-        <div style="font-size:13px;color:var(--ccd-lbl);font-weight:600" data-ccd1-lbl>CCD1</div>
-        <div style="font-size:13px;color:var(--ccd-lbl);font-weight:600" data-ccd1-type>Compute</div>
+        <div style="font-size:calc(13px*var(--fs-base,1));color:var(--ccd-lbl);font-weight:600" data-ccd1-lbl>CCD1</div>
+        <div style="font-size:calc(13px*var(--fs-base,1));color:var(--ccd-lbl);font-weight:600" data-ccd1-type>Compute</div>
       </div>
       <div id="ccd1bars" style="flex-shrink:0"></div>
       <div style="flex:1"></div>
     </div>
 
     <!-- RIGHT SIDE PANEL (hidden when spark off) -->
-    <div id="side-right" style="display:none;width:88px;flex-shrink:0;flex-direction:column;gap:4px;justify-content:space-evenly">
+    <div id="side-right" style="display:none;width:calc(88px*var(--fs-base,1)*var(--data-scale,1));flex-shrink:0;flex-direction:column;gap:4px;justify-content:space-evenly">
       <div class="card" style="padding:8px;flex-shrink:0">
-        <div style="font-size:8px;color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">POWER</div>
-        <div id="pkgpwr" style="font-size:13px;color:var(--pwr-col);font-weight:700;font-family:monospace">--</div>
+        <div style="font-size:calc(8px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">POWER</div>
+        <div id="pkgpwr" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--pwr-col);font-weight:700;font-family:monospace">--</div>
       </div>
       <div class="card" style="padding:8px;flex-shrink:0">
-        <div style="font-size:8px;color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">CPU LOAD</div>
-        <div id="cpuload" style="font-size:13px;color:var(--avg-col);font-weight:700;font-family:monospace">--%</div>
+        <div style="font-size:calc(8px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">CPU LOAD</div>
+        <div id="cpuload" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--avg-col);font-weight:700;font-family:monospace">--%</div>
         <div style="height:3px;background:var(--bar-bg);border-radius:2px;margin-top:4px;overflow:hidden;border:1px solid var(--border)"><div id="sl-load-bar" style="height:100%;background:var(--avg-col);width:0%;transition:width .5s"></div></div>
       </div>
       <div class="card" style="padding:8px;flex-shrink:0">
-        <div style="font-size:8px;color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">GPU TEMP</div>
-        <div id="sl-gpu-t" style="font-size:13px;color:var(--temp-low);font-weight:700;font-family:monospace">--</div>
+        <div style="font-size:calc(8px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">GPU TEMP</div>
+        <div id="sl-gpu-t" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--temp-low);font-weight:700;font-family:monospace">--</div>
       </div>
       <div class="card" style="padding:8px;flex-shrink:0">
-        <div style="font-size:8px;color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">GPU CLK</div>
-        <div id="sl-gpu-c" style="font-size:13px;color:var(--gpu-acc);font-weight:700;font-family:monospace">--</div>
+        <div style="font-size:calc(8px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">GPU CLK</div>
+        <div id="sl-gpu-c" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--gpu-acc);font-weight:700;font-family:monospace">--</div>
       </div>
       <div class="card" style="padding:8px;flex-shrink:0">
-        <div style="font-size:8px;color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">GPU LOAD</div>
-        <div id="sl-gpu-l" style="font-size:13px;color:var(--gpu-acc);font-weight:700;font-family:monospace">--%</div>
+        <div style="font-size:calc(8px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">GPU LOAD</div>
+        <div id="sl-gpu-l" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--gpu-acc);font-weight:700;font-family:monospace">--%</div>
         <div style="height:3px;background:var(--bar-bg);border-radius:2px;margin-top:4px;overflow:hidden;border:1px solid var(--border)"><div id="sl-gpuload-bar" style="height:100%;background:var(--gpu-acc);width:0%;transition:width .5s"></div></div>
       </div>
       <div class="card" style="padding:8px;flex-shrink:0">
-        <div style="font-size:8px;color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">RAM LOAD</div>
-        <div id="sl-ram-l" style="font-size:13px;color:var(--mem-acc);font-weight:700;font-family:monospace">--%</div>
+        <div style="font-size:calc(8px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">RAM LOAD</div>
+        <div id="sl-ram-l" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--mem-acc);font-weight:700;font-family:monospace">--%</div>
         <div style="height:3px;background:var(--bar-bg);border-radius:2px;margin-top:4px;overflow:hidden;border:1px solid var(--border)"><div id="sl-ramload-bar" style="height:100%;background:var(--mem-acc);width:0%;transition:width .5s"></div></div>
       </div>
     </div>
@@ -226,34 +227,34 @@ body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;backgr
   <div id="summary-bar-wrap" style="margin-top:6px;flex-shrink:0;display:flex;gap:6px">
     <div id="sum-left" class="card" style="flex:1;display:flex;justify-content:space-around;padding:8px 12px">
       <div style="text-align:center">
-        <div style="font-size:10px;color:var(--sum-lbl);letter-spacing:.08em">PEAK</div>
-        <div id="peakclk-bot" style="font-size:14px;color:var(--peak-col);font-weight:700">--</div>
+        <div style="font-size:calc(10px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.08em">PEAK</div>
+        <div id="peakclk-bot" style="font-size:calc(14px*var(--fs-base,1)*var(--data-scale,1));color:var(--peak-col);font-weight:700">--</div>
       </div>
       <div style="width:1px;background:var(--border)"></div>
       <div style="text-align:center">
-        <div style="font-size:10px;color:var(--sum-lbl);letter-spacing:.08em">AVG</div>
-        <div id="avgclk-bot" style="font-size:14px;color:var(--avg-col);font-weight:700">--</div>
+        <div style="font-size:calc(10px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.08em">AVG</div>
+        <div id="avgclk-bot" style="font-size:calc(14px*var(--fs-base,1)*var(--data-scale,1));color:var(--avg-col);font-weight:700">--</div>
       </div>
     </div>
     <div id="sum-right" class="card" style="flex:1;display:flex;justify-content:space-around;padding:8px 12px">
       <div style="text-align:center">
-        <div style="font-size:9px;color:var(--sum-lbl);letter-spacing:.08em">POWER</div>
-        <div id="pkgpwr-bot" style="font-size:13px;color:var(--pwr-col);font-weight:700">--</div>
+        <div style="font-size:calc(9px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.08em">POWER</div>
+        <div id="pkgpwr-bot" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--pwr-col);font-weight:700">--</div>
       </div>
       <div style="width:1px;background:var(--border)"></div>
       <div style="text-align:center">
-        <div style="font-size:9px;color:var(--sum-lbl);letter-spacing:.08em">CPU</div>
-        <div id="cpuload-bot" style="font-size:13px;color:var(--avg-col);font-weight:700">--%</div>
+        <div style="font-size:calc(9px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.08em">CPU</div>
+        <div id="cpuload-bot" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--avg-col);font-weight:700">--%</div>
       </div>
       <div style="width:1px;background:var(--border)"></div>
       <div style="text-align:center">
-        <div style="font-size:9px;color:var(--sum-lbl);letter-spacing:.08em">GPU</div>
-        <div id="gpuload-bot" style="font-size:13px;color:var(--gpu-acc);font-weight:700">--%</div>
+        <div style="font-size:calc(9px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.08em">GPU</div>
+        <div id="gpuload-bot" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--gpu-acc);font-weight:700">--%</div>
       </div>
       <div style="width:1px;background:var(--border)"></div>
       <div style="text-align:center">
-        <div style="font-size:9px;color:var(--sum-lbl);letter-spacing:.08em">RAM</div>
-        <div id="ramload-bot" style="font-size:13px;color:var(--mem-acc);font-weight:700">--%</div>
+        <div style="font-size:calc(9px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.08em">RAM</div>
+        <div id="ramload-bot" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--mem-acc);font-weight:700">--%</div>
       </div>
     </div>
   </div>
@@ -291,7 +292,6 @@ body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;backgr
 </div>
 
 <div id="status">LIVE</div>
-<button id="settings-btn" onclick="openSettings()" title="Customize">⚙</button>
 
 <div id="settings-drawer">
   <div id="drawer-handle"><div id="drawer-grip">· · ·</div></div>
@@ -334,7 +334,7 @@ body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;backgr
   </div>
 </div>
 
-<script src="/nav.js?v=8" data-page="performance"></script>
+<script src="/nav.js?v=9" data-page="performance"></script>
 <script>
 // ══════════════════════════════════════════════════════════════════════════════
 // WEBVIEW2 IPC — IS_WEBVIEW and sendToHost defined in nav.js
@@ -394,6 +394,7 @@ function persistSettings() {
 let _hwApplied = false;
 function applyHwInfo(info) {
   if (!info) return;
+  setClockScale(info.baseMhz);
   // Driver warning — show once per session, auto-dismiss after 10s
   const dw = document.getElementById('driver-warn');
   if (dw && info.driverOk === false) {
@@ -468,7 +469,7 @@ let _serverProfiles={};
 
 function blendBrightness(hex,amount){if(!hex||hex.length<7)return hex;let r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);if(amount>0){const t=amount/100;r=Math.round(r+(255-r)*t);g=Math.round(g+(255-g)*t);b=Math.round(b+(255-b)*t);}else if(amount<0){const t=-amount/100;r=Math.round(r*(1-t));g=Math.round(g*(1-t));b=Math.round(b*(1-t));}return`#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;}
 function applyAllColors(){const r=document.documentElement.style;for(const[k,v]of Object.entries(VAR_MAP))r.setProperty(v,COLORS[k]);document.body.style.background=COLORS.bg;updateTempBars();redrawCoreBars();updateGradPreviews();}
-function setColor(key,val){COLORS[key]=val;if(VAR_MAP[key])document.documentElement.style.setProperty(VAR_MAP[key],val);if(key==='bg')document.body.style.background=val;if(key.startsWith('temp'))updateTempBars();if(key.startsWith('bar')||key==='barStart')redrawCoreBars();updateGradPreviews();const prev=document.getElementById('prev-'+key);if(prev){const ps=PREVIEW_STYLE[key];if(ps)prev.style.cssText='width:20px;height:16px;border-radius:2px;flex-shrink:0;border:1px solid #2a0a2a;font-size:7px;display:flex;align-items:center;justify-content:center;overflow:hidden;'+ps(val);prev.textContent=PREVIEW_INNER[key]||'';}persistColors();}
+function setColor(key,val){COLORS[key]=val;if(VAR_MAP[key])document.documentElement.style.setProperty(VAR_MAP[key],val);if(key==='bg')document.body.style.background=val;if(key.startsWith('temp'))updateTempBars();if(key.startsWith('bar')||key==='barStart')redrawCoreBars();updateGradPreviews();const prev=document.getElementById('prev-'+key);if(prev){const ps=PREVIEW_STYLE[key];if(ps)prev.style.cssText='width:20px;height:16px;border-radius:2px;flex-shrink:0;border:1px solid #2a0a2a;font-size:calc(7px*var(--fs-base,1));display:flex;align-items:center;justify-content:center;overflow:hidden;'+ps(val);prev.textContent=PREVIEW_INNER[key]||'';}persistColors();}
 function onColorPickerChange(key,val){_baseColors[key]=val;const sl=document.getElementById('bright-'+key);if(sl)sl.value=0;setColor(key,val);}
 function onBrightnessSlide(key,amount){const adjusted=blendBrightness(_baseColors[key],parseInt(amount));setColor(key,adjusted);const input=document.querySelector(`input[data-ck="${key}"]`);if(input)input.value=adjusted;}
 function resetGrad(key){_baseColors[key]=COLOR_DEFAULTS[key];const sl=document.getElementById('bright-'+key);if(sl)sl.value=0;const input=document.querySelector(`input[data-ck="${key}"]`);if(input)input.value=COLOR_DEFAULTS[key];setColor(key,COLOR_DEFAULTS[key]);}
@@ -517,16 +518,22 @@ function togglePeek(){_peeking=!_peeking;const d=document.getElementById('settin
 // ══════════════════════════════════════════════════════════════════════════════
 const SETTING_DEFAULTS={gearBlinkDuration:10,updateInterval:250,avgWindow:'sync',thermalDecimals:1};
 let SETTINGS={...SETTING_DEFAULTS};
+// Called by the shared nav panel (System tab) when a Performance setting changes
+window.onPerfSettingChanged=function(key,val){setSetting(key,key==='updateInterval'?parseInt(val):val);};
 function setSetting(key,val){SETTINGS[key]=val;if(key==='updateInterval')startApplyTimer();if(key==='avgWindow')updateAvgLabel();persistSettings();}
 function syncSettingsPickers(){const g=document.getElementById('s-gearBlink'),u=document.getElementById('s-updateInterval'),a=document.getElementById('s-avgWindow'),d=document.getElementById('s-thermalDecimals');if(g)g.value=String(SETTINGS.gearBlinkDuration);if(u)u.value=String(SETTINGS.updateInterval);if(a)a.value=String(SETTINGS.avgWindow);if(d)d.value=String(SETTINGS.thermalDecimals||1);updateAvgLabel();}
 function updateAvgLabel(){const lbl=document.getElementById('avg-label');if(!lbl)return;const w=SETTINGS.avgWindow;if(w==='sync'){lbl.textContent='AVG';return;}const ms=parseInt(w);lbl.textContent=ms<60000?`AVG ${ms/1000}s`:'AVG 1m';}
-function startGearBlink(){const dur=SETTINGS.gearBlinkDuration;if(!dur)return;const btn=document.getElementById('settings-btn');btn.classList.add('blinking');setTimeout(()=>btn.classList.remove('blinking'),dur*1000);}
+function startGearBlink(){const dur=SETTINGS.gearBlinkDuration;if(!dur)return;const btn=document.getElementById('settings-btn');if(!btn)return;btn.classList.add('blinking');setTimeout(()=>btn.classList.remove('blinking'),dur*1000);}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // CORE BARS + DATA
 // ══════════════════════════════════════════════════════════════════════════════
-const STOCK=4300,MAX=5875;
-function clkEnd(clk){return clk>=5500?COLORS.barBoost:clk>=4500?COLORS.barHigh:clk>=3500?COLORS.barMid:COLORS.barLow;}
+// Bar scale follows the CPU: STOCK = rated base clock (from the host), MAX = the
+// highest clock seen so far (starts at base x1.3). Half the bar = base clock.
+let STOCK=4300,MAX=5590;
+function setClockScale(baseMhz){if(baseMhz>1000){STOCK=baseMhz;MAX=Math.max(MAX,Math.round(baseMhz*1.3));}}
+function trackMaxClock(clk){if(clk>MAX)MAX=Math.ceil(clk*1.02);}
+function clkEnd(clk){return clk>=MAX*0.94?COLORS.barBoost:clk>=STOCK*1.05?COLORS.barHigh:clk>=STOCK*0.8?COLORS.barMid:COLORS.barLow;}
 function barGrad(clk){return`linear-gradient(90deg,${COLORS.barStart} 0%,${clkEnd(clk)} 100%)`;}
 function tempCol(t){if(t==null)return COLORS.tempVal;return t<60?COLORS.tempLow:t<78?COLORS.tempWarn:COLORS.tempHot;}
 // Dynamic core metadata — built from first data receive
@@ -576,7 +583,7 @@ function buildDynamicBars(coresObj, hwInfo) {
     if (ccd0type) ccd0type.textContent = hwInfo?.x3d ? 'V-Cache' : '';
     if (ccd1type) ccd1type.textContent = hwInfo?.x3d ? 'Compute' : '';
     const ccd1wrap = document.getElementById('ccd1wrap');
-    if (ccd1wrap) ccd1wrap.style.display = '';
+    if (ccd1wrap) ccd1wrap.style.display = 'flex';
   } else {
     if (ccd0lbl) ccd0lbl.textContent = 'CORES';
     if (ccd0type) ccd0type.textContent = hwInfo?.cpu?.toUpperCase() || '';
@@ -656,7 +663,7 @@ function buildBars(){
       const wrap=document.createElement('div');
       wrap.style.cssText='margin-bottom:7px;display:flex;align-items:center;gap:8px';
       wrap.innerHTML=`
-        <div style="width:30px;text-align:right;font-size:13px;color:var(--core-lbl);flex-shrink:0;font-weight:600;line-height:1">${c.rank===1?'★':''}${c.label||'C'+c.id}</div>
+        <div style="width:calc(30px*var(--fs-base,1)*var(--data-scale,1));text-align:right;font-size:calc(13px*var(--fs-base,1));color:var(--core-lbl);flex-shrink:0;font-weight:600;line-height:1">${c.rank===1?'★':''}${c.label||'C'+c.id}</div>
         <div style="flex:1;display:flex;flex-direction:column;gap:1px">
           <div style="height:14px;background:var(--bar-bg);border-radius:2px;overflow:hidden;border:1px solid var(--border);position:relative">
             <div id="bar${c.id}" style="position:absolute;inset:0;transition:background .4s,clip-path .4s,opacity .4s;opacity:0.15"></div>
@@ -666,7 +673,7 @@ function buildBars(){
               style="display:block"></svg>
           </div>
         </div>
-        <div id="clk${c.id}" style="width:68px;text-align:right;font-size:13px;font-family:monospace;flex-shrink:0;color:var(--core-lbl);font-weight:600;line-height:1">--</div>`;
+        <div id="clk${c.id}" style="width:calc(72px*var(--fs-base,1)*var(--data-scale,1));text-align:right;font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));font-family:monospace;flex-shrink:0;color:var(--core-lbl);font-weight:600;line-height:1">--</div>`;
       el.appendChild(wrap);
     });
   });
@@ -708,7 +715,7 @@ function applyData(data){
   const gT=data.gpu_temp;setText('sgpuT',gT!=null?gT+'°C':'--');setCol('sgpuT',tempCol(gT));
   setText('sgpuV',data.gpu_voltage!=null?parseFloat(data.gpu_voltage).toFixed(3)+'V':'--');setText('sgpuP',data.gpu_power!=null?Math.round(data.gpu_power)+'W':'--');setText('sgpuC',data.gpu_clock!=null?Math.round(data.gpu_clock)+'MHz':'--');
   const cores=data.cores||{};let peak=0,tot=0,cnt=0;
-  CORES_META.forEach(c=>{const cd=cores[String(c.id)]||cores[c.id],clk=cd?cd.clk:0;const bar=document.getElementById('bar'+c.id),clkEl=document.getElementById('clk'+c.id);if(clk>peak)peak=clk;if(clk>0){tot+=clk;cnt++;}const pct=clk<=0?0:clk<=STOCK?(clk/STOCK)*50:50+((clk-STOCK)/(MAX-STOCK))*50;if(bar){bar._lastClk=clk;bar.style.background=barGrad(clk);bar.style.opacity=pct<3?'0.2':String(0.65+pct/100*0.35);bar.style.clipPath=`inset(0 ${100-pct}% 0 0)`;}if(clkEl){clkEl.textContent=clk>0?Math.round(clk)+'MHz':'--';clkEl.style.color=clk>=4500?clkEnd(clk):COLORS.coreLbl;const tip=[];if(cd&&cd.load!=null)tip.push('Load '+Math.round(cd.load)+'%');if(cd&&cd.temp!=null)tip.push('Temp '+cd.temp.toFixed(1)+'°C');clkEl.title=tip.join(' · ');}});
+  CORES_META.forEach(c=>{const cd=cores[String(c.id)]||cores[c.id],clk=cd?cd.clk:0;trackMaxClock(clk);const bar=document.getElementById('bar'+c.id),clkEl=document.getElementById('clk'+c.id);if(clk>peak)peak=clk;if(clk>0){tot+=clk;cnt++;}const pct=clk<=0?0:clk<=STOCK?(clk/STOCK)*50:50+((clk-STOCK)/(MAX-STOCK))*50;if(bar){bar._lastClk=clk;bar.style.background=barGrad(clk);bar.style.opacity=pct<3?'0.2':String(0.65+pct/100*0.35);bar.style.clipPath=`inset(0 ${100-pct}% 0 0)`;}if(clkEl){clkEl.textContent=clk>0?Math.round(clk)+'MHz':'--';clkEl.style.color=clk>=STOCK*1.05?clkEnd(clk):COLORS.coreLbl;const tip=[];if(cd&&cd.load!=null)tip.push('Load '+Math.round(cd.load)+'%');if(cd&&cd.temp!=null)tip.push('Temp '+cd.temp.toFixed(1)+'°C');clkEl.title=tip.join(' · ');}});
   // Push sparkline data and redraw visible ones
   CORES_META.forEach(c=>{
     const cd=cores[String(c.id)]||cores[c.id];
