@@ -5,13 +5,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PC Monitor — Fan Control</title>
-<link rel="stylesheet" href="/ui.css?v=8">
+<link rel="stylesheet" href="/ui.css?v=9">
 <style>
-  .fan-rpm-big  { font-size:30px;font-weight:700;color:var(--mem-acc);line-height:1; }
-  .fan-rpm-unit { font-size:11px;color:var(--label-dim);margin-left:2px; }
+  .fan-rpm-big  { font-size:calc(30px*var(--fs-base,1)*var(--data-scale,1));font-weight:700;color:var(--mem-acc);line-height:1; }
+  .fan-rpm-unit { font-size:calc(11px*var(--fs-base,1)*var(--data-scale,1));color:var(--label-dim);margin-left:2px; }
   .mode-tabs { display:flex;gap:6px;margin:10px 0 8px; }
   .mode-tab {
-    flex:1;padding:7px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+    flex:1;padding:7px;font-size:calc(10px*var(--fs-base,1));letter-spacing:.1em;text-transform:uppercase;
     border:1px solid var(--border);background:transparent;color:var(--label-dim);
     cursor:pointer;border-radius:4px;font-family:inherit;transition:all .15s;
   }
@@ -25,7 +25,7 @@
   .curve-axis-y {
     position:absolute;left:0;top:0;bottom:0;width:32px;
     display:flex;flex-direction:column;justify-content:space-between;
-    font-size:8px;color:var(--label-dim);text-align:right;padding-right:4px;
+    font-size:calc(8px*var(--fs-base,1));color:var(--label-dim);text-align:right;padding-right:4px;
   }
   .curve-graph {
     width:100%;aspect-ratio:2.2/1;background:var(--bar-bg);
@@ -34,25 +34,25 @@
   }
   .curve-axis-x-labels {
     display:flex;justify-content:space-between;
-    font-size:9px;color:var(--label-dim);padding:3px 0 0;
+    font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);padding:3px 0 0;
     font-family:monospace;
   }
   .curve-y-label {
     position:absolute;left:-26px;top:50%;transform:translateY(-50%) rotate(-90deg);
-    font-size:8px;color:var(--label-dim);letter-spacing:.1em;white-space:nowrap;
+    font-size:calc(8px*var(--fs-base,1));color:var(--label-dim);letter-spacing:.1em;white-space:nowrap;
     font-family:monospace;
   }
   .curve-axis-x {
     display:flex;justify-content:space-between;
-    font-size:8px;color:var(--label-dim);padding:2px 2px 0;margin-top:3px;
+    font-size:calc(8px*var(--fs-base,1));color:var(--label-dim);padding:2px 2px 0;margin-top:3px;
   }
-  .curve-hint { font-size:9px;color:var(--label-dim);text-align:center;margin:5px 0 8px;letter-spacing:.05em; }
+  .curve-hint { font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);text-align:center;margin:5px 0 8px;letter-spacing:.05em; }
   .curve-src-row { display:flex;align-items:center;gap:10px;margin-bottom:8px; }
-  .curve-src-row label { font-size:10px;color:var(--label);letter-spacing:.06em; }
+  .curve-src-row label { font-size:calc(10px*var(--fs-base,1));color:var(--label);letter-spacing:.06em; }
   .curve-btns { display:flex;gap:6px;margin-top:6px; }
   .health-row { display:flex;align-items:center;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border); }
-  .health-status { flex:1;font-size:10px;line-height:1.5; }
-  .no-ctrl { font-size:10px;color:var(--label-dim);padding:6px 0; }
+  .health-status { flex:1;font-size:calc(10px*var(--fs-base,1));line-height:1.5; }
+  .no-ctrl { font-size:calc(10px*var(--fs-base,1));color:var(--label-dim);padding:6px 0; }
 </style>
 </head>
 <body>
@@ -65,11 +65,11 @@
   </div>
   <div class="page-body">
     <div id="no-fans" class="empty-state">Waiting for sensor data...</div>
-    <div id="fan-notice" style="display:none;margin:10px 0;padding:10px 14px;background:rgba(80,60,0,.15);border:1px solid rgba(180,120,0,.3);border-radius:5px;font-size:10px;line-height:1.7;color:#aa8833;">⚠ <strong>Fan control unavailable on this system.</strong><br>Your fans are visible but cannot be controlled — either the hardware driver blocks software control, or your motherboard's fan controller isn't yet supported by the sensor library (LibreHardwareMonitor).<br><span style="color:#665500">Try your motherboard's own software (e.g. MSI Center, ASUS Armoury Crate, Gigabyte EasyTune) for full fan control. Support for more boards is added regularly.</span></div>
+    <div id="fan-notice" style="display:none;margin:10px 0;padding:10px 14px;background:rgba(80,60,0,.15);border:1px solid rgba(180,120,0,.3);border-radius:5px;font-size:calc(10px*var(--fs-base,1));line-height:1.7;color:#aa8833;">⚠ <strong>Fan control unavailable on this system.</strong><br>Your fans are visible but cannot be controlled — either the hardware driver blocks software control, or your motherboard's fan controller isn't yet supported by the sensor library (LibreHardwareMonitor).<br><span style="color:#665500">Try your motherboard's own software (e.g. MSI Center, ASUS Armoury Crate, Gigabyte EasyTune) for full fan control. Support for more boards is added regularly.</span></div>
     <div id="fans-list"></div>
   </div>
 </div>
-<script src="/nav.js?v=8" data-page="fans"></script>
+<script src="/nav.js?v=9" data-page="fans"></script>
 <script>
 // ── State ─────────────────────────────────────────────────────────────────────
 const fanStates = {};
@@ -354,7 +354,7 @@ function buildCard(fan) {
     ${fan.hasControl ? `
     <div class="health-row">
       <button class="btn btn-ghost" id="hbtn-${id}" onclick="runHealth('${fan.name}')"
-        style="padding:6px 12px;font-size:9px">⚕ Health Check</button>
+        style="padding:6px 12px;font-size:calc(9px*var(--fs-base,1))">⚕ Health Check</button>
       <span class="health-status" id="hres-${id}"></span>
     </div>` : ''}
   </div>`;

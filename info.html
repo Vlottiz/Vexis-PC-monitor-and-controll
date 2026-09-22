@@ -4,13 +4,13 @@
 <meta charset="UTF-8">
 <meta http-equiv="Cache-Control" content="no-cache, no-store">
 <title>PC Monitor — Info</title>
-<link rel="stylesheet" href="/ui.css?v=8">
+<link rel="stylesheet" href="/ui.css?v=9">
 <style>
   .credit-row { display:flex;align-items:flex-start;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(68,51,0,.15); }
   .credit-row:last-child { border-bottom:none; }
-  .credit-name { font-size:11px;color:var(--label);font-weight:500; }
-  .credit-role { font-size:9px;color:var(--label-dim);margin-top:2px;letter-spacing:.04em;line-height:1.5; }
-  .credit-badge { font-size:8px;padding:2px 7px;border-radius:10px;background:rgba(68,51,0,.2);border:1px solid rgba(68,51,0,.3);color:var(--label-dim);letter-spacing:.06em;white-space:nowrap; }
+  .credit-name { font-size:calc(11px*var(--fs-base,1));color:var(--label);font-weight:500; }
+  .credit-role { font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);margin-top:2px;letter-spacing:.04em;line-height:1.5; }
+  .credit-badge { font-size:calc(8px*var(--fs-base,1));padding:2px 7px;border-radius:10px;background:rgba(68,51,0,.2);border:1px solid rgba(68,51,0,.3);color:var(--label-dim);letter-spacing:.06em;white-space:nowrap; }
   .update-dot { width:8px;height:8px;border-radius:50%;background:#333;flex-shrink:0;transition:background .3s; }
   .update-dot.ok  { background:#44aa66;box-shadow:0 0 6px #44aa66; }
   .update-dot.new { background:#ffaa00;box-shadow:0 0 6px #ffaa00; }
@@ -27,7 +27,7 @@
     <!-- Support -->
     <div class="card">
       <div class="card-header"><span class="card-title">SUPPORT THE PROJECT</span></div>
-      <div style="font-size:10px;color:var(--label-dim);margin-bottom:14px;line-height:1.8">
+      <div style="font-size:calc(10px*var(--fs-base,1));color:var(--label-dim);margin-bottom:14px;line-height:1.8">
         PC Monitor is completely free and open source. If you find it useful,
         consider buying me a coffee — it helps keep development going and motivates new features.
       </div>
@@ -47,7 +47,7 @@
         <span class="card-title">VERSION</span>
         <div style="display:flex;align-items:center;gap:8px">
           <div class="update-dot" id="update-dot"></div>
-          <span id="update-status" style="font-size:9px;color:var(--label-dim);letter-spacing:.06em">CHECKING...</span>
+          <span id="update-status" style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);letter-spacing:.06em">CHECKING...</span>
         </div>
       </div>
       <div class="info-row"><span class="info-key">Installed</span><span class="info-val" id="ver-current">v2.0.0</span></div>
@@ -131,7 +131,7 @@
           onclick="sendToHost({type:'openUrl',url:'https://claude.ai'})">claude.ai ↗</span>
       </div>
 
-      <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(68,51,0,.2);font-size:9px;color:var(--label-dim);line-height:1.7">
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(68,51,0,.2);font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);line-height:1.7">
         All ideas, feature design, and project direction by <strong style="color:var(--label)">Vlottiz</strong>.
         Built on the shoulders of an incredible open source community. Thank you to every contributor.
       </div>
@@ -153,7 +153,7 @@
   </div>
 </div>
 
-<script src="/nav.js?v=8" data-page="info"></script>
+<script src="/nav.js?v=9" data-page="info"></script>
 <script>
 const CURRENT_VERSION = 'v2.0.0';
 const GITHUB_RELEASES = 'https://api.github.com/repos/Vlottiz/pc-monitor/releases/latest';

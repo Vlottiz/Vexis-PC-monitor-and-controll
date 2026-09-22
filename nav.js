@@ -227,6 +227,7 @@ window.navOnConfig = function(cfg) {
   // Restore settings
   if (cfg.settings) {
     NAV_SETTINGS = cfg.settings;
+    navSyncPerfSettings();
     const bypassDisabled = cfg.settings['disableSecurityBypass'] === 'true';
     const cb = document.getElementById('nv-sec-bypass');
     if (cb) {
@@ -409,24 +410,15 @@ function initNav() {
   fsBtn.onclick = () => sendToHost({type:'toggleFullscreen'});
   document.body.appendChild(fsBtn);
 
-  // ⚙ gear — TOP RIGHT (opens full settings on perf page, colors panel elsewhere)
+  // ⚙ gear — TOP RIGHT (opens the Colors tab, same on every page)
   const gear = document.createElement('button');
   gear.id = 'nav-gear-btn'; gear.innerHTML = '⚙'; gear.title = 'Colors';
-  gear.onclick = () => {
-    if (NAV_CURRENT_PAGE === 'performance' && typeof openSettings === 'function')
-      openSettings();
-    else { openNav(); showNavTab('colors'); }
-  };
+  gear.onclick = () => { openNav(); showNavTab('colors'); };
   document.body.appendChild(gear);
 
   updateProfileUI();
   applyStoredLightMode();
 
-  // Hide nav gear on perf page (it has its own gear)
-  if (NAV_CURRENT_PAGE === 'performance') {
-    const g = document.getElementById('nav-gear-btn');
-    if (g) g.style.display = 'none';
-  }
 }
 
 function buildPanelHTML() {
@@ -561,6 +553,25 @@ function buildPanelHTML() {
       </div>
 
       <div style="padding:8px 0;border-bottom:1px solid rgba(68,51,0,.2)">
+        <div style="font-size:10px;color:var(--label);margin-bottom:6px">Performance Page</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
+          <span style="font-size:9px;color:var(--label);opacity:.8">Update speed</span>
+          <select id="nv-updateInterval" class="nv-select" onchange="navSetPerfSetting('updateInterval',this.value)">
+            <option value="250">Max (4/sec)</option><option value="500">Fast (2/sec)</option>
+            <option value="1000">Normal (1/sec)</option><option value="2000">Slow (every 2s)</option><option value="5000">Very slow (every 5s)</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <span style="font-size:9px;color:var(--label);opacity:.8">AVG MHz window</span>
+          <select id="nv-avgWindow" class="nv-select" onchange="navSetPerfSetting('avgWindow',this.value)">
+            <option value="sync">Sync with update</option><option value="1000">1 second</option>
+            <option value="5000">5 seconds</option><option value="15000">15 seconds</option>
+            <option value="30000">30 seconds</option><option value="60000">1 minute</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="padding:8px 0;border-bottom:1px solid rgba(68,51,0,.2)">
         <div style="font-size:10px;color:var(--label);margin-bottom:6px">Security Settings</div>
         <div style="font-size:9px;color:var(--label);opacity:.7;line-height:1.4;margin-bottom:8px">
           Sensor driver (PawnIO) status and Windows protection status.
@@ -628,6 +639,19 @@ function navApplyStoredFontScale() {
   const navSlider = document.getElementById('nv-nav-slider');
   if (navSlider) navSlider.value = navStored;
   navSetNavScale(navStored);
+}
+
+// Performance page settings live in the shared config so any page can change them
+window.navSetPerfSetting = function(key, val) {
+  NAV_SETTINGS[key] = String(val);
+  sendToHost({ type:'saveSettings', settings: { [key]: String(val) } });
+  if (typeof window.onPerfSettingChanged === 'function') window.onPerfSettingChanged(key, val);
+};
+function navSyncPerfSettings() {
+  for (const key of ['updateInterval', 'avgWindow']) {
+    const el = document.getElementById('nv-' + key);
+    if (el && NAV_SETTINGS[key]) el.value = NAV_SETTINGS[key];
+  }
 }
 
 function navToggleSecurityBypass(enabled) {
@@ -889,25 +913,109 @@ function injectNavStyles() {
 
     body.nav-light-mode { filter:invert(1) hue-rotate(180deg); }
 
-    /* ── Data text scaling ──────────────────────────────────────────────────── */
-    /* Applied globally so all pages scale sensor readings without per-page edits */
-    :root { --data-scale:1; --nv-scale:1; }
-    .fan-rpm-big      { font-size:calc(30px * var(--data-scale,1)) !important; }
-    .stat-val,
-    .temp-val, .val-big, .value-big,
-    .core-clock-val, .pkg-val,
-    [class$="-val"]:not([class*="label"]):not([class*="lbl"]) {
-      font-size:calc(1em * var(--data-scale,1));
+    /* ── Collapsible sections ─────────────────────────────────────────────── */
+    .pcm-collapsible { cursor:pointer; user-select:none; }
+    .pcm-collapsible::after {
+      content:'▾'; display:inline-block; margin-left:6px; font-size:.85em;
+      opacity:.45; transition:transform .15s, opacity .15s;
+    }
+    .pcm-collapsible:hover::after { opacity:.9; }
+    .pcm-collapsible.pcm-is-collapsed::after { transform:rotate(-90deg); }
+    .pcm-collapsed > :not(.pcm-collapse-head) { display:none !important; }
+    .pcm-collapsed .pcm-collapse-head, .pcm-collapsed .pcm-collapse-head .card-title { margin-bottom:0 !important; }
+    .pcm-hidden { display:none !important; }
+
+    /* ── Text scaling ──────────────────────────────────────────────────────── */
+    /* Pages size text as calc(Npx * var(--fs-base)) — "Page UI Font" slider — and
+       live readings additionally * var(--data-scale) — "Data Text" slider. */
+    :root { --fs-base:1; --data-scale:1; --nv-scale:1; }
+    .nv-select {
+      background:var(--surface2,#1e1608); border:1px solid var(--border,#443300); color:var(--text,#e8d080);
+      font-size:calc(9px * var(--nv-scale,1)); padding:3px 6px; border-radius:3px; font-family:monospace; cursor:pointer;
     }
   `;
   document.head.appendChild(s);
 }
+
+// ── Collapsible sections ──────────────────────────────────────────────────────
+// Click any card title (class "card-title") to hide/show the rest of its card.
+// Other headers opt in with data-collapse, plus data-collapse-target="#id" to
+// hide a specific element instead of the rest of the card. State is remembered
+// per page (and shared with popouts) and re-applied when pages rebuild cards.
+const NAV_COLLAPSE_STORE = 'pcm-collapsed';
+
+function navCollapsedAll() {
+  try { return JSON.parse(localStorage.getItem(NAV_COLLAPSE_STORE) || '{}') || {}; } catch { return {}; }
+}
+function navCollapsedSet() { return new Set(navCollapsedAll()[NAV_CURRENT_PAGE] || []); }
+
+window.navIsCollapsed = function(key) { return navCollapsedSet().has(key); };
+window.navToggleCollapsed = function(key) {
+  const all = navCollapsedAll();
+  const set = new Set(all[NAV_CURRENT_PAGE] || []);
+  if (set.has(key)) set.delete(key); else set.add(key);
+  all[NAV_CURRENT_PAGE] = [...set];
+  try { localStorage.setItem(NAV_COLLAPSE_STORE, JSON.stringify(all)); } catch {}
+  return set.has(key);
+};
+
+function navCollapseKey(h) {
+  return h.dataset.collapseKey || h.id || (h.textContent || '').trim().toUpperCase();
+}
+
+// Hide/show what a header controls
+function navApplyCollapse(h, collapsed) {
+  h.classList.toggle('pcm-is-collapsed', collapsed);
+  const target = h.dataset.collapseTarget;
+  if (target) {
+    const t = document.querySelector(target);
+    if (t) t.classList.toggle('pcm-hidden', collapsed);
+    return;
+  }
+  const card = h.closest('[data-collapse-scope], .card');
+  if (!card) return;
+  // The card's direct child that holds the title stays visible
+  let head = h;
+  while (head.parentElement && head.parentElement !== card) head = head.parentElement;
+  head.classList.add('pcm-collapse-head');
+  card.classList.toggle('pcm-collapsed', collapsed);
+}
+
+function navWireCollapsibles() {
+  const saved = navCollapsedSet();
+  document.querySelectorAll('.card-title, [data-collapse]').forEach(h => {
+    if (h.closest('#nav-panel')) return;
+    if (!h.classList.contains('pcm-collapsible')) {
+      h.classList.add('pcm-collapsible');
+      h.title = h.title || 'Click to collapse / expand';
+    }
+    const want = saved.has(navCollapseKey(h));
+    if (want !== h.classList.contains('pcm-is-collapsed') ||
+        (want && !h.dataset.collapseTarget && !h.closest('.pcm-collapsed')))
+      navApplyCollapse(h, want);
+  });
+}
+
+document.addEventListener('click', e => {
+  const h = e.target.closest('.pcm-collapsible');
+  if (!h || e.target.closest('button, input, select, a, label')) return;
+  navApplyCollapse(h, navToggleCollapsed(navCollapseKey(h)));
+});
+
+// Pages rebuild cards as data arrives — re-apply saved state after DOM changes
+let _navCollapseQueued = false;
+new MutationObserver(() => {
+  if (_navCollapseQueued) return;
+  _navCollapseQueued = true;
+  requestAnimationFrame(() => { _navCollapseQueued = false; navWireCollapsibles(); });
+}).observe(document.documentElement, { childList: true, subtree: true });
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 function boot() {
   if (NAV_IS_POPOUT) initPopoutBadge();
   else               initNav();
   navApplyStoredFontScale();
+  navWireCollapsibles();
 }
 
 if (document.readyState === 'loading')

@@ -5,10 +5,14 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PC Monitor — Temperatures</title>
-<link rel="stylesheet" href="/ui.css?v=8">
+<link rel="stylesheet" href="/ui.css?v=9">
 <style>
   .controls { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
-  .sample-count { font-size:10px; color:var(--label-dim); }
+  .sample-count { font-size:calc(10px*var(--fs-base,1)); color:var(--label-dim); }
+  .temp-toggle { cursor:pointer; user-select:none; }
+  .temp-toggle:hover th, .temp-toggle:hover td { color:var(--header-title); }
+  .temp-toggle .chev { display:inline-block; margin-right:6px; opacity:.5; transition:transform .15s; }
+  .temp-toggle.shut .chev { transform:rotate(-90deg); }
 </style>
 </head>
 <body>
@@ -25,7 +29,7 @@
         <option value="2">2 decimals</option>
         <option value="3">3 decimals</option>
       </select>
-      <button class="btn btn-ghost" onclick="resetStats()" style="padding:5px 12px;font-size:9px">RESET</button>
+      <button class="btn btn-ghost" onclick="resetStats()" style="padding:5px 12px;font-size:calc(9px*var(--fs-base,1))">RESET</button>
     </div>
   </div>
   <div class="page-body" style="padding:0">
@@ -35,7 +39,7 @@
     </table>
   </div>
 </div>
-<script src="/nav.js?v=8" data-page="temps"></script>
+<script src="/nav.js?v=9" data-page="temps"></script>
 <script>
 let DEC=1; const stats={};  let _all={};
 function setDec(n){DEC=n;render();}
@@ -52,8 +56,12 @@ function render(){
   for(const k of keys){const[g,...r]=k.split('/');if(!groups[g])groups[g]=[];groups[g].push({k,name:r.join('/')});}
   let html='';
   for(const[g,sensors] of Object.entries(groups)){
-    html+=`<tr class="group-row"><td colspan="5">${g}</td></tr>`;
-    html+=`<tr><th>SENSOR</th><th>CURRENT</th><th>MIN</th><th>MAX</th><th>AVG</th></tr>`;
+    // Clicking the group name or its SENSOR header row collapses the group
+    const shut=navIsCollapsed('group:'+g);
+    const cls=`temp-toggle${shut?' shut':''}`;
+    html+=`<tr class="group-row ${cls}" data-group="${g}"><td colspan="5"><span class="chev">▾</span>${g}</td></tr>`;
+    html+=`<tr class="${cls}" data-group="${g}"><th><span class="chev">▾</span>SENSOR</th><th>CURRENT</th><th>MIN</th><th>MAX</th><th>AVG</th></tr>`;
+    if(shut)continue;
     for(const{k,name}of sensors){
       const s=stats[k]; if(!s)continue;
       const avg=getAvg(k);
@@ -70,6 +78,10 @@ function render(){
   }
   document.getElementById('temp-body').innerHTML=html;
 }
+document.getElementById('temp-body').addEventListener('click',e=>{
+  const row=e.target.closest('.temp-toggle'); if(!row)return;
+  navToggleCollapsed('group:'+row.dataset.group); render();
+});
 let cnt=0;
 function receiveData(data){
   _all=data.all_temps||{};
