@@ -109,8 +109,15 @@ public class MainForm : Form
                 using var http = new System.Net.Http.HttpClient();
                 http.DefaultRequestHeaders.Add("User-Agent", $"Vexis/{AppVersionText}");
                 http.Timeout = TimeSpan.FromSeconds(8);
-                var json = await http.GetStringAsync(
-                    "https://api.github.com/repos/Vlottiz/vexis/releases/latest");
+                using var resp = await http.GetAsync(
+                    "https://api.github.com/repos/Vlottiz/pc-monitor/releases/latest");
+                if (resp.StatusCode == System.Net.HttpStatusCode.NotFound)
+                {
+                    Console.WriteLine("[update] No GitHub releases published yet.");
+                    return;
+                }
+                resp.EnsureSuccessStatusCode();
+                var json = await resp.Content.ReadAsStringAsync();
                 var doc  = System.Text.Json.JsonDocument.Parse(json);
                 var tag  = doc.RootElement.GetProperty("tag_name").GetString() ?? "";
                 if (Version.TryParse(tag.TrimStart('v', 'V'), out var latest) &&
@@ -269,7 +276,7 @@ public class MainForm : Form
                     break;
 
                 case "installPawnIO":
-                    _ = Task.Run(() => { DriverSetup.EnsurePawnIo(); PushSecurityStatus(); });
+                    _ = Task.Run(() => { DriverSetup.EnsurePawnIo(forceRepair: true); PushSecurityStatus(); });
                     break;
 
                 case "restoreSecurity":

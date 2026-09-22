@@ -72,7 +72,7 @@
     <!-- Virtual memory -->
     <div class="card">
       <div class="card-header"><span class="card-title">VIRTUAL MEMORY</span></div>
-      <div class="info-row"><span class="info-key">Page File Used</span><span class="info-val" id="virt-used" style="color:var(--label)">--</span></div>
+      <div class="info-row"><span class="info-key">Committed (RAM + page file)</span><span class="info-val" id="virt-used" style="color:var(--label)">--</span></div>
       <div style="margin-top:6px;height:5px;background:var(--bar-bg);border-radius:2px;overflow:hidden;border:1px solid var(--border)">
         <div id="virt-bar" style="height:100%;background:var(--border-bright);width:0%;transition:width .5s;border-radius:2px"></div>
       </div>
@@ -162,16 +162,11 @@ function receiveData(data) {
     }
   }
 
-  // Virtual memory (from all_temps or separate field)
-  // Just show ram_load as a proxy for virtual memory usage
-  if (load != null) {
-    const info = data.info;
-    const totalGb = info?.ramGb || 0;
-    const usedGb = data.ram_used_gb || (totalGb * load / 100);
-    const virtPct = Math.min(100, load);
-    setText('virt-used', usedGb.toFixed(1) + ' GB');
+  // Virtual memory (commit charge: RAM + page file)
+  if (data.virt_used_gb != null) {
+    setText('virt-used', data.virt_used_gb.toFixed(1) + ' GB');
     const vb = document.getElementById('virt-bar');
-    if (vb) vb.style.width = virtPct + '%';
+    if (vb && data.virt_load != null) vb.style.width = Math.min(100, data.virt_load) + '%';
   }
 
   // Time

@@ -62,22 +62,27 @@ Section "Vexis Hardware Monitoring" SecMain
   File /r "publish\*.*"
 
   ; Sensor driver — PawnIO (signed, works with Memory Integrity ON).
-  ; Skip if already installed: its setup refuses to install over itself.
+  ; $0 = PawnIO registered (uninstall key), $2 = driver service present.
+  ; Older Vexis builds deleted the service but left the registration, so
+  ; "registered but no service" is repaired with uninstall + install.
   SetRegView 64
   EnumRegValue $0 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\PawnIO" 0
+  EnumRegValue $2 HKLM "SYSTEM\CurrentControlSet\Services\PawnIO" 0
   SetRegView default
   ${If} $0 != ""
+  ${AndIf} $2 != ""
     DetailPrint "PawnIO already installed."
   ${ElseIf} ${FileExists} "$INSTDIR\PawnIO_setup.exe"
+    ${If} $0 != ""
+      DetailPrint "Repairing PawnIO sensor driver..."
+      ExecWait '"$INSTDIR\PawnIO_setup.exe" -uninstall -silent'
+    ${EndIf}
     DetailPrint "Installing PawnIO sensor driver..."
     ExecWait '"$INSTDIR\PawnIO_setup.exe" -install -silent' $1
     DetailPrint "PawnIO setup exit code: $1"
   ${Else}
-    DetailPrint "PawnIO_setup.exe not bundled - Vexis will install PawnIO on first launch."
+    DetailPrint "PawnIO_setup.exe not bundled - install PawnIO from https://pawnio.eu"
   ${EndIf}
-
-  ; Remove the Defender exclusion that older versions added (no longer needed)
-  nsExec::ExecToLog 'powershell.exe -NoProfile -WindowStyle Hidden -Command "Remove-MpPreference -ExclusionPath \"$INSTDIR\" -ExclusionProcess \"Vexis.exe\" -ErrorAction SilentlyContinue"'
 
   ; Write uninstaller
   WriteUninstaller "$INSTDIR\Uninstall.exe"
@@ -121,9 +126,6 @@ SectionEnd
 Section "Uninstall"
   ; Stop running instance
   nsExec::ExecToLog 'taskkill /IM Vexis.exe /F'
-
-  ; Remove Defender exclusions
-  nsExec::ExecToLog 'powershell.exe -NoProfile -WindowStyle Hidden -Command "Remove-MpPreference -ExclusionPath \"$INSTDIR\" -ExclusionProcess \"Vexis.exe\" -ErrorAction SilentlyContinue"'
 
   ; Remove files
   RMDir /r "$INSTDIR"

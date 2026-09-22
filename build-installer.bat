@@ -21,9 +21,9 @@ echo.
 echo  [1/4] Checking PawnIO_setup.exe...
 if not exist "PawnIO_setup.exe" (
     echo      Downloading from github.com/namazso/PawnIO.Setup ...
-    powershell -NoProfile -Command "Invoke-WebRequest -UseBasicParsing 'https://github.com/namazso/PawnIO.Setup/releases/latest/download/PawnIO_setup.exe' -OutFile 'PawnIO_setup.exe'"
+    curl.exe -L --fail -o PawnIO_setup.exe https://github.com/namazso/PawnIO.Setup/releases/latest/download/PawnIO_setup.exe
     if not exist "PawnIO_setup.exe" (
-        echo      [!] Download failed. Vexis will download PawnIO on first launch instead.
+        echo      [!] Download failed. Download it manually from https://pawnio.eu into this folder.
     )
 ) else (
     echo      Found.
