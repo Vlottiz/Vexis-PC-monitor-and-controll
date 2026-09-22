@@ -30,11 +30,17 @@ internal class FanEntry
 // ─── FanController ─────────────────────────────────────────────────────────────
 public class FanController
 {
-    private readonly List<FanEntry> _fans = new();
+    private List<FanEntry> _fans = new();
     private bool _discovered;
 
+    // LHM lists a SuperIO fan only after a successful read. The read is skipped
+    // when another program (MSI Center, HWiNFO, ...) holds the ISA bus lock, so
+    // motherboard fans can appear after startup — keep looking for them.
+    private List<IHardware> _hardware = new();
+    private DateTime _startedAt   = DateTime.Now;
+    private DateTime _lastRescan  = DateTime.Now;
+
     // WMI fallback fan names — populated when LHM finds no motherboard fan sensors
-    // (MSI X870E TOMAHAWK's Nuvoton SuperIO chip is not yet supported by LHM)
     private readonly List<string> _wmiFanNames = new();
 
     // ─── Discovery ─────────────────────────────────────────────────────────────
@@ -44,7 +50,8 @@ public class FanController
     /// </summary>
     public void Discover(IEnumerable<IHardware> hardware)
     {
-        _fans.Clear();
+        _hardware = hardware.ToList();
+        var found = new List<FanEntry>();
 
         // Flatten top-level hardware + all SubHardware so we catch SuperIO chips.
         // Motherboard fan headers (CPU_FAN, SYS_FAN1, etc.) live on a SuperIO
@@ -93,7 +100,7 @@ public class FanController
                         ctrl = ctrlSensors[idx];
                 }
 
-                _fans.Add(new FanEntry
+                found.Add(new FanEntry
                 {
                     Name      = fan.Name,
                     RpmSensor = fan,
@@ -104,13 +111,14 @@ public class FanController
             }
         }
 
+        _fans = found;
         _discovered = true;
         Console.WriteLine($"[fans] Discovered {_fans.Count} fan(s) total.");
 
         // ── WMI fallback for boards whose SuperIO LHM doesn't support ──────────
-        // MSI X870E TOMAHAWK uses a Nuvoton chip not yet in LHM — motherboard fan
-        // headers show up with zero sensors. Win32_Fan gives read-only RPM data
-        // (no software control) but is better than showing nothing.
+        // If the SuperIO chip can't be read, motherboard fan headers show up with
+        // zero sensors. Win32_Fan gives read-only RPM data (no software control)
+        // but is better than showing nothing.
         bool hasMotherboardFans = _fans.Any(f =>
             f.RpmSensor.Hardware.HardwareType != HardwareType.GpuAmd &&
             f.RpmSensor.Hardware.HardwareType != HardwareType.GpuNvidia &&
@@ -131,7 +139,7 @@ public class FanController
                 if (_wmiFanNames.Count > 0)
                     Console.WriteLine($"[fans] WMI fallback active for {_wmiFanNames.Count} fan(s) — read-only, no curve/manual control.");
                 else
-                    Console.WriteLine("[fans] WMI Win32_Fan returned no fans — board uses proprietary SDK (MSI Center required for non-GPU fans).");
+                    Console.WriteLine("[fans] No motherboard fans yet — will keep checking (close MSI Center / HWiNFO if they stay missing).");
             }
             catch (Exception ex)
             {
@@ -147,6 +155,7 @@ public class FanController
     public void Update(SensorData sensorData, AppConfig config)
     {
         if (!_discovered) return;
+        RescanIfNewFans();
 
         foreach (var fan in _fans)
         {
@@ -166,6 +175,41 @@ public class FanController
             int targetPct = AppConfig.InterpolateCurve(curve.Points, temp);
 
             fan.CtrlSensor?.Control?.SetSoftware(targetPct);
+        }
+    }
+
+    // Every 5 s for the first 2 minutes, then every 30 s: if LHM now exposes more
+    // fan sensors than we know about, discover again (keeping each fan's mode).
+    private void RescanIfNewFans()
+    {
+        var now = DateTime.Now;
+        var interval = now - _startedAt < TimeSpan.FromMinutes(2)
+            ? TimeSpan.FromSeconds(5) : TimeSpan.FromSeconds(30);
+        if (now - _lastRescan < interval) return;
+        _lastRescan = now;
+
+        try
+        {
+            int fanSensors = _hardware
+                .SelectMany(hw => new[] { hw }.Concat(hw.SubHardware))
+                .Sum(h => h.Sensors.Count(x => x.SensorType == SensorType.Fan));
+            if (fanSensors <= _fans.Count) return;
+
+            Console.WriteLine($"[fans] {fanSensors - _fans.Count} new fan sensor(s) appeared — rescanning.");
+            var previous = _fans.ToDictionary(f => f.Name);
+            Discover(_hardware);
+            foreach (var f in _fans)
+                if (previous.TryGetValue(f.Name, out var old))
+                {
+                    f.Mode = old.Mode;
+                    f.ManualPct = old.ManualPct;
+                    if (f.Mode == "manual") f.CtrlSensor?.Control?.SetSoftware(f.ManualPct);
+                }
+        }
+        catch (Exception ex)
+        {
+            // Sensor lists can change under us while LHM activates sensors — try next time
+            Console.WriteLine($"[fans] Rescan skipped: {ex.Message}");
         }
     }
 

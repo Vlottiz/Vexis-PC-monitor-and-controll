@@ -135,6 +135,18 @@ public class SensorService : IDisposable
             foreach (var sub in hw.SubHardware)
             {
                 sub.Update();
+                // SuperIO reads are skipped while another app holds the ISA bus lock —
+                // give it a few more tries before reporting what we found.
+                for (int retry = 0; retry < 5 && sub.HardwareType == HardwareType.SuperIO &&
+                     !sub.Sensors.Any(x => x.SensorType is SensorType.Fan or SensorType.Temperature); retry++)
+                {
+                    Thread.Sleep(200);
+                    sub.Update();
+                }
+                if (sub.HardwareType == HardwareType.SuperIO &&
+                    !sub.Sensors.Any(x => x.SensorType is SensorType.Fan or SensorType.Temperature))
+                    Console.WriteLine($"[hw]   ! {sub.Name} could not be read — another program (MSI Center, " +
+                                      "HWiNFO, AIDA64, ...) is probably holding the hardware bus. Close it and restart Vexis.");
                 int fanCount  = sub.Sensors.Count(s => s.SensorType == SensorType.Fan);
                 int ctrlCount = sub.Sensors.Count(s => s.SensorType == SensorType.Control);
                 Console.WriteLine($"[hw]   SubHW: [{sub.HardwareType}] {sub.Name} — {fanCount} fan, {ctrlCount} ctrl sensors");
@@ -358,28 +370,27 @@ public class SensorService : IDisposable
                         if (isVirtual) data.virt_used_gb ??= s.Value.Value;
                         else           data.ram_used_gb  ??= s.Value.Value;
                     }
-                    if (s.SensorType == SensorType.Temperature && s.Value.HasValue)
+                    if (IsRealTemp(s))
                     {
                         data.dimm_temps ??= new List<float>();
-                        data.dimm_temps.Add(s.Value.Value);
+                        data.dimm_temps.Add(s.Value!.Value);
                     }
                 }
             }
 
-            foreach (var s in hw.Sensors)
-                if (s.SensorType == SensorType.Temperature && s.Value.HasValue && s.Value.Value > 1f)
-                {
-                    string prefix = hw.HardwareType switch
-                    {
-                        HardwareType.Cpu         => "CPU",
-                        HardwareType.GpuAmd      => "GPU",
-                        HardwareType.GpuNvidia   => "GPU",
-                        HardwareType.GpuIntel    => "GPU",
-                        HardwareType.Motherboard => "MB",
-                        _                        => hw.HardwareType.ToString()
-                    };
-                    data.all_temps[$"{prefix}/{s.Name}"] = (float)Math.Round(s.Value.Value, 2);
-                }
+            string prefix = hw.HardwareType switch
+            {
+                HardwareType.Cpu         => "CPU",
+                HardwareType.GpuAmd      => "GPU",
+                HardwareType.GpuNvidia   => "GPU",
+                HardwareType.GpuIntel    => "GPU",
+                HardwareType.Motherboard => "MB",
+                _                        => hw.HardwareType.ToString()
+            };
+            // Motherboard temps live on its SuperIO sub-hardware
+            foreach (var s in hw.Sensors.Concat(hw.SubHardware.SelectMany(sub => sub.Sensors)))
+                if (IsRealTemp(s))
+                    data.all_temps[$"{prefix}/{s.Name}"] = (float)Math.Round(s.Value!.Value, 2);
         }
 
         // ── WMI fallback when LHM driver can't read (blocked by BIOS/firmware) ───
@@ -409,6 +420,14 @@ public class SensorService : IDisposable
         _latest = data;
         OnUpdate?.Invoke(data);
     }
+
+    // A live temperature reading — not a threshold ("Thermal Sensor High Limit",
+    // "... Critical High Limit") and not an empty slot / unconnected probe.
+    private static bool IsRealTemp(ISensor s) =>
+        s.SensorType == SensorType.Temperature &&
+        s.Value is > 1f and < 150f &&
+        !s.Name.Contains("Limit", StringComparison.OrdinalIgnoreCase) &&
+        !s.Name.Contains("Threshold", StringComparison.OrdinalIgnoreCase);
 
     // ── CPU load from LHM sensors (AMD gets this for free; Intel needs WMI fallback) ──
     private void ReadCpuLoad(IHardware hw, SensorData data)
