@@ -191,6 +191,16 @@
         <div style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);margin-top:2px">PEAK CLOCK</div>
       </button>
 
+      <button class="nav-tile" onclick="navView('gpu.html')"
+        style="display:flex;flex-direction:column;align-items:flex-start;padding:12px 14px;text-align:left;height:auto">
+        <div style="display:flex;align-items:center;gap:8px;width:100%;margin-bottom:8px">
+          <span style="font-size:calc(16px*var(--fs-base,1));color:var(--gpu-acc)">▩</span>
+          <span class="nav-tile-label" style="font-size:calc(10px*var(--fs-base,1))">GPU</span>
+        </div>
+        <div style="font-size:calc(18px*var(--fs-base,1)*var(--data-scale,1));font-weight:700;color:var(--gpu-acc)" id="nt-gpuload">-- %</div>
+        <div style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);margin-top:2px">GPU LOAD</div>
+      </button>
+
       <button class="nav-tile" onclick="navView('temps.html')"
         style="display:flex;flex-direction:column;align-items:flex-start;padding:12px 14px;text-align:left;height:auto">
         <div style="display:flex;align-items:center;gap:8px;width:100%;margin-bottom:8px">
@@ -237,7 +247,7 @@
   </div>
 </div>
 
-<script src="/nav.js?v=14" data-page="home"></script>
+<script src="/nav.js?v=15" data-page="home"></script>
 <script>
 setInterval(()=>{ const e=document.getElementById('htime'); if(e)e.textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}); },1000);
 
@@ -292,6 +302,8 @@ function receiveData(data){
   Object.values(cores).forEach(c=>{ if(c.clk>peakClk)peakClk=c.clk; });
   const ntP=document.getElementById('nt-peakclk');
   if(ntP)ntP.textContent=peakClk>0?Math.round(peakClk)+' MHz':'-- MHz';
+  const ntL=document.getElementById('nt-gpuload');
+  if(ntL)ntL.textContent=data.gpu_load!=null?Math.round(data.gpu_load)+' %':'-- %';
   const ntG=document.getElementById('nt-gputemp');
   if(ntG)ntG.textContent=data.gpu_temp!=null?data.gpu_temp.toFixed(1)+' °C':'-- °C';
   // Fan tile: the busiest fan, not just the first header (often an empty CPU_FAN)

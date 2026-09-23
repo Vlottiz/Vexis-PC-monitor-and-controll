@@ -25,7 +25,7 @@ Unlike traditional monitoring tools, Vexis offers:
 | Feature | Details |
 |---|---|
 | **CPU Monitoring** | Per-core clock speeds, temperatures, CCD temps (AMD), package power |
-| **GPU Monitoring** | Temperature, clock speed, voltage, power draw, VRAM |
+| **GPU Monitoring** | Dedicated GPU tab: load (core, memory controller, video, bus), core / hot-spot / memory temps, clocks, power, VRAM, fans, PCIe traffic, FPS, history charts and every raw sensor |
 | **Fan Control** | Auto / Manual / Custom curve editor with hysteresis and minimum speed |
 | **Temperature History** | Min / Max / Avg for every thermal sensor on the system |
 | **RGB Control** | OpenRGB integration — auto-launch, master + per-device brightness, hardware modes, GUI toggle |
