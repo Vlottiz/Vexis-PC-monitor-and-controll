@@ -220,6 +220,7 @@ let NAV_SETTINGS = {};
 
 window.navOnConfig = function(cfg) {
   if (typeof cfg.startWithWindows === 'boolean') navSetStartupState(cfg.startWithWindows);
+  if (cfg.zoom) navZoomState(cfg.zoom);
   if (cfg.appVersion) {
     window.NAV_APP_VERSION = cfg.appVersion;
     const v = document.getElementById('nv-version');
@@ -787,6 +788,34 @@ function initPopoutBadge() {
   applyStoredLightMode();
 }
 
+// ── Zoom buttons (for people without Ctrl+scroll) ─────────────────────────────
+// The host changes WebView2's zoom (same as Ctrl+scroll) and reports the level back.
+const NAV_ZOOM_SVG = sign => `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+  <circle cx="6.5" cy="6.5" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/>
+  <line x1="10" y1="10" x2="14.5" y2="14.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+  <line x1="4.3" y1="6.5" x2="8.7" y2="6.5" stroke="currentColor" stroke-width="1.4"/>
+  ${sign === '+' ? '<line x1="6.5" y1="4.3" x2="6.5" y2="8.7" stroke="currentColor" stroke-width="1.4"/>' : ''}
+</svg>`;
+
+function navInitZoom() {
+  if (document.getElementById('nav-zoom')) return;
+  const z = document.createElement('div');
+  z.id = 'nav-zoom';
+  z.innerHTML =
+    `<button type="button" title="Zoom out (Ctrl −)" aria-label="Zoom out" data-d="-1">${NAV_ZOOM_SVG('-')}</button>` +
+    `<button type="button" id="nav-zoom-pct" title="Reset zoom (Ctrl 0)" aria-label="Reset zoom" data-d="0">100%</button>` +
+    `<button type="button" title="Zoom in (Ctrl +)" aria-label="Zoom in" data-d="1">${NAV_ZOOM_SVG('+')}</button>`;
+  z.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (b) sendToHost({ type: 'zoom', delta: parseInt(b.dataset.d) });
+  });
+  document.body.appendChild(z);
+}
+window.navZoomState = function(pct) {
+  const el = document.getElementById('nav-zoom-pct');
+  if (el && pct) el.textContent = Math.round(pct) + '%';
+};
+
 // ── Resizable nav panel ───────────────────────────────────────────────────────
 const NAV_WIDTH_DEFAULT = 300, NAV_WIDTH_MIN = 240, NAV_WIDTH_MAX = 640;
 
@@ -794,6 +823,8 @@ function navSetPanelWidth(px, save) {
   const max = Math.min(NAV_WIDTH_MAX, window.innerWidth - 40);
   const w = Math.round(Math.max(NAV_WIDTH_MIN, Math.min(max, px)));
   document.documentElement.style.setProperty('--nv-width', w + 'px');
+  // Contents scale with the panel: 450 px wide = 1.5× the 300 px layout
+  document.documentElement.style.setProperty('--nv-zoom', (w / NAV_WIDTH_DEFAULT).toFixed(3));
   if (save) { try { localStorage.setItem('pcm-nav-width', String(w)); } catch {} }
 }
 
@@ -890,6 +921,22 @@ function injectSharedStyles() {
     .nv-switch input:checked ~ .nv-switch-text { color:var(--header-title,#ffcc00); }
 
     .nv-num { width:52px; text-align:right; }
+
+    /* Zoom − 100% + (bottom-right corner, every page and popout) */
+    #nav-zoom {
+      position:fixed; right:8px; bottom:8px; z-index:9998; display:flex; align-items:center; gap:2px;
+      padding:2px; border-radius:14px; background:rgba(0,0,0,.45);
+      border:1px solid color-mix(in srgb, var(--border,#443300) 70%, transparent);
+      opacity:.55; transition:opacity .15s;
+    }
+    #nav-zoom:hover, #nav-zoom:focus-within { opacity:1; }
+    #nav-zoom button {
+      display:flex; align-items:center; justify-content:center; height:24px; min-width:26px; padding:0 5px;
+      border:none; border-radius:12px; background:transparent; cursor:pointer;
+      color:var(--header-title,#ffcc00); font-family:monospace; font-size:10px;
+    }
+    #nav-zoom button:hover { background:color-mix(in srgb, var(--header-title,#ffcc00) 18%, transparent); }
+    #nav-zoom-pct { min-width:40px !important; color:var(--label,#aa7700) !important; }
     .nv-select {
       background:var(--surface2,#1e1608); border:1px solid var(--border,#443300); color:var(--text,#e8d080);
       font-size:calc(9px * var(--nv-scale,1)); padding:3px 6px; border-radius:3px; font-family:monospace; cursor:pointer;
@@ -937,6 +984,7 @@ function injectNavStyles() {
       transition:transform .22s cubic-bezier(.4,0,.2,1);
     }
     /* Drag the right edge to resize the panel (double-click resets) */
+    #nav-panel > :not(#nav-resize) { zoom:var(--nv-zoom,1); }
     #nav-resize {
       position:absolute;top:0;right:0;bottom:0;width:8px;cursor:ew-resize;z-index:2;
     }
@@ -1201,6 +1249,7 @@ new MutationObserver(() => {
 // ── Boot ──────────────────────────────────────────────────────────────────────
 function boot() {
   injectSharedStyles();
+  navInitZoom();
   // Every page defines receiveData(); tap it for nav-level info (alert status)
   const pageReceive = window.receiveData;
   if (typeof pageReceive === 'function')

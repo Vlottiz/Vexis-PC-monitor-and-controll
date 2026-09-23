@@ -5,7 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PC Monitor — RGB</title>
-<link rel="stylesheet" href="/ui.css?v=11">
+<link rel="stylesheet" href="/ui.css?v=12">
 <style>
   .rgb-dot{width:8px;height:8px;border-radius:50%;background:#333;flex-shrink:0;transition:background .3s;}
   .rgb-dot.on{background:#44ff88;box-shadow:0 0 6px #44ff88;}.rgb-dot.err{background:#ff4444;box-shadow:0 0 6px #ff4444;}
@@ -108,7 +108,7 @@
     </div>
   </div>
 </div>
-<script src="/nav.js?v=12" data-page="rgb"></script>
+<script src="/nav.js?v=13" data-page="rgb"></script>
 <script>
 const ORGB_PORT=localStorage.getItem('pcm-rgb-port')||'6742';
 let _devices=[],_connected=false,_callCounter=0;
@@ -132,15 +132,29 @@ function ledCnt(i){
   if((d.type??-1)===2&&d.colors?.length>1)return d.colors.length;
   return d.num_leds||(typeof d.leds==='number'?d.leds:0)||(d.colors?.length||0)||1;
 }
-function isRam(i){const n=(_devices[i]?.name||'').toLowerCase();return n.includes('dram')||n.includes('ene');}
-function cleanMode(raw,idx){if(!raw)return'Mode '+idx;const c=raw.replace(/[^\x20-\x7E]/g,'').trim();return(c&&c.length<=32)?c:'Mode '+idx;}
-function staticIdx(i){
-  const d=_devices[i];if(!d?.modes?.length)return 0;
-  const f=d.modes.findIndex(m=>{const n=(m.name||'').toLowerCase();return n.includes('static')||n.includes('direct');});
-  if(f>=0)return f;
-  if(isRam(i))return Math.min(1,d.modes.length-1);
-  return 0;
+// OpenRGB device_type 1 = DRAM (names vary: "G.Skill Trident Z5", "ENE DRAM", ...)
+function isRam(i){const d=_devices[i];if(!d)return false;const n=(d.name||'').toLowerCase();return d.type===1||n.includes('dram');}
+
+// ── Getting a device ready for colours ───────────────────────────────────────
+// Devices with a per-LED mode (Direct/Custom) must be switched to it first,
+// otherwise their hardware animation keeps running and each LED update restarts it
+// (the RAM symptom). Devices with only mode-specific colours (often GPUs: "Static")
+// take the colour through the mode itself.
+const _modeReady={};                      // devIdx → custom mode already set this session
+function colorModeIdx(d){                 // mode that takes a single colour
+  const ms=d?.modes||[];
+  let i=ms.findIndex(m=>m.color_mode===2&&/static/i.test(m.name||''));
+  if(i<0)i=ms.findIndex(m=>m.color_mode===2);
+  return i;
 }
+function canColor(d){return !!d&&!d.skip&&((d.per_led&&d.num_leds>0)||colorModeIdx(d)>=0);}
+async function ensureDirect(devIdx){
+  const d=_devices[devIdx];
+  if(!d||!d.per_led||_modeReady[devIdx])return;
+  await orgbPut('/devices/'+devIdx+'/mode',{custom:true});
+  _modeReady[devIdx]=true;
+}
+function cleanMode(raw,idx){if(!raw)return'Mode '+idx;const c=raw.replace(/[^\x20-\x7E]/g,'').trim();return(c&&c.length<=32)?c:'Mode '+idx;}
 
 // ── Per-LED painter ──────────────────────────────────────────────────────────
 const _lc={},_exp=new Set();
@@ -161,7 +175,7 @@ let _ramSync=localStorage.getItem('pcm-ram-sync')!=='0';
 function toggleSync(){_ramSync=!_ramSync;localStorage.setItem('pcm-ram-sync',_ramSync?'1':'0');document.querySelectorAll('.rsd').forEach(e=>e.classList.toggle('off',!_ramSync));document.querySelectorAll('.rsl').forEach(e=>e.textContent=_ramSync?'RAM STICKS SYNCED':'RAM STICKS UNLINKED');}
 async function applyRAM(devIdx,leds,hex){
   await setDC(devIdx,leds,hex);
-  if(_ramSync){for(let i=0;i<_devices.length;i++){if(i!==devIdx&&isRam(i)&&!_devices[i].skip&&_devices[i].num_leds){const cnt=ledCnt(i),sl=leds.length===cnt?leds:new Array(cnt).fill(leds[0]||hexRgb(hex));await setDC(i,sl,hex);const p=document.getElementById('dev-col-'+i);if(p&&hex)p.value=hex;}}}
+  if(_ramSync){for(let i=0;i<_devices.length;i++){if(i!==devIdx&&isRam(i)&&canColor(_devices[i])){const cnt=ledCnt(i),sl=leds.length===cnt?leds:new Array(cnt).fill(leds[0]||hexRgb(hex));await setDC(i,sl,hex);const p=document.getElementById('dev-col-'+i);if(p&&hex)p.value=hex;}}}
 }
 
 // ── Color application ─────────────────────────────────────────────────────────
@@ -182,21 +196,23 @@ function clearHold(devIdx){if(_hold[devIdx]){clearTimeout(_hold[devIdx]);delete 
 async function setDC(devIdx,leds,hex){
   if(!leds||!leds.length)return;
   const dev=_devices[devIdx]||{};
-  const devType=dev.type??-1;
-  // Only send SetCustomMode for GPU (type=2) — keyboard/DRAM/Corsair abort the
-  // connection when they receive it, killing all subsequent color sends.
-  if(devType===2){
-    const c=leds[0]||{r:0,g:0,b:0};
-    await orgbPut('/devices/'+devIdx+'/mode',{mode:staticIdx(devIdx),r:c.r,g:c.g,b:c.b});
+  if(dev.per_led){
+    await ensureDirect(devIdx);
+    await orgbPut('/devices/'+devIdx+'/leds',leds);
+    // Keep color alive — fires every 2 s for devices whose hardware may revert
+    startHold(devIdx,leds);
+  }else{
+    // No per-LED mode: set the colour on the device's Static (mode-specific) mode
+    const mi=colorModeIdx(dev),c=leds[0]||{r:0,g:0,b:0};
+    if(mi>=0){await orgbPut('/devices/'+devIdx+'/mode',{mode:mi,r:c.r,g:c.g,b:c.b});updateModeChips(devIdx,mi);}
   }
-  await orgbPut('/devices/'+devIdx+'/leds',leds);
-  // Keep color alive — fires every 2 s for devices whose hardware may revert
-  startHold(devIdx,leds);
   if(hex){const{r,g,b}=hexRgb(hex);_lc[devIdx]=new Array(leds.length).fill(null).map(()=>({r,g,b}));if(_exp.has(devIdx))renderGrid(devIdx);}
 }
 let _aTimer=null,_aPend=null;
-function applyAllColor(hex){if(!_connected)return;_aPend=hex;clearTimeout(_aTimer);_aTimer=setTimeout(async()=>{const h=_aPend;if(!h)return;_aPend=null;const{r,g,b}=hexRgb(h);for(let i=0;i<_devices.length;i++){const d=_devices[i];if(d.skip||!d.num_leds)continue;try{await setDC(i,new Array(ledCnt(i)).fill({r,g,b}),h);}catch(e){}}},300);}
-async function setDevMode(devIdx,modeIdx){try{await orgbPut('/devices/'+devIdx+'/mode',{mode:modeIdx});_devices[devIdx]=await orgbGet('/devices/'+devIdx);}catch(e){}}
+function applyAllColor(hex){if(!_connected)return;_aPend=hex;clearTimeout(_aTimer);_aTimer=setTimeout(async()=>{const h=_aPend;if(!h)return;_aPend=null;const{r,g,b}=hexRgb(h);for(let i=0;i<_devices.length;i++){const d=_devices[i];if(!canColor(d))continue;try{await setDC(i,new Array(ledCnt(i)).fill({r,g,b}),h);}catch(e){}}},300);}
+// Picking a hardware mode chip hands control back to the device; the next colour
+// change switches it to Direct/Custom again.
+async function setDevMode(devIdx,modeIdx){clearHold(devIdx);_modeReady[devIdx]=false;try{await orgbPut('/devices/'+devIdx+'/mode',{mode:modeIdx});}catch(e){}}
 
 // ── Per-device animation engine ───────────────────────────────────────────────
 // Time-based: uses performance.now() as the clock source so animation position
@@ -280,8 +296,8 @@ async function startDevAnim(devIdx,type){
   const interval=Math.max(25,85-spd*6);
   _devAnim[devIdx]={type,startTime:performance.now(),running:true,drops:null,sending:false};
   updateAnimBtn(devIdx,type);
-  // Set device to direct mode — fire-and-forget so animation starts immediately
-  if((_devices[devIdx]?.type??-1)===2)orgbPut('/devices/'+devIdx+'/mode',{mode:staticIdx(devIdx)}).catch(()=>{});
+  // Software animations need the device in Direct/Custom mode — fire-and-forget
+  ensureDirect(devIdx).catch(()=>{});
   _devAnim[devIdx].timer=setInterval(()=>animTick(devIdx),interval);
 }
 
@@ -308,7 +324,7 @@ function buildQC(){document.getElementById('quick-colors').innerHTML=QCOLS.map((
 function renderDevices(){
   const list=document.getElementById('device-list');if(!_devices.length){list.innerHTML='';return;}
   list.innerHTML=_devices.map((d,i)=>{
-    if(d.skip||!d.num_leds)return`<div class="card device-card" id="dev-${i}" style="opacity:.4"><div class="card-header"><span class="card-title">${d.name||'Device '+i}</span><span class="badge badge-warn">UNSUPPORTED</span></div></div>`;
+    if(!canColor(d))return`<div class="card device-card" id="dev-${i}" style="opacity:.4"><div class="card-header"><span class="card-title">${d.name||'Device '+i}</span><span class="badge badge-warn">UNSUPPORTED</span></div></div>`;
     const cnt=ledCnt(i),isR=isRam(i);
     const cHex=d.colors?.[0]?rgbHex(d.colors[0].r||0,d.colors[0].g||0,d.colors[0].b||0):'#ff0000';
     const modeChips=(d.modes||[]).slice(0,8).map((m,mi)=>`<button class="mode-chip${d.active_mode===mi?' active':''}" onclick="setDevMode(${i},${mi});updateModeChips(${i},${mi})">${cleanMode(m.name,mi)}</button>`).join('');
@@ -379,7 +395,7 @@ function sL(id,on,col){const e=document.getElementById(id);if(!e)return;e.style.
 function updLights(s){if(s==='connected'){sL('sl-notopen',true);sL('sl-noserver',true);sL('sl-connected',true);}else if(s==='process_up'){sL('sl-notopen',true);sL('sl-noserver',false);sL('sl-connected',false);}else{sL('sl-notopen',false);sL('sl-noserver',false);sL('sl-connected',false);}}
 function setStatus(state,msg){
   const dot=document.getElementById('rgb-dot'),txt=document.getElementById('rgb-status-txt'),sub=document.getElementById('rgb-sub'),off=document.getElementById('rgb-offline'),on=document.getElementById('rgb-online');
-  if(state==='online'){_connected=true;dot.className='rgb-dot on';txt.textContent='CONNECTED';const a=_devices.filter(d=>!d.skip&&d.num_leds).length;sub.textContent=`${a} active (${_devices.length} total)`;off.style.display='none';on.style.display='block';buildQC();updLights('connected');}
+  if(state==='online'){_connected=true;dot.className='rgb-dot on';txt.textContent='CONNECTED';const a=_devices.filter(canColor).length;sub.textContent=`${a} active (${_devices.length} total)`;off.style.display='none';on.style.display='block';buildQC();updLights('connected');}
   else if(state==='offline'){_connected=false;dot.className='rgb-dot err';txt.textContent='OFFLINE';sub.textContent=msg||'OpenRGB not running';off.style.display='block';on.style.display='none';updLights('none');chkProc();}
   else{dot.className='rgb-dot';txt.textContent='CONNECTING...';sub.textContent='Trying localhost:6742...';updLights('none');}
 }
@@ -420,6 +436,7 @@ let _lastDevCount = -1;
 async function connSilent(){
   try{
     _devices=await orgbGet('/devices');
+    for(const k in _modeReady)delete _modeReady[k]; // fresh list/connection: set modes again
     if(!Array.isArray(_devices))throw new Error('Bad response');
     // Keep polling until device count is non-zero AND stable across two polls.
     // OpenRGB registers devices over 1-2s so we may catch it mid-scan.

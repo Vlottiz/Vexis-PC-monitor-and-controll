@@ -68,6 +68,9 @@ public class PopoutForm : Form
                 "Vexis", $"WebView2Cache_popout_{_pageName}"),
             options: webViewOptsP);
         await _webView.EnsureCoreWebView2Async(webViewEnv);
+        _webView.ZoomFactor = ZoomHelper.Parse(_config.Settings); // start at the main window's zoom
+        _webView.ZoomFactorChanged += (_, _) =>
+            _webView.CoreWebView2?.ExecuteScriptAsync(ZoomHelper.Script(_webView.ZoomFactor));
         _webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
         _webView.CoreWebView2.Settings.IsStatusBarEnabled            = false;
         _webView.CoreWebView2.Settings.AreDevToolsEnabled            = true;
@@ -119,7 +122,8 @@ public class PopoutForm : Form
             {
                 type = "config", colors = _config.Colors, settings = _config.Settings,
                 colorProfiles = _config.ColorProfiles, fanCurves = _config.FanCurves,
-                appVersion = MainForm.AppVersionText, startWithWindows = MainForm.StartWithWindowsEnabled
+                appVersion = MainForm.AppVersionText, startWithWindows = MainForm.StartWithWindowsEnabled,
+                zoom = Math.Round(_webView.ZoomFactor * 100)
             };
             string json = JsonSerializer.Serialize(payload, _json);
             await _webView.CoreWebView2.ExecuteScriptAsync(
@@ -135,6 +139,17 @@ public class PopoutForm : Form
             string raw = e.TryGetWebMessageAsString();
             // Always handle config requests locally
             if (raw.Contains("\"requestConfig\"")) { _ = SendConfig(); return; }
+            // Zoom buttons zoom this window, not the main one
+            if (raw.Contains("\"zoom\""))
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(raw);
+                if (doc.RootElement.TryGetProperty("type", out var t) && t.GetString() == "zoom")
+                {
+                    int delta = doc.RootElement.TryGetProperty("delta", out var d) ? d.GetInt32() : 0;
+                    ZoomHelper.Change(_webView, delta);
+                    return;
+                }
+            }
             // Route everything else back to MainForm via the callback
             _onMessage?.Invoke(raw);
         }
