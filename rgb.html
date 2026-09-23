@@ -28,6 +28,10 @@
   .anim-btn{padding:5px 10px;font-size:calc(10px*var(--fs-base,1));letter-spacing:.06em;font-family:monospace;background:rgba(10,8,3,.8);border:1px solid rgba(68,51,0,.3);border-radius:3px;cursor:pointer;color:var(--label-dim);transition:all .15s;}
   .anim-btn:hover{border-color:rgba(255,204,0,.4);color:var(--label);}
   .anim-btn.anim-on{border-color:var(--header-title);color:var(--header-title);background:rgba(255,204,0,.08);}
+  .fx-off .fx-body{opacity:.35;filter:grayscale(1);pointer-events:none;user-select:none;}
+  .fx-off .fx-body *{cursor:not-allowed;}
+  .fx-note{font-size:calc(10px*var(--fs-base,1));line-height:1.6;color:var(--label);background:rgba(80,60,0,.15);border:1px solid rgba(180,120,0,.3);border-radius:4px;padding:8px 12px;margin:8px 0 6px;}
+  .fx-note b{color:var(--header-title);}
   .anim-stop{color:#cc4444;border-color:rgba(180,40,40,.3);}
   .anim-stop:hover{background:rgba(180,40,40,.15);color:#ff6666;}
   .anim-spd{flex:1;min-width:60px;max-width:120px;accent-color:var(--mem-acc);}
@@ -103,15 +107,17 @@
           <button class="btn btn-primary" onclick="applyAllColor(document.getElementById('custom-color').value)" style="padding:5px 12px">APPLY ALL</button>
         </div>
         <div class="cprow">
-          <label style="flex:0 0 auto">BRIGHTNESS</label>
+          <label style="flex:0 0 auto" title="Scales every device; each device also has its own slider">MASTER BRIGHTNESS</label>
           <input type="range" class="range-slider" id="rgb-bright" min="0" max="100" step="1" value="100" style="flex:1" oninput="setBrightness(this.value)">
           <span class="control-value" id="rgb-bright-val" style="min-width:44px;text-align:right">100%</span>
         </div>
       </div>
 
       <!-- Looping effects, all devices -->
-      <div class="card">
-        <div class="card-header"><span class="card-title">EFFECTS &#x2014; ALL DEVICES</span><span class="badge badge-dim" id="fx-pill" style="display:none"></span></div>
+      <div class="card fx-off">
+        <div class="card-header"><span class="card-title">EFFECTS &#x2014; ALL DEVICES</span><span class="badge badge-warn">UNDER DEVELOPMENT</span><span class="badge badge-dim" id="fx-pill" style="display:none"></span></div>
+        <div class="fx-note">&#x26A0; These software patterns are switched off for now: Vexis sends each frame through OpenRGB and it is too laggy on some devices. They will return in a later update.<br>Your devices' <b>built-in animations still work</b> &#x2014; pick them with the mode buttons on each device below.</div>
+        <div class="fx-body">
         <div class="anim-row" id="fx-row"></div>
         <div class="cprow">
           <label style="flex:0 0 auto">COLORS</label>
@@ -120,7 +126,7 @@
           <label style="flex:0 0 auto;margin-left:10px">SPEED</label>
           <input type="range" class="range-slider" id="fx-spd" min="1" max="10" step="1" value="5" style="flex:1" oninput="fxSave();fxRestartTimers()">
         </div>
-        <div style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);letter-spacing:.05em;margin-top:4px">Effects loop until you pick a colour, a hardware mode or STOP, and resume when Vexis reconnects. Devices without per-LED control keep their hardware mode.</div>
+        </div>
       </div>
 
 <div id="device-list"></div>
@@ -141,21 +147,51 @@ async function orgbGet(p){const r=await orgbCall('GET',p,null);return typeof r==
 // change can re-send them.
 let _bright=Math.max(0,Math.min(100,parseInt(localStorage.getItem('pcm-rgb-brightness')??'100')||0));
 const _last={};
-function dim(c){const k=_bright/100;return{r:Math.round((c.r||0)*k),g:Math.round((c.g||0)*k),b:Math.round((c.b||0)*k)};}
+// Per-device brightness (0-100) on top of the master slider, saved by device.
+// Keyed by position + name so two identical RAM sticks keep separate values.
+let _devBright={};try{_devBright=JSON.parse(localStorage.getItem('pcm-rgb-bright-dev')||'{}')||{};}catch{}
+function devKey(i){return i+':'+(_devices[i]?.name||'');}
+function devB(i){const v=_devBright[devKey(i)];return v==null?100:v;}
+function effB(i){return Math.round(_bright*devB(i)/100);}              // effective %, 0-100
+function dim(c,i){const k=effB(i)/100;return{r:Math.round((c.r||0)*k),g:Math.round((c.g||0)*k),b:Math.round((c.b||0)*k)};}
 async function orgbPut(p,b){
   const m=/^\/devices\/(\d+)\/(leds|mode)$/.exec(p);
-  if(m&&m[2]==='leds'&&Array.isArray(b)){_last[m[1]]={p,b};b=b.map(dim);}
-  else if(m&&m[2]==='mode'&&b&&b.r!=null){_last[m[1]]={p,b};b={...b,...dim(b)};}
+  if(m&&m[2]==='leds'&&Array.isArray(b)){const i=+m[1];_last[i]={p,b};b=b.map(c=>dim(c,i));}
+  else if(m&&m[2]==='mode'&&b&&b.r!=null){const i=+m[1];_last[i]={p,b};b={...b,...dim(b,i)};}
   await orgbCall('PUT',p,JSON.stringify(b));
+}
+// Hardware mode picked from a device's mode chips (null = Vexis is sending colours)
+const _hwMode={};
+function hwModeBright(i,mi){return _devices[i]?.modes?.[mi]?.has_brightness?effB(i):undefined;}
+// Re-apply brightness to one device: re-send its last colours, or set the hardware
+// mode's own brightness when a built-in animation is running.
+function applyBright(i){
+  if(!_connected||_devAnim[i])return;
+  const mi=_hwMode[i];
+  if(mi!=null){const br=hwModeBright(i,mi);if(br!=null)orgbPut('/devices/'+i+'/mode',{mode:mi,brightness:br}).catch(()=>{});return;}
+  const l=_last[i];if(l)orgbPut(l.p,l.b).catch(()=>{});
 }
 let _brightT=null;
 function setBrightness(v){
   _bright=Math.max(0,Math.min(100,parseInt(v)||0));
   try{localStorage.setItem('pcm-rgb-brightness',String(_bright));}catch{}
   const lbl=document.getElementById('rgb-bright-val');if(lbl)lbl.textContent=_bright+'%';
-  // Re-send the current static colours (running effects pick it up next frame)
+  const sl=document.getElementById('rgb-bright');if(sl)sl.value=_bright;
   clearTimeout(_brightT);
-  _brightT=setTimeout(()=>{if(!_connected)return;for(const i in _last){if(_devAnim[i])continue;const l=_last[i];orgbPut(l.p,l.b).catch(()=>{});}},120);
+  _brightT=setTimeout(()=>{for(let i=0;i<_devices.length;i++)applyBright(i);},120);
+}
+const _devBrightT={};
+function setDevBrightness(i,v){
+  v=Math.max(0,Math.min(100,parseInt(v)||0));
+  // Synced RAM sticks share one brightness
+  const group=(isRam(i)&&_ramSync)?_devices.map((_,j)=>j).filter(j=>isRam(j)):[i];
+  group.forEach(j=>{
+    _devBright[devKey(j)]=v;
+    const s=document.getElementById('dev-bright-'+j);if(s)s.value=v;
+    const l=document.getElementById('dev-bright-val-'+j);if(l)l.textContent=v+'%';
+    clearTimeout(_devBrightT[j]);_devBrightT[j]=setTimeout(()=>applyBright(j),120);
+  });
+  try{localStorage.setItem('pcm-rgb-bright-dev',JSON.stringify(_devBright));}catch{}
 }
 
 const QCOLS=[{c:'#ff0000',l:'Red'},{c:'#ff6600',l:'Orange'},{c:'#ffff00',l:'Yellow'},{c:'#00ff00',l:'Green'},{c:'#00ffff',l:'Cyan'},{c:'#0066ff',l:'Blue'},{c:'#aa00ff',l:'Purple'},{c:'#ff00cc',l:'Pink'},{c:'#ffffff',l:'White'},{c:'#888888',l:'Half'},{c:'#222222',l:'Dim'},{c:'#000000',l:'Off'}];
@@ -190,6 +226,7 @@ function canColor(d){return !!d&&!d.skip&&((d.per_led&&d.num_leds>0)||colorModeI
 async function ensureDirect(devIdx){
   const d=_devices[devIdx];
   if(!d||!d.per_led||_modeReady[devIdx])return;
+  delete _hwMode[devIdx];
   await orgbPut('/devices/'+devIdx+'/mode',{custom:true});
   _modeReady[devIdx]=true;
 }
@@ -235,6 +272,7 @@ function clearHold(devIdx){if(_hold[devIdx]){clearTimeout(_hold[devIdx]);delete 
 async function setDC(devIdx,leds,hex){
   if(!leds||!leds.length)return;
   if(_devAnim[devIdx]){stopDevAnim(devIdx);if(!Object.keys(_devAnim).length)stopFx();else updateAnimBtn();}
+  delete _hwMode[devIdx];
   const dev=_devices[devIdx]||{};
   if(dev.per_led){
     await ensureDirect(devIdx);
@@ -252,7 +290,7 @@ let _aTimer=null,_aPend=null;
 function applyAllColor(hex){if(!_connected)return;_aPend=hex;clearTimeout(_aTimer);_aTimer=setTimeout(async()=>{const h=_aPend;if(!h)return;_aPend=null;const{r,g,b}=hexRgb(h);for(let i=0;i<_devices.length;i++){const d=_devices[i];if(!canColor(d))continue;try{await setDC(i,new Array(ledCnt(i)).fill({r,g,b}),h);}catch(e){}}},300);}
 // Picking a hardware mode chip hands control back to the device; the next colour
 // change switches it to Direct/Custom again.
-async function setDevMode(devIdx,modeIdx){if(_devAnim[devIdx]){stopDevAnim(devIdx);if(!Object.keys(_devAnim).length)stopFx();else updateAnimBtn();}clearHold(devIdx);delete _last[devIdx];_modeReady[devIdx]=false;try{await orgbPut('/devices/'+devIdx+'/mode',{mode:modeIdx});}catch(e){}}
+async function setDevMode(devIdx,modeIdx){if(_devAnim[devIdx]){stopDevAnim(devIdx);if(!Object.keys(_devAnim).length)stopFx();else updateAnimBtn();}clearHold(devIdx);delete _last[devIdx];_modeReady[devIdx]=false;_hwMode[devIdx]=modeIdx;const br=hwModeBright(devIdx,modeIdx);try{await orgbPut('/devices/'+devIdx+'/mode',br!=null?{mode:modeIdx,brightness:br}:{mode:modeIdx});}catch(e){}}
 
 // ── Per-device animation engine ───────────────────────────────────────────────
 // Time-based: uses performance.now() as the clock source so animation position
@@ -382,8 +420,10 @@ function fxSave(){
   try{localStorage.setItem('pcm-rgb-fx',JSON.stringify({type:_fx.type,c1:_fx.c1,c2:_fx.c2,spd:_fx.spd}));}catch{}
 }
 function fxTargets(){const r=[];for(let i=0;i<_devices.length;i++){const d=_devices[i];if(canColor(d)&&d.per_led&&d.num_leds>0)r.push(i);}return r;}
+// Software effects are paused (too laggy over OpenRGB for now) — flip to re-enable
+const FX_ENABLED=false;
 function startFx(type){
-  if(!_connected)return;
+  if(!_connected||!FX_ENABLED)return;
   if(_fx.type===type&&Object.keys(_devAnim).length){stopFx();return;}   // click again = stop
   _fx.type=type;_fx.start=performance.now();fxSave();
   fxTargets().forEach(i=>startDevAnim(i,type));
@@ -400,7 +440,7 @@ function buildFx(){
   set('rgb-bright',_bright);const bl=document.getElementById('rgb-bright-val');if(bl)bl.textContent=_bright+'%';
   updateAnimBtn();
 }
-function resumeFx(){if(_fx.type&&!Object.keys(_devAnim).length){const t=_fx.type;_fx.type=null;startFx(t);}}
+function resumeFx(){if(!FX_ENABLED){_fx.type=null;return;}if(_fx.type&&!Object.keys(_devAnim).length){const t=_fx.type;_fx.type=null;startFx(t);}}
 
 // ── Render ───────────────────────────────────────────────────────────────────
 function buildQC(){document.getElementById('quick-colors').innerHTML=QCOLS.map(({c,l})=>`<div class="qcol" style="background:${c}" title="${l}" onclick="applyAllColor('${c}');document.getElementById('custom-color').value='${c}'"></div>`).join('');}
@@ -411,7 +451,7 @@ function renderDevices(){
     if(!canColor(d))return`<div class="card device-card" id="dev-${i}" style="opacity:.4"><div class="card-header"><span class="card-title">${d.name||'Device '+i}</span><span class="badge badge-warn">UNSUPPORTED</span></div></div>`;
     const cnt=ledCnt(i),isR=isRam(i);
     const cHex=d.colors?.[0]?rgbHex(d.colors[0].r||0,d.colors[0].g||0,d.colors[0].b||0):'#ff0000';
-    const modeChips=(d.modes||[]).slice(0,8).map((m,mi)=>`<button class="mode-chip${d.active_mode===mi?' active':''}" onclick="setDevMode(${i},${mi});updateModeChips(${i},${mi})">${cleanMode(m.name,mi)}</button>`).join('');
+    const modeChips=(d.modes||[]).map((m,mi)=>`<button class="mode-chip${d.active_mode===mi?' active':''}" onclick="pickMode(${i},${mi})">${cleanMode(m.name,mi)}</button>`).join('');
     return`<div class="card device-card" id="dev-${i}">
       <div class="card-header">
         <span class="card-title">${d.name||'Device '+i}</span>
@@ -420,11 +460,16 @@ function renderDevices(){
         </div>
       </div>
       ${isR?`<div class="rsbar"><div class="rsd${_ramSync?'':' off'}"></div><span class="rsl" style="flex:1;color:var(--label)">${_ramSync?'RAM STICKS SYNCED':'RAM STICKS UNLINKED'}</span><button class="rst" onclick="toggleSync()">TOGGLE SYNC</button></div>`:''}
-      ${(!isR&&modeChips)?`<div class="mode-row" id="dev-modes-${i}">${modeChips}</div>`:''}
+      ${modeChips?`<div class="mode-row" id="dev-modes-${i}">${modeChips}</div>`:''}
       <div class="cprow">
         <label>APPLY ALL LEDS</label>
         <input type="color" class="bp" id="dev-col-${i}" value="${cHex}" oninput="clearTimeout(this._t);this._t=setTimeout(()=>${isR?'applyRAM':'setDC'}(${i},new Array(${cnt}).fill(hexRgb(this.value)),this.value),200)">
         <button class="btn btn-primary" onclick="${isR?'applyRAM':'setDC'}(${i},new Array(${cnt}).fill(hexRgb(document.getElementById('dev-col-${i}').value)),document.getElementById('dev-col-${i}').value)" style="padding:5px 10px">APPLY</button>
+      </div>
+      <div class="cprow">
+        <label style="flex:0 0 auto" title="On top of the master slider. Built-in hardware modes follow it only if the device supports brightness.">BRIGHTNESS</label>
+        <input type="range" class="range-slider" id="dev-bright-${i}" min="0" max="100" step="1" value="${devB(i)}" style="flex:1" oninput="setDevBrightness(${i},this.value)">
+        <span class="control-value" id="dev-bright-val-${i}" style="min-width:44px;text-align:right">${devB(i)}%</span>
       </div>
 
       <div class="ltbtn" id="lt-${i}" onclick="toggleLed(${i})">&#x25C8; INDIVIDUAL LEDs &#x25BC;</div>
@@ -439,6 +484,12 @@ function renderDevices(){
       </div>
     </div>`;
   }).join('');
+}
+// Mode chip click; synced RAM sticks follow when they have a mode of the same name
+function pickMode(i,mi){
+  const name=_devices[i]?.modes?.[mi]?.name;
+  const group=(isRam(i)&&_ramSync)?_devices.map((_,j)=>j).filter(j=>isRam(j)):[i];
+  group.forEach(j=>{const mj=j===i?mi:(_devices[j]?.modes||[]).findIndex(m=>m.name===name);if(mj>=0){setDevMode(j,mj);updateModeChips(j,mj);}});
 }
 function updateModeChips(devIdx,am){document.querySelectorAll('#dev-modes-'+devIdx+' .mode-chip').forEach((c,mi)=>c.classList.toggle('active',mi===am));}
 
