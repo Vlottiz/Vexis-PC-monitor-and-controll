@@ -15,6 +15,22 @@ public class OpenRGBClient : IDisposable
     private const uint PKT_DEV_DATA     = 1;
     private const uint PKT_UPDATE_LEDS  = 1050;  // NET_PACKET_ID_RGBCONTROLLER_UPDATELEDS
     private const uint PKT_UPDATE_MODE  = 1101;  // NET_PACKET_ID_RGBCONTROLLER_UPDATEMODE
+    private const uint PKT_CUSTOM_MODE  = 1100;  // NET_PACKET_ID_RGBCONTROLLER_SETCUSTOMMODE (no body)
+    private const uint MAX_PROTOCOL     = 5;     // highest SDK protocol this client implements
+
+    // Mode colour types (RGBController.h)
+    public const int MODE_COLORS_NONE = 0, MODE_COLORS_PER_LED = 1, MODE_COLORS_MODE_SPECIFIC = 2, MODE_COLORS_RANDOM = 3;
+
+    // One device mode, exactly as OpenRGB describes it — kept so UpdateMode can send it back
+    private sealed class ModeInfo
+    {
+        public string Name = "";
+        public int  Value;
+        public uint Flags, SpeedMin, SpeedMax, BrightMin, BrightMax, ColorsMin, ColorsMax, Speed, Brightness, Direction, ColorMode;
+        public List<uint> Colors = new();
+    }
+    private readonly Dictionary<uint, List<ModeInfo>> _modes = new();
+    private uint _proto = MAX_PROTOCOL; // negotiated: min(ours, server's)
 
     private readonly int     _port;
     private TcpClient?       _tcp;
@@ -39,15 +55,17 @@ public class OpenRGBClient : IDisposable
         // Send our supported version (3), server replies with agreed version
         try
         {
-            await SendAsync(0, 40, BitConverter.GetBytes((uint)5));
+            await SendAsync(0, 40, BitConverter.GetBytes(MAX_PROTOCOL));
             var (_, _, verData) = await RecvAsync();
-            uint agreedVer = verData.Length >= 4 ? BitConverter.ToUInt32(verData, 0) : 0;
-            Console.WriteLine($"[orgb] Connected on port {_port}, protocol v{agreedVer}");
+            uint serverVer = verData.Length >= 4 ? BitConverter.ToUInt32(verData, 0) : 0;
+            _proto = Math.Min(MAX_PROTOCOL, serverVer);
+            Console.WriteLine($"[orgb] Connected on port {_port}, server protocol v{serverVer}, using v{_proto}");
             _failedDevices.Clear(); // reset on fresh connection
         }
         catch
         {
-            Console.WriteLine($"[orgb] Connected on port {_port} (no version negotiation)");
+            _proto = 0; // very old server without version negotiation
+            Console.WriteLine($"[orgb] Connected on port {_port} (no version negotiation, protocol v0)");
         }
     }
 
@@ -96,7 +114,11 @@ public class OpenRGBClient : IDisposable
     {
         int got = 0;
         while (got < count)
-            got += await _ns!.ReadAsync(buf.AsMemory(got, count - got));
+        {
+            int n = await _ns!.ReadAsync(buf.AsMemory(got, count - got));
+            if (n == 0) throw new IOException("OpenRGB closed the connection");
+            got += n;
+        }
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
@@ -117,6 +139,7 @@ public class OpenRGBClient : IDisposable
                 await SendAsync((uint)i, PKT_DEV_DATA, BitConverter.GetBytes((uint)i));
                 var (_, _, dd) = await RecvAsync();
                 var dev = ParseDevice(i, dd);
+                _modes[(uint)i] = _lastParsedModes;
                 arr.Add(dev);
             }
             return arr.ToJsonString();
@@ -124,28 +147,83 @@ public class OpenRGBClient : IDisposable
         finally { _lock.Release(); }
     }
 
-    public Task SetCustomModeAsync(uint devIdx)
+    /// <summary>
+    /// Asks OpenRGB to switch the device to its software-control mode. OpenRGB picks
+    /// "Direct", then "Custom", then "Static" (per-LED or mode-specific colours).
+    /// Without this, devices like DRAM keep running their hardware animation and
+    /// every UpdateLEDs just restarts it.
+    /// </summary>
+    public async Task SetCustomModeAsync(uint devIdx)
     {
-        Console.WriteLine($"[orgb] SetCustomMode dev={devIdx} (no-op)");
-        return Task.CompletedTask;
+        await _lock.WaitAsync();
+        try
+        {
+            if (!IsConnected) await ConnectAsync();
+            await SendAsync(devIdx, PKT_CUSTOM_MODE, Array.Empty<byte>());
+            Console.WriteLine($"[orgb] SetCustomMode dev={devIdx}");
+        }
+        finally { _lock.Release(); }
     }
 
     // Reset failed device list (e.g. when OpenRGB restarts)
     public void ResetFailedDevices() => _failedDevices.Clear();
 
-    public async Task SetModeAsync(uint devIdx, int modeIdx)
+    /// <summary>
+    /// Switches a device to one of its modes (UpdateMode). If a colour is given and the
+    /// mode takes mode-specific colours (e.g. a GPU's "Static"), every mode colour is set
+    /// to it — that is how devices without a per-LED mode get a colour.
+    /// </summary>
+    public async Task SetModeAsync(uint devIdx, int modeIdx, (byte r, byte g, byte b)? color = null)
     {
         await _lock.WaitAsync();
         try
         {
-            // UpdateMode packet: uint32 data_size, then mode data
-            // Simplified: just send mode index as uint32
-            var pkt = new List<byte>();
-            pkt.AddRange(BitConverter.GetBytes((uint)modeIdx));
-            await SendAsync(devIdx, PKT_UPDATE_MODE, pkt.ToArray());
-            Console.WriteLine($"[orgb] SetMode dev={devIdx} mode={modeIdx}");
+            if (!IsConnected) await ConnectAsync();
+            if (!_modes.TryGetValue(devIdx, out var modes) || modeIdx < 0 || modeIdx >= modes.Count)
+            {
+                Console.WriteLine($"[orgb] SetMode dev={devIdx} mode={modeIdx} skipped (unknown mode — refresh devices)");
+                return;
+            }
+            var m = modes[modeIdx];
+            if (color is { } c && m.ColorMode == MODE_COLORS_MODE_SPECIFIC)
+            {
+                uint packed = (uint)(c.r | (c.g << 8) | (c.b << 16)); // RGBColor = 0x00BBGGRR
+                int n = Math.Max(Math.Max(1, (int)m.ColorsMin), m.Colors.Count);
+                if (m.ColorsMax > 0) n = Math.Min(n, (int)m.ColorsMax);
+                m.Colors = Enumerable.Repeat(packed, n).ToList();
+            }
+
+            var body = new List<byte>();
+            body.AddRange(new byte[4]);                    // data_size, filled in below
+            body.AddRange(BitConverter.GetBytes(modeIdx)); // mode_idx (int)
+            WriteMode(body, m, _proto);
+            var pkt = body.ToArray();
+            BitConverter.TryWriteBytes(pkt.AsSpan(0, 4), (uint)pkt.Length);
+            await SendAsync(devIdx, PKT_UPDATE_MODE, pkt);
+            Console.WriteLine($"[orgb] SetMode dev={devIdx} mode={modeIdx} '{m.Name}' colorMode={m.ColorMode} colors={m.Colors.Count}");
         }
         finally { _lock.Release(); }
+    }
+
+    // Mode description, same layout OpenRGB sends in device data (protocol < 6)
+    private static void WriteMode(List<byte> o, ModeInfo m, uint proto)
+    {
+        var name = Encoding.UTF8.GetBytes(m.Name);
+        o.AddRange(BitConverter.GetBytes((ushort)(name.Length + 1)));
+        o.AddRange(name); o.Add(0);
+        o.AddRange(BitConverter.GetBytes(m.Value));
+        o.AddRange(BitConverter.GetBytes(m.Flags));
+        o.AddRange(BitConverter.GetBytes(m.SpeedMin));
+        o.AddRange(BitConverter.GetBytes(m.SpeedMax));
+        if (proto >= 3) { o.AddRange(BitConverter.GetBytes(m.BrightMin)); o.AddRange(BitConverter.GetBytes(m.BrightMax)); }
+        o.AddRange(BitConverter.GetBytes(m.ColorsMin));
+        o.AddRange(BitConverter.GetBytes(m.ColorsMax));
+        o.AddRange(BitConverter.GetBytes(m.Speed));
+        if (proto >= 3) o.AddRange(BitConverter.GetBytes(m.Brightness));
+        o.AddRange(BitConverter.GetBytes(m.Direction));
+        o.AddRange(BitConverter.GetBytes(m.ColorMode));
+        o.AddRange(BitConverter.GetBytes((ushort)m.Colors.Count));
+        foreach (var c in m.Colors) o.AddRange(BitConverter.GetBytes(c));
     }
 
     public async Task SetLedsAsync(uint devIdx, List<Dictionary<string, int>> leds)
@@ -209,131 +287,120 @@ public class OpenRGBClient : IDisposable
     }
 
     // ── Device data parser ────────────────────────────────────────────────────
-    // Strategy: do a best-effort forward parse to extract name/vendor/type/modes,
-    // but always fall back to backward scan for LED count — it's the most reliable
-    // approach across OpenRGB protocol versions (v3, v4, v5+).
-    // Protocol v5 added fields to the mode struct; rather than versioning the parser
-    // we guard every read and use the backward scan as the authoritative LED source.
-    private static JsonObject ParseDevice(int idx, byte[] d)
-    {
-        // ── Always do the backward scan first — it never throws ───────────────
-        // The colors section is always the LAST field: [uint16 N][RGBColor*N]
-        // Scan from largest possible N down, find the uint16 that equals N.
-        int scannedN = 0;
-        {
-            int maxPossible = Math.Min(2048, (d.Length - 4) / 4);
-            for (int N = maxPossible; N >= 4; N--)
-            {
-                int scanPos = d.Length - 2 - N * 4;
-                if (scanPos < 4 || scanPos + 1 >= d.Length) continue;
-                if (BitConverter.ToUInt16(d, scanPos) != (ushort)N) continue;
-                // Extra check: byte before should not form a matching N+1
-                bool ok = true;
-                if (scanPos >= 6 && BitConverter.ToUInt16(d, scanPos - 4) == (ushort)(N + 1))
-                    ok = false;
-                if (ok) { scannedN = N; break; }
-            }
-        }
+    // Follows OpenRGB's RGBController::GetDeviceDescriptionData for protocol v0-v5:
+    //   data_size, type, name, [vendor v1+], description, version, serial, location,
+    //   num_modes(u16), active_mode(i32), modes[], num_zones(u16), zones[],
+    //   num_leds(u16), leds[], num_colors(u16), colors[],
+    //   [v5+: led display names, device flags]
+    private List<ModeInfo> _lastParsedModes = new();
 
-        // ── Forward parse — wrapped in try so a bad device can never crash ────
-        string name = $"Device {idx}";
-        string vendor = "";
-        int devType = 0, activeMode = 0;
-        var modes = new JsonArray();
-        int forwardLeds = 0;
+    private JsonObject ParseDevice(int idx, byte[] d)
+    {
+        string name = $"Device {idx}", vendor = "";
+        int devType = 0, activeMode = 0, zoneLeds = 0, numLeds = 0;
+        var modes = new List<ModeInfo>();
+        var colors = new JsonArray();
+        bool complete = false;
 
         try
         {
             int p = 0;
-            Read32(d, ref p);                          // data_size
-            devType    = (int)Read32(d, ref p);        // device_type
-            name       = ReadStr(d, ref p);
-            vendor     = ReadStr(d, ref p);
-            ReadStr(d, ref p);                         // description
-            ReadStr(d, ref p);                         // version
-            ReadStr(d, ref p);                         // serial
-            ReadStr(d, ref p);                         // location
-            activeMode = ReadU16(d, ref p);
+            Read32(d, ref p);                                   // data_size
+            devType = (int)Read32(d, ref p);                    // device_type
+            name    = ReadStr(d, ref p);
+            if (_proto >= 1) vendor = ReadStr(d, ref p);
+            ReadStr(d, ref p);                                  // description
+            ReadStr(d, ref p);                                  // version
+            ReadStr(d, ref p);                                  // serial
+            ReadStr(d, ref p);                                  // location
+
             int numModes = ReadU16(d, ref p);
-
-            for (int m = 0; m < numModes && p + 2 < d.Length; m++)
+            activeMode   = (int)Read32(d, ref p);
+            for (int m = 0; m < numModes; m++)
             {
-                string modeName = ReadStr(d, ref p);
-                // Mode struct: value(4) flags(4) speed_min(4) speed_max(4)
-                //   brightness_min(4) brightness_max(4) colors_min(4) colors_max(4)
-                //   speed(4) brightness(4) direction(4) color_mode(4) = 48 bytes fixed
-                // Protocol v5+ may add more fields but we skip via color count anyway
-                if (p + 48 > d.Length) break;
-                Read32(d, ref p); // value
-                uint flags = Read32(d, ref p);
-                Read32(d, ref p); // speed_min
-                Read32(d, ref p); // speed_max
-                Read32(d, ref p); // brightness_min
-                Read32(d, ref p); // brightness_max
-                Read32(d, ref p); // colors_min
-                Read32(d, ref p); // colors_max
-                Read32(d, ref p); // speed
-                Read32(d, ref p); // brightness
-                Read32(d, ref p); // direction
-                Read32(d, ref p); // color_mode
-                if (p + 2 > d.Length) break;
-                int numModeColors = ReadU16(d, ref p);
-                if (numModeColors < 0 || numModeColors > 2048) break; // sanity
-                for (int c = 0; c < numModeColors && p + 4 <= d.Length; c++) p += 4;
-                var mo = new JsonObject(); mo["name"] = modeName; mo["flags"] = (int)flags;
-                modes.Add(mo);
+                var mi = new ModeInfo { Name = ReadStr(d, ref p) };
+                mi.Value     = (int)Read32(d, ref p);
+                mi.Flags     = Read32(d, ref p);
+                mi.SpeedMin  = Read32(d, ref p);
+                mi.SpeedMax  = Read32(d, ref p);
+                if (_proto >= 3) { mi.BrightMin = Read32(d, ref p); mi.BrightMax = Read32(d, ref p); }
+                mi.ColorsMin = Read32(d, ref p);
+                mi.ColorsMax = Read32(d, ref p);
+                mi.Speed     = Read32(d, ref p);
+                if (_proto >= 3) mi.Brightness = Read32(d, ref p);
+                mi.Direction = Read32(d, ref p);
+                mi.ColorMode = Read32(d, ref p);
+                int nc = ReadU16(d, ref p);
+                for (int c = 0; c < nc; c++) mi.Colors.Add(Read32(d, ref p));
+                modes.Add(mi);
             }
 
-            // Parse zones to get a forward LED count as fallback
-            if (p + 2 <= d.Length)
+            int numZones = ReadU16(d, ref p);
+            for (int z = 0; z < numZones; z++)
             {
-                int numZones = ReadU16(d, ref p);
-                for (int z = 0; z < numZones && p + 2 < d.Length; z++)
+                ReadStr(d, ref p);                              // zone name
+                Read32(d, ref p);                               // zone type
+                Read32(d, ref p);                               // leds_min
+                Read32(d, ref p);                               // leds_max
+                zoneLeds += (int)Read32(d, ref p);              // leds_count
+                int matrixBytes = ReadU16(d, ref p);
+                p += matrixBytes;                               // height, width, map
+                if (_proto >= 4)
                 {
-                    ReadStr(d, ref p);               // zone name
-                    if (p + 18 > d.Length) break;
-                    Read32(d, ref p);                // zone_type
-                    Read32(d, ref p);                // leds_min
-                    Read32(d, ref p);                // leds_max
-                    forwardLeds += (int)Read32(d, ref p); // leds_count
-                    if (p + 2 > d.Length) break;
-                    int matrixBytes = ReadU16(d, ref p);
-                    if (matrixBytes > 0 && p + matrixBytes <= d.Length) p += matrixBytes;
+                    int segs = ReadU16(d, ref p);
+                    for (int sg = 0; sg < segs; sg++)
+                    { ReadStr(d, ref p); Read32(d, ref p); Read32(d, ref p); Read32(d, ref p); }
                 }
+                if (_proto >= 5) Read32(d, ref p);              // zone flags
             }
+
+            numLeds = ReadU16(d, ref p);
+            for (int l = 0; l < numLeds; l++) { ReadStr(d, ref p); Read32(d, ref p); } // name, value
+
+            int numColors = ReadU16(d, ref p);
+            for (int c = 0; c < numColors; c++)
+            {
+                var col = new JsonObject { ["r"] = (int)d[p], ["g"] = (int)d[p + 1], ["b"] = (int)d[p + 2] };
+                colors.Add(col);
+                p += 4;
+            }
+            complete = true;
         }
         catch (Exception ex)
         {
-            // Forward parse failed partway — that's fine, we still have scannedN
-            Console.WriteLine($"[orgb] Device {idx} forward parse partial: {ex.Message} — using backward scan ({scannedN} LEDs)");
+            Console.WriteLine($"[orgb] Device {idx} ({name}) parse error: {ex.Message}");
         }
 
-        // ── Build colors from backward scan (most reliable) ───────────────────
-        var colors = new JsonArray();
-        if (scannedN > 0)
-        {
-            int colStart = d.Length - scannedN * 4;
-            for (int c = 0; c < scannedN && colStart + c*4 + 3 < d.Length; c++)
+        int effectiveLeds = colors.Count > 0 ? colors.Count : Math.Max(numLeds, zoneLeds);
+        _lastParsedModes = modes;
+
+        var modeArr = new JsonArray();
+        foreach (var m in modes)
+            modeArr.Add(new JsonObject
             {
-                byte r = d[colStart + c*4]; byte g = d[colStart + c*4 + 1]; byte b = d[colStart + c*4 + 2];
-                var col = new JsonObject(); col["r"]=(int)r; col["g"]=(int)g; col["b"]=(int)b;
-                colors.Add(col);
-            }
-        }
+                ["name"] = m.Name, ["flags"] = (int)m.Flags, ["color_mode"] = (int)m.ColorMode,
+                ["colors_min"] = (int)m.ColorsMin, ["colors_max"] = (int)m.ColorsMax
+            });
+        bool perLed      = modes.Any(m => m.ColorMode == MODE_COLORS_PER_LED);
+        bool modeColored = modes.Any(m => m.ColorMode == MODE_COLORS_MODE_SPECIFIC);
 
-        int effectiveLeds = scannedN > 0 ? scannedN : Math.Max(forwardLeds, colors.Count);
-        Console.WriteLine($"[orgb] Device {idx}: {name}, leds={effectiveLeds} (scan={scannedN} fwd={forwardLeds})");
+        Console.WriteLine($"[orgb] Device {idx}: {name} type={devType} leds={effectiveLeds} modes={modes.Count} " +
+                          $"(perLed={perLed}, modeColors={modeColored}{(complete ? "" : ", PARTIAL")}) " +
+                          $"[{string.Join(", ", modes.Select(m => $"{m.Name}:{m.ColorMode}"))}]");
 
-        var dev = new JsonObject();
-        dev["name"]        = name.Length > 0 ? name : $"Device {idx}";
-        dev["vendor"]      = vendor;
-        dev["type"]        = devType;
-        dev["active_mode"] = activeMode;
-        dev["modes"]       = modes;
-        dev["leds"]        = effectiveLeds;
-        dev["num_leds"]    = effectiveLeds;
-        dev["colors"]      = colors;
-        return dev;
+        return new JsonObject
+        {
+            ["name"]        = name.Length > 0 ? name : $"Device {idx}",
+            ["vendor"]      = vendor,
+            ["type"]        = devType,
+            ["active_mode"] = activeMode,
+            ["modes"]       = modeArr,
+            ["per_led"]     = perLed,
+            ["mode_colors"] = modeColored,
+            ["leds"]        = effectiveLeds,
+            ["num_leds"]    = effectiveLeds,
+            ["colors"]      = colors
+        };
     }
 
     // ── Binary helpers ────────────────────────────────────────────────────────
@@ -344,10 +411,10 @@ public class OpenRGBClient : IDisposable
 
     private static string ReadStr(byte[] d, ref int p)
     {
-        if (p + 2 > d.Length) return "";
-        int len = BitConverter.ToUInt16(d, p); p += 2;
-        if (len <= 0 || p + len > d.Length) return "";
-        var s = Encoding.UTF8.GetString(d, p, len - 1); // exclude null terminator
+        int len = BitConverter.ToUInt16(d, p); p += 2;       // throws past the end
+        if (len == 0) return "";
+        if (p + len > d.Length) throw new IndexOutOfRangeException("string past end of data");
+        var s = Encoding.UTF8.GetString(d, p, len - 1);   // exclude null terminator
         p += len;
         return s;
     }

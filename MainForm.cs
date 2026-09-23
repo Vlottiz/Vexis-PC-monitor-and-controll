@@ -111,6 +111,16 @@ public class MainForm : Form
             options: webViewOpts);
         await _webView.EnsureCoreWebView2Async(webViewEnv);
 
+        // Page zoom (− / + buttons, Ctrl+scroll): restore last level, remember changes
+        _webView.ZoomFactor = ZoomHelper.Parse(_config.Settings);
+        _webView.ZoomFactorChanged += (_, _) =>
+        {
+            _config.Settings ??= new Dictionary<string, string>();
+            _config.Settings["zoom"] = _webView.ZoomFactor.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+            _config.Save();
+            _webView.CoreWebView2?.ExecuteScriptAsync(ZoomHelper.Script(_webView.ZoomFactor));
+        };
+
         _webView.PreviewKeyDown += (s, e) =>
         {
             if (e.KeyCode == System.Windows.Forms.Keys.F11)
@@ -237,7 +247,7 @@ public class MainForm : Form
                 type = "config", colors = _config.Colors, settings = _config.Settings,
                 colorProfiles = _config.ColorProfiles, fanCurves = _config.FanCurves,
                 lastPresetIdx = _config.LastPresetIdx, appVersion = AppVersionText,
-                startWithWindows = StartWithWindowsEnabled
+                startWithWindows = StartWithWindowsEnabled, zoom = Math.Round(_webView.ZoomFactor * 100)
             };
             string json = JsonSerializer.Serialize(payload, _json);
             await _webView.CoreWebView2.ExecuteScriptAsync(
@@ -316,7 +326,7 @@ public class MainForm : Form
 
     // Messages that only make sense for the main window (popouts must not drive it)
     private static readonly HashSet<string> MainWindowOnly =
-        new() { "navigate", "popOut", "minimize", "exit", "toggleFullscreen", "requestConfig", "getLogs" };
+        new() { "navigate", "popOut", "minimize", "exit", "toggleFullscreen", "requestConfig", "getLogs", "zoom" };
 
     private void HandleMessage(string raw)
     {
@@ -351,6 +361,10 @@ public class MainForm : Form
                     });
                     break;
                 }
+
+                case "zoom":
+                    Invoke(() => ZoomHelper.Change(_webView, msg.delta ?? 0)); // ZoomFactorChanged saves + updates the label
+                    break;
 
                 case "testAlert":
                     Invoke(() => QueueNotification("test alert",
@@ -446,57 +460,10 @@ public class MainForm : Form
                     _ = Task.Run(async () =>
                     {
                         string cid2 = msg.callId ?? "0";
-                        await _orgbLock.WaitAsync();
-                        try
-                        {
-                            if (_orgbClient == null || !_orgbClient.IsConnected)
-                            {
-                                _orgbClient?.Dispose();
-                                _orgbClient = new OpenRGBClient(msg.port ?? 6742);
-                                await _orgbClient.ConnectAsync();
-                            }
-
-                            string orgbPath = msg.path ?? "/devices";
-                            string jsonResult2;
-
-                            if (orgbPath == "/devices")
-                                jsonResult2 = await _orgbClient.GetDevicesJsonAsync();
-                            else if (orgbPath.Contains("/leds") && msg.body != null)
-                            {
-                                var parts2 = orgbPath.Split('/');
-                                uint devIdx2 = uint.Parse(parts2[2]);
-                                var leds2 = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string,int>>>(msg.body)!;
-                                await _orgbClient.SetLedsAsync(devIdx2, leds2);
-                                jsonResult2 = "{}";
-                            }
-                            else if (orgbPath.Contains("/mode") && msg.method == "PUT" && msg.body != null)
-                            {
-                                var parts2 = orgbPath.Split('/');
-                                uint devIdx2 = uint.Parse(parts2[2]);
-                                var modeDoc = System.Text.Json.JsonDocument.Parse(msg.body).RootElement;
-                                int modeIdx = modeDoc.TryGetProperty("mode", out var mv) ? mv.GetInt32() : 0;
-                                byte r = (byte)(modeDoc.TryGetProperty("r", out var rv) ? rv.GetInt32() : 255);
-                                byte g = (byte)(modeDoc.TryGetProperty("g", out var gv) ? gv.GetInt32() : 255);
-                                byte b = (byte)(modeDoc.TryGetProperty("b", out var bv) ? bv.GetInt32() : 255);
-                                await _orgbClient.SetCustomModeAsync(devIdx2);
-                                Console.WriteLine($"[orgb] SetCustomMode dev={devIdx2} → entering direct mode");
-                                jsonResult2 = "{}";
-                            }
-                            else { jsonResult2 = "{}"; }
-
-                            string esc2 = System.Text.Json.JsonSerializer.Serialize(jsonResult2);
-                            Invoke(() => _webView.CoreWebView2?.ExecuteScriptAsync(
-                                $"typeof orgbProxyResult==='function'&&orgbProxyResult('{cid2}',true,{esc2})"));
-                        }
-                        catch (Exception ex2)
-                        {
-                            _orgbClient = null;
-                            Console.WriteLine($"[rgb] proxy error: {ex2.Message}");
-                            string ej2 = System.Text.Json.JsonSerializer.Serialize(ex2.Message);
-                            Invoke(() => _webView.CoreWebView2?.ExecuteScriptAsync(
-                                $"typeof orgbProxyResult==='function'&&orgbProxyResult('{cid2}',false,{ej2})"));
-                        }
-                        finally { _orgbLock.Release(); }
+                        var (ok, json) = await OpenRgbProxyAsync(msg);
+                        string payload = System.Text.Json.JsonSerializer.Serialize(json);
+                        Invoke(() => _webView.CoreWebView2?.ExecuteScriptAsync(
+                            $"typeof orgbProxyResult==='function'&&orgbProxyResult('{cid2}',{(ok ? "true" : "false")},{payload})"));
                     });
                     break;
 
@@ -651,32 +618,13 @@ public class MainForm : Form
                             new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                         if (msg2 == null) return;
 
-                        if (msg2.type == "openrgbProxy" && _orgbClient != null && msg2.path != null)
+                        if (msg2.type == "openrgbProxy")
                         {
-                            string jsonResult = "{}";
-                            try
-                            {
-                                if (msg2.path == "/devices")
-                                    jsonResult = await _orgbClient.GetDevicesJsonAsync();
-                                else if (msg2.path.Contains("/leds") && msg2.body != null)
-                                {
-                                    var parts3 = msg2.path.Split('/');
-                                    uint devIdx3 = uint.Parse(parts3[2]);
-                                    var leds3 = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string,int>>>(msg2.body)!;
-                                    await _orgbClient.SetLedsAsync(devIdx3, leds3);
-                                }
-                                else if (msg2.path.Contains("/mode") && msg2.method == "PUT" && msg2.body != null)
-                                {
-                                    var parts3 = msg2.path.Split('/');
-                                    uint devIdx3 = uint.Parse(parts3[2]);
-                                    await _orgbClient.SetCustomModeAsync(devIdx3);
-                                }
-                            }
-                            catch { }
+                            var (ok3, json3) = await OpenRgbProxyAsync(msg2);
                             string cid3 = msg2.callId ?? "0";
-                            string esc3 = System.Text.Json.JsonSerializer.Serialize(jsonResult);
+                            string esc3 = System.Text.Json.JsonSerializer.Serialize(json3);
                             await form!.ExecuteScriptAsync(
-                                $"typeof orgbProxyResult==='function'&&orgbProxyResult('{cid3}',true,{esc3})");
+                                $"typeof orgbProxyResult==='function'&&orgbProxyResult('{cid3}',{(ok3 ? "true" : "false")},{esc3})");
                         }
                         else if (msg2.type == "checkOpenRGB")
                         {
@@ -697,6 +645,65 @@ public class MainForm : Form
         _popouts[page] = form;
         form.FormClosed += (_, _) => _popouts.Remove(page);
         form.Show();
+    }
+
+    // ── OpenRGB proxy (shared by the main window and popouts) ──────────────────
+    // Paths (REST-like, from rgb.html):
+    //   GET  /devices               → device list JSON
+    //   PUT  /devices/{i}/leds      → [{r,g,b}, ...]
+    //   PUT  /devices/{i}/mode      → {custom:true}            switch to Direct/Custom/Static
+    //                                 {mode:n}                  switch to mode n
+    //                                 {mode:n, r, g, b}         mode n with that colour
+    //                                                           (mode-specific colours, e.g. GPU Static)
+    private async Task<(bool ok, string json)> OpenRgbProxyAsync(IncomingMessage msg)
+    {
+        await _orgbLock.WaitAsync();
+        try
+        {
+            if (_orgbClient == null || !_orgbClient.IsConnected)
+            {
+                _orgbClient?.Dispose();
+                _orgbClient = new OpenRGBClient(msg.port ?? 6742);
+                await _orgbClient.ConnectAsync();
+            }
+
+            string path = msg.path ?? "/devices";
+            if (path == "/devices")
+                return (true, await _orgbClient.GetDevicesJsonAsync());
+
+            var parts = path.Split('/');
+            if (parts.Length < 4 || !uint.TryParse(parts[2], out uint dev) || msg.body == null)
+                return (true, "{}");
+
+            if (parts[3] == "leds")
+            {
+                var leds = JsonSerializer.Deserialize<List<Dictionary<string, int>>>(msg.body)!;
+                await _orgbClient.SetLedsAsync(dev, leds);
+            }
+            else if (parts[3] == "mode" && msg.method == "PUT")
+            {
+                var m = JsonDocument.Parse(msg.body).RootElement;
+                if (m.TryGetProperty("custom", out var cv) && cv.ValueKind == JsonValueKind.True)
+                    await _orgbClient.SetCustomModeAsync(dev);
+                else if (m.TryGetProperty("mode", out var mv))
+                {
+                    (byte, byte, byte)? color = m.TryGetProperty("r", out var rv)
+                        ? ((byte)rv.GetInt32(),
+                           (byte)(m.TryGetProperty("g", out var gv) ? gv.GetInt32() : 0),
+                           (byte)(m.TryGetProperty("b", out var bv) ? bv.GetInt32() : 0))
+                        : null;
+                    await _orgbClient.SetModeAsync(dev, mv.GetInt32(), color);
+                }
+            }
+            return (true, "{}");
+        }
+        catch (Exception ex)
+        {
+            _orgbClient = null;
+            Console.WriteLine($"[rgb] proxy error: {ex.Message}");
+            return (false, ex.Message);
+        }
+        finally { _orgbLock.Release(); }
     }
 
     private void SetupTray()
@@ -865,4 +872,5 @@ public class IncomingMessage
     public bool?                       enabled  { get; set; }
     public FanCurve?                   fanCurve { get; set; }
     public int?  seq      { get; set; }
+    public int?  delta    { get; set; } // zoom: +1 / -1 / 0 (reset)
 }
