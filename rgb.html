@@ -9,7 +9,7 @@
 <style>
   .rgb-dot{width:8px;height:8px;border-radius:50%;background:#333;flex-shrink:0;transition:background .3s;}
   .rgb-dot.on{background:#44ff88;box-shadow:0 0 6px #44ff88;}.rgb-dot.err{background:#ff4444;box-shadow:0 0 6px #ff4444;}
-  .device-card{margin-bottom:10px;}
+  .device-card,#rgb-online>.card{margin-bottom:10px;}
   .mode-row{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0;}
   .mode-chip{padding:3px 9px;font-size:calc(9px*var(--fs-base,1));letter-spacing:.08em;border-radius:12px;border:1px solid var(--border);color:var(--label-dim);cursor:pointer;background:transparent;font-family:inherit;transition:all .15s;}
   .mode-chip:hover{border-color:var(--border-bright);color:var(--label);}
@@ -25,7 +25,7 @@
   .qcol:hover{transform:scale(1.15);border-color:rgba(255,255,255,.4);}
   /* Per-device animation row */
   .anim-row{display:flex;gap:4px;flex-wrap:wrap;margin:7px 0 4px;align-items:center;}
-  .anim-btn{padding:3px 8px;font-size:calc(8px*var(--fs-base,1));letter-spacing:.06em;font-family:monospace;background:rgba(10,8,3,.8);border:1px solid rgba(68,51,0,.3);border-radius:3px;cursor:pointer;color:var(--label-dim);transition:all .15s;}
+  .anim-btn{padding:5px 10px;font-size:calc(10px*var(--fs-base,1));letter-spacing:.06em;font-family:monospace;background:rgba(10,8,3,.8);border:1px solid rgba(68,51,0,.3);border-radius:3px;cursor:pointer;color:var(--label-dim);transition:all .15s;}
   .anim-btn:hover{border-color:rgba(255,204,0,.4);color:var(--label);}
   .anim-btn.anim-on{border-color:var(--header-title);color:var(--header-title);background:rgba(255,204,0,.08);}
   .anim-stop{color:#cc4444;border-color:rgba(180,40,40,.3);}
@@ -102,13 +102,32 @@
           <input type="color" class="bp" id="custom-color" value="#ff0000" onchange="applyAllColor(this.value)">
           <button class="btn btn-primary" onclick="applyAllColor(document.getElementById('custom-color').value)" style="padding:5px 12px">APPLY ALL</button>
         </div>
+        <div class="cprow">
+          <label style="flex:0 0 auto">BRIGHTNESS</label>
+          <input type="range" class="range-slider" id="rgb-bright" min="0" max="100" step="1" value="100" style="flex:1" oninput="setBrightness(this.value)">
+          <span class="control-value" id="rgb-bright-val" style="min-width:44px;text-align:right">100%</span>
+        </div>
+      </div>
+
+      <!-- Looping effects, all devices -->
+      <div class="card">
+        <div class="card-header"><span class="card-title">EFFECTS &#x2014; ALL DEVICES</span><span class="badge badge-dim" id="fx-pill" style="display:none"></span></div>
+        <div class="anim-row" id="fx-row"></div>
+        <div class="cprow">
+          <label style="flex:0 0 auto">COLORS</label>
+          <input type="color" class="bp" id="fx-c1" value="#ff0000" oninput="fxSave()">
+          <input type="color" class="bp" id="fx-c2" value="#0066ff" oninput="fxSave()">
+          <label style="flex:0 0 auto;margin-left:10px">SPEED</label>
+          <input type="range" class="range-slider" id="fx-spd" min="1" max="10" step="1" value="5" style="flex:1" oninput="fxSave();fxRestartTimers()">
+        </div>
+        <div style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);letter-spacing:.05em;margin-top:4px">Effects loop until you pick a colour, a hardware mode or STOP, and resume when Vexis reconnects. Devices without per-LED control keep their hardware mode.</div>
       </div>
 
 <div id="device-list"></div>
     </div>
   </div>
 </div>
-<script src="/nav.js?v=13" data-page="rgb"></script>
+<script src="/nav.js?v=14" data-page="rgb"></script>
 <script>
 const ORGB_PORT=localStorage.getItem('pcm-rgb-port')||'6742';
 let _devices=[],_connected=false,_callCounter=0;
@@ -117,10 +136,30 @@ const _pendingCalls={};
 window.orgbProxyResult=function(id,ok,data){const cb=_pendingCalls[id];if(cb){delete _pendingCalls[id];cb(ok,data);}};
 function orgbCall(m,p,b){return new Promise((res,rej)=>{const id=String(++_callCounter);_pendingCalls[id]=(ok,d)=>ok?res(d):rej(new Error(d));setTimeout(()=>{if(_pendingCalls[id]){delete _pendingCalls[id];rej(new Error('Timeout'));}},8000);sendToHost({type:'openrgbProxy',method:m,path:p,body:b||null,port:parseInt(ORGB_PORT),callId:id});});}
 async function orgbGet(p){const r=await orgbCall('GET',p,null);return typeof r==='string'?JSON.parse(r):r;}
-async function orgbPut(p,b){await orgbCall('PUT',p,JSON.stringify(b));}
+// Every colour write goes through here, so the brightness slider applies to static
+// colours, holds and effects alike. _last keeps the unscaled colours so a brightness
+// change can re-send them.
+let _bright=Math.max(0,Math.min(100,parseInt(localStorage.getItem('pcm-rgb-brightness')??'100')||0));
+const _last={};
+function dim(c){const k=_bright/100;return{r:Math.round((c.r||0)*k),g:Math.round((c.g||0)*k),b:Math.round((c.b||0)*k)};}
+async function orgbPut(p,b){
+  const m=/^\/devices\/(\d+)\/(leds|mode)$/.exec(p);
+  if(m&&m[2]==='leds'&&Array.isArray(b)){_last[m[1]]={p,b};b=b.map(dim);}
+  else if(m&&m[2]==='mode'&&b&&b.r!=null){_last[m[1]]={p,b};b={...b,...dim(b)};}
+  await orgbCall('PUT',p,JSON.stringify(b));
+}
+let _brightT=null;
+function setBrightness(v){
+  _bright=Math.max(0,Math.min(100,parseInt(v)||0));
+  try{localStorage.setItem('pcm-rgb-brightness',String(_bright));}catch{}
+  const lbl=document.getElementById('rgb-bright-val');if(lbl)lbl.textContent=_bright+'%';
+  // Re-send the current static colours (running effects pick it up next frame)
+  clearTimeout(_brightT);
+  _brightT=setTimeout(()=>{if(!_connected)return;for(const i in _last){if(_devAnim[i])continue;const l=_last[i];orgbPut(l.p,l.b).catch(()=>{});}},120);
+}
 
 const QCOLS=[{c:'#ff0000',l:'Red'},{c:'#ff6600',l:'Orange'},{c:'#ffff00',l:'Yellow'},{c:'#00ff00',l:'Green'},{c:'#00ffff',l:'Cyan'},{c:'#0066ff',l:'Blue'},{c:'#aa00ff',l:'Purple'},{c:'#ff00cc',l:'Pink'},{c:'#ffffff',l:'White'},{c:'#888888',l:'Half'},{c:'#222222',l:'Dim'},{c:'#000000',l:'Off'}];
-const ANIMS=[{id:'rainbow',icon:'&#x25C8;',l:'RAINBOW'},{id:'breathing',icon:'&#x25C9;',l:'BREATH'},{id:'comet',icon:'&#x2192;',l:'COMET'},{id:'raindrop',icon:'&#x2193;',l:'RAIN'},{id:'strobe',icon:'&#x26A1;',l:'STROBE'},{id:'wave',icon:'&#x2248;',l:'WAVE'}];
+const ANIMS=[{id:'rainbow',icon:'&#x25C8;',l:'RAINBOW'},{id:'spectrum',icon:'&#x25CE;',l:'SPECTRUM'},{id:'breathing',icon:'&#x25C9;',l:'BREATH'},{id:'wave',icon:'&#x2248;',l:'WAVE'},{id:'comet',icon:'&#x2192;',l:'COMET'},{id:'scanner',icon:'&#x2194;',l:'SCANNER'},{id:'raindrop',icon:'&#x2193;',l:'RAIN'},{id:'fire',icon:'&#x2668;',l:'FIRE'},{id:'strobe',icon:'&#x26A1;',l:'STROBE'}];
 
 function hexRgb(h){return{r:parseInt(h.slice(1,3),16),g:parseInt(h.slice(3,5),16),b:parseInt(h.slice(5,7),16)};}
 function rgbHex(r,g,b){return'#'+[r,g,b].map(v=>(v||0).toString(16).padStart(2,'0')).join('');}
@@ -195,6 +234,7 @@ function clearHold(devIdx){if(_hold[devIdx]){clearTimeout(_hold[devIdx]);delete 
 
 async function setDC(devIdx,leds,hex){
   if(!leds||!leds.length)return;
+  if(_devAnim[devIdx]){stopDevAnim(devIdx);if(!Object.keys(_devAnim).length)stopFx();else updateAnimBtn();}
   const dev=_devices[devIdx]||{};
   if(dev.per_led){
     await ensureDirect(devIdx);
@@ -212,7 +252,7 @@ let _aTimer=null,_aPend=null;
 function applyAllColor(hex){if(!_connected)return;_aPend=hex;clearTimeout(_aTimer);_aTimer=setTimeout(async()=>{const h=_aPend;if(!h)return;_aPend=null;const{r,g,b}=hexRgb(h);for(let i=0;i<_devices.length;i++){const d=_devices[i];if(!canColor(d))continue;try{await setDC(i,new Array(ledCnt(i)).fill({r,g,b}),h);}catch(e){}}},300);}
 // Picking a hardware mode chip hands control back to the device; the next colour
 // change switches it to Direct/Custom again.
-async function setDevMode(devIdx,modeIdx){clearHold(devIdx);_modeReady[devIdx]=false;try{await orgbPut('/devices/'+devIdx+'/mode',{mode:modeIdx});}catch(e){}}
+async function setDevMode(devIdx,modeIdx){if(_devAnim[devIdx]){stopDevAnim(devIdx);if(!Object.keys(_devAnim).length)stopFx();else updateAnimBtn();}clearHold(devIdx);delete _last[devIdx];_modeReady[devIdx]=false;try{await orgbPut('/devices/'+devIdx+'/mode',{mode:modeIdx});}catch(e){}}
 
 // ── Per-device animation engine ───────────────────────────────────────────────
 // Time-based: uses performance.now() as the clock source so animation position
@@ -230,6 +270,24 @@ function animColor(type,li,total,devIdx,t,speed,c1,c2){
       // Smooth hue sweep across LEDs + time — wraps via modulo, no discontinuity
       const hue=((li/len + t*0.15) % 1)*360;
       return hsvRgb(hue,1,1);
+    }
+    case'spectrum':{
+      // Whole device fades through the colour wheel
+      return hsvRgb((t*0.08%1)*360,1,1);
+    }
+    case'scanner':{
+      // Back-and-forth sweep with a short fading tail
+      const span=Math.max(len-1,1),ph=(t*0.35)%2,pos=(ph<1?ph:2-ph)*span;
+      const b=Math.max(0,1-Math.abs(li-pos)/Math.max(1.5,len*0.15))**1.5;
+      return{r:Math.round(c1.r*b+c2.r*(1-b)*0.08),g:Math.round(c1.g*b+c2.g*(1-b)*0.08),b:Math.round(c1.b*b+c2.b*(1-b)*0.08)};
+    }
+    case'fire':{
+      // Flicker between colour 1 (flame) and colour 2 (embers), smoothed per LED
+      const a=_devAnim[devIdx];if(!a)return{r:0,g:0,b:0};
+      if(!a.heat)a.heat=new Float32Array(len).fill(0.5);
+      a.heat[li]+= (Math.random()-0.5)*0.35; a.heat[li]=a.heat[li]*0.9+0.5*0.1;
+      const h=Math.max(0,Math.min(1,a.heat[li]));
+      return{r:Math.round(c1.r*h+c2.r*(1-h)*0.5),g:Math.round(c1.g*h+c2.g*(1-h)*0.5),b:Math.round(c1.b*h+c2.b*(1-h)*0.5)};
     }
     case'breathing':{
       // Starts at 0 (off), peaks at 1, returns to 0 — clean loop at 2π boundary
@@ -277,9 +335,7 @@ function animTick(devIdx){
   const a=_devAnim[devIdx];
   if(!a||!a.running||!_connected||a.sending)return;
   const cnt=ledCnt(devIdx);
-  const c1=hexRgb(document.getElementById('anim-c1-'+devIdx)?.value||'#ff0000');
-  const c2=hexRgb(document.getElementById('anim-c2-'+devIdx)?.value||'#0066ff');
-  const spd=parseInt(document.getElementById('anim-spd-'+devIdx)?.value||'5');
+  const c1=hexRgb(_fx.c1),c2=hexRgb(_fx.c2),spd=_fx.spd;
   const t=(performance.now()-a.startTime)*0.001*spd;
   const leds=Array.from({length:cnt},(_,li)=>animColor(a.type,li,cnt,devIdx,t,spd,c1,c2));
   a.sending=true;
@@ -290,12 +346,11 @@ function animTick(devIdx){
 
 async function startDevAnim(devIdx,type){
   stopDevAnim(devIdx);
-  const spd=parseInt(document.getElementById('anim-spd-'+devIdx)?.value||'5');
+  const spd=_fx.spd;
   // Speed 1→100ms(10fps), Speed 5→50ms(20fps), Speed 10→25ms(40fps)
   // spd1→80ms(12fps) spd5→40ms(25fps) spd10→20ms→25ms(40fps)
   const interval=Math.max(25,85-spd*6);
-  _devAnim[devIdx]={type,startTime:performance.now(),running:true,drops:null,sending:false};
-  updateAnimBtn(devIdx,type);
+  _devAnim[devIdx]={type,startTime:_fx.start||performance.now(),running:true,drops:null,sending:false};
   // Software animations need the device in Direct/Custom mode — fire-and-forget
   ensureDirect(devIdx).catch(()=>{});
   _devAnim[devIdx].timer=setInterval(()=>animTick(devIdx),interval);
@@ -306,17 +361,46 @@ function stopDevAnim(devIdx){
   if(a){clearInterval(a.timer);a.running=false;}
   delete _devAnim[devIdx];
   clearHold(devIdx); // animation takes over — no need for static hold
-  updateAnimBtn(devIdx,null);
 }
 
-function updateAnimBtn(devIdx,activeType){
-  ANIMS.forEach(({id})=>{
-    const b=document.getElementById('ab-'+devIdx+'-'+id);
-    if(b)b.classList.toggle('anim-on',id===activeType);
-  });
-  const pill=document.getElementById('anim-pill-'+devIdx);
-  if(pill){pill.textContent=activeType?activeType.toUpperCase():'';pill.style.display=activeType?'':'none';}
+function updateAnimBtn(){
+  const on=Object.keys(_devAnim).length?_fx.type:null;
+  ANIMS.forEach(({id})=>document.getElementById('fx-'+id)?.classList.toggle('anim-on',id===on));
+  const pill=document.getElementById('fx-pill');
+  if(pill){pill.textContent=on?on.toUpperCase()+' \u00b7 '+Object.keys(_devAnim).length+' DEV':'';pill.style.display=on?'':'none';}
 }
+
+// ── Effects, all devices ─────────────────────────────────────────────────────
+// One effect runs on every device with per-LED control, all sharing one clock so
+// they stay in step. The choice is saved and resumed on reconnect.
+const _fx=(()=>{let o={};try{o=JSON.parse(localStorage.getItem('pcm-rgb-fx')||'{}');}catch{}
+  return{type:o.type||null,c1:o.c1||'#ff0000',c2:o.c2||'#0066ff',spd:Math.max(1,Math.min(10,o.spd||5)),start:0};})();
+function fxSave(){
+  _fx.c1=document.getElementById('fx-c1')?.value||_fx.c1;
+  _fx.c2=document.getElementById('fx-c2')?.value||_fx.c2;
+  _fx.spd=parseInt(document.getElementById('fx-spd')?.value||_fx.spd);
+  try{localStorage.setItem('pcm-rgb-fx',JSON.stringify({type:_fx.type,c1:_fx.c1,c2:_fx.c2,spd:_fx.spd}));}catch{}
+}
+function fxTargets(){const r=[];for(let i=0;i<_devices.length;i++){const d=_devices[i];if(canColor(d)&&d.per_led&&d.num_leds>0)r.push(i);}return r;}
+function startFx(type){
+  if(!_connected)return;
+  if(_fx.type===type&&Object.keys(_devAnim).length){stopFx();return;}   // click again = stop
+  _fx.type=type;_fx.start=performance.now();fxSave();
+  fxTargets().forEach(i=>startDevAnim(i,type));
+  updateAnimBtn();
+}
+function stopFx(){_fx.type=null;fxSave();stopAllAnims();updateAnimBtn();}
+function fxRestartTimers(){if(_fx.type)Object.keys(_devAnim).forEach(i=>startDevAnim(Number(i),_fx.type));}
+function buildFx(){
+  const row=document.getElementById('fx-row');if(!row)return;
+  row.innerHTML=ANIMS.map(a=>`<button class="anim-btn" id="fx-${a.id}" onclick="startFx('${a.id}')">${a.icon} ${a.l}</button>`).join('')+
+    `<button class="anim-btn anim-stop" onclick="stopFx()">&#x25A0; STOP</button>`;
+  const set=(id,v)=>{const e=document.getElementById(id);if(e)e.value=v;};
+  set('fx-c1',_fx.c1);set('fx-c2',_fx.c2);set('fx-spd',_fx.spd);
+  set('rgb-bright',_bright);const bl=document.getElementById('rgb-bright-val');if(bl)bl.textContent=_bright+'%';
+  updateAnimBtn();
+}
+function resumeFx(){if(_fx.type&&!Object.keys(_devAnim).length){const t=_fx.type;_fx.type=null;startFx(t);}}
 
 // ── Render ───────────────────────────────────────────────────────────────────
 function buildQC(){document.getElementById('quick-colors').innerHTML=QCOLS.map(({c,l})=>`<div class="qcol" style="background:${c}" title="${l}" onclick="applyAllColor('${c}');document.getElementById('custom-color').value='${c}'"></div>`).join('');}
@@ -359,7 +443,7 @@ function renderDevices(){
 function updateModeChips(devIdx,am){document.querySelectorAll('#dev-modes-'+devIdx+' .mode-chip').forEach((c,mi)=>c.classList.toggle('active',mi===am));}
 
 // ── Status ────────────────────────────────────────────────────────────────────
-function stopAllAnims(){Object.keys(_devAnim).forEach(i=>stopDevAnim(Number(i)));}
+function stopAllAnims(){Object.keys(_devAnim).forEach(i=>stopDevAnim(Number(i)));updateAnimBtn();}
 
 // Open OpenRGB in full GUI mode for plugin/effect configuration.
 // PCMonitor pauses direct RGB control while the GUI is open; auto-reconnects
@@ -443,7 +527,7 @@ async function connSilent(){
     if(_devices.length===0){setStatus('offline','Detecting devices...');_lastDevCount=-1;return;}
     if(_devices.length!==_lastDevCount){_lastDevCount=_devices.length;setStatus('offline','Detecting devices...');return;}
     _lastDevCount=-1;
-    setStatus('online');renderDevices();stopRetryLoop();
+    setStatus('online');renderDevices();buildFx();resumeFx();stopRetryLoop();
   }catch(e){if(!_retryLoop)setStatus('offline',e.message);}
 }
 function receiveData(){}
