@@ -44,7 +44,48 @@ public class SensorData
     public Dictionary<string, float>  all_temps { get; set; } = new();
     public List<FanInfo>?             fans      { get; set; }
     public HwInfo?                    info      { get; set; }
+    public GpuDetail?                 gpu       { get; set; }  // full metrics for the GPU page
     public string?                    alert_status { get; set; } // set by MainForm for the settings panel
+}
+
+/// <summary>
+/// Everything LibreHardwareMonitor reports for the primary GPU. The named fields
+/// cover what the GPU page charts; <see cref="sensors"/> lists every sensor so
+/// vendor-specific ones (VR temps, 12VHPWR pins, D3D engines...) still show up.
+/// </summary>
+public class GpuDetail
+{
+    public string  name    { get; set; } = "";
+    public string  vendor  { get; set; } = "";   // "nvidia" | "amd" | "intel"
+    public float?  temp_core    { get; set; }
+    public float?  temp_hotspot { get; set; }
+    public float?  temp_mem     { get; set; }
+    public float?  clk_core     { get; set; }   // MHz
+    public float?  clk_mem      { get; set; }
+    public float?  clk_extra    { get; set; }   // shader / SoC clock
+    public string? clk_extra_name { get; set; }
+    public float?  load_core    { get; set; }   // %
+    public float?  load_mem_ctrl { get; set; }
+    public float?  load_video   { get; set; }
+    public float?  load_bus     { get; set; }
+    public float?  load_power   { get; set; }   // % of power limit (NVIDIA)
+    public float?  power        { get; set; }   // W
+    public float?  voltage      { get; set; }   // V
+    public float?  vram_used_mb { get; set; }
+    public float?  vram_total_mb { get; set; }
+    public float?  fan_rpm      { get; set; }
+    public float?  fan_pct      { get; set; }
+    public float?  pcie_rx      { get; set; }   // bytes/s
+    public float?  pcie_tx      { get; set; }
+    public float?  fps          { get; set; }
+    public List<GpuSensor> sensors { get; set; } = new();
+}
+
+public class GpuSensor
+{
+    public string type  { get; set; } = "";
+    public string name  { get; set; } = "";
+    public float  value { get; set; }
 }
 
 public class CoreInfo
@@ -695,6 +736,7 @@ public class SensorService : IDisposable
 
     private static void ReadGpu(IHardware hw, SensorData data)
     {
+        ReadGpuDetail(hw, data);
         foreach (var s in hw.Sensors)
         {
             if (s.Value is null || s.Value.Value == 0f) continue;
@@ -708,6 +750,81 @@ public class SensorService : IDisposable
                 case SensorType.Load:        if (s.Name == "GPU Core" || s.Name == "D3D 3D" || s.Name.Contains("GPU Core")) data.gpu_load ??= v; break;
             }
         }
+    }
+
+    private static void ReadGpuDetail(IHardware hw, SensorData data)
+    {
+        if (data.gpu != null) return; // first matching GPU only
+        var g = new GpuDetail
+        {
+            name   = CleanGpuName(hw.Name),
+            vendor = hw.HardwareType switch
+            {
+                HardwareType.GpuNvidia => "nvidia", HardwareType.GpuAmd => "amd", _ => "intel"
+            }
+        };
+        float? d3dUsed = null, d3dTotal = null, d3dVideo = null, fanRpm = null;
+        foreach (var s in hw.Sensors)
+        {
+            if (s.Value is not float v || float.IsNaN(v)) continue;
+            string n = s.Name;
+            g.sensors.Add(new GpuSensor { type = s.SensorType.ToString(), name = n, value = v });
+            switch (s.SensorType)
+            {
+                case SensorType.Temperature:
+                    if (n == "GPU Core") g.temp_core ??= v;
+                    else if (n == "GPU Hot Spot") g.temp_hotspot ??= v;
+                    else if (n is "GPU Memory Junction" or "GPU Memory") g.temp_mem ??= v;
+                    break;
+                case SensorType.Clock:
+                    if (n == "GPU Core") g.clk_core ??= v;
+                    else if (n == "GPU Memory") g.clk_mem ??= v;
+                    else if (n is "GPU Shader" or "GPU SoC" && g.clk_extra == null) { g.clk_extra = v; g.clk_extra_name = n.Replace("GPU ", ""); }
+                    break;
+                case SensorType.Load:
+                    if (n == "GPU Core") g.load_core ??= v;
+                    else if (n == "GPU Memory Controller") g.load_mem_ctrl ??= v;
+                    else if (n == "GPU Video Engine") g.load_video ??= v;
+                    else if (n == "GPU Bus") g.load_bus ??= v;
+                    else if (n == "GPU Power") g.load_power ??= v;
+                    else if (n == "D3D 3D" && g.load_core == null) g.load_core = v;
+                    else if (n.StartsWith("D3D Video", StringComparison.OrdinalIgnoreCase)) d3dVideo = Math.Max(d3dVideo ?? 0, v);
+                    break;
+                case SensorType.Power:
+                    if (n == "GPU Package") g.power ??= v;
+                    else if (n == "GPU PPT") g.power ??= v;
+                    break;
+                case SensorType.Voltage:
+                    if (n is "GPU Core" or "GPU Core Voltage") g.voltage ??= v;
+                    break;
+                case SensorType.SmallData:
+                    if (n == "GPU Memory Used") g.vram_used_mb ??= v;
+                    else if (n == "GPU Memory Total") g.vram_total_mb ??= v;
+                    else if (n == "D3D Dedicated Memory Used") d3dUsed ??= v;
+                    else if (n == "D3D Dedicated Memory Total") d3dTotal ??= v;
+                    break;
+                case SensorType.Fan:
+                    fanRpm = Math.Max(fanRpm ?? 0, v);
+                    break;
+                case SensorType.Control:
+                    g.fan_pct = Math.Max(g.fan_pct ?? 0, v);
+                    break;
+                case SensorType.Throughput:
+                    if (n == "GPU PCIe Rx") g.pcie_rx ??= v;
+                    else if (n == "GPU PCIe Tx") g.pcie_tx ??= v;
+                    break;
+                case SensorType.Factor:
+                    if (n == "Fullscreen FPS" && v >= 0) g.fps ??= v;
+                    break;
+            }
+        }
+        // Fallbacks: D3D counters exist on every vendor when the driver sensors don't
+        g.vram_used_mb  ??= d3dUsed;
+        g.vram_total_mb ??= d3dTotal;
+        g.load_video    ??= d3dVideo;
+        g.fan_rpm = fanRpm;
+        g.power ??= hw.Sensors.FirstOrDefault(x => x.SensorType == SensorType.Power && x.Value > 0)?.Value;
+        data.gpu = g;
     }
 
     private static string CleanCpuName(string name) =>

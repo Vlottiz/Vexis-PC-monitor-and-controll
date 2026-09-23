@@ -59,7 +59,7 @@ window.navSetDriverWarning = function(msg) {
 const NAV_CURRENT_PAGE = document.currentScript?.getAttribute('data-page') || 'home';
 const NAV_IS_POPOUT    = new URLSearchParams(window.location.search).get('popout') === '1';
 const NAV_PAGE_FILES   = {
-  home:'home.html', performance:'index.html', memory:'memory.html', temps:'temps.html',
+  home:'home.html', performance:'index.html', gpu:'gpu.html', memory:'memory.html', temps:'temps.html',
   fans:'fans.html', rgb:'rgb.html', info:'info.html', security:'security.html'
 };
 
@@ -67,6 +67,7 @@ const NAV_PAGE_FILES   = {
 const NAV_PAGES = [
   { id:'home',        icon:'⌂', label:'HOME'         },
   { id:'performance', icon:'▣', label:'PERFORMANCE'  },
+  { id:'gpu',         icon:'▩', label:'GPU'          },
   { id:'memory',      icon:'▦', label:'MEMORY'        },
   { id:'temps',       icon:'◈', label:'TEMPERATURES' },
   { id:'fans',        icon:'◎', label:'FAN CONTROL'  },

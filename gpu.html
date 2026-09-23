@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store">
+<title>PC Monitor — GPU</title>
+<link rel="stylesheet" href="/ui.css?v=12">
+<style>
+  .hero-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; }
+  .hero { text-align:center; padding:14px 10px; }
+  .hero .stat-label { margin-bottom:6px; }
+  .hero .stat-value { font-family:monospace; text-shadow:0 0 14px currentColor; white-space:nowrap; }
+  .hero .stat-value .u { font-size:.45em; margin-left:3px; opacity:.75; text-shadow:none; }
+  .hero .stat-sub { font-size:calc(9px*var(--fs-base,1)); letter-spacing:.08em; margin-top:6px; }
+
+  .meter { display:grid; grid-template-columns:minmax(90px,24%) 1fr calc(112px*var(--fs-base,1)*var(--data-scale,1)); align-items:center; gap:10px; padding:5px 0; }
+  .meter-lbl { font-size:calc(10px*var(--fs-base,1)); color:var(--label); letter-spacing:.08em; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .meter-bar { height:8px; background:var(--bar-bg); border:1px solid var(--border); border-radius:4px; overflow:hidden; position:relative; }
+  .meter-fill { height:100%; width:0%; border-radius:4px; transition:width .5s ease; }
+  .meter-peak { position:absolute; top:-1px; bottom:-1px; width:2px; background:var(--peak-col); opacity:.7; left:0; display:none; }
+  .meter-val { font-family:monospace; font-weight:700; text-align:right; font-size:calc(12px*var(--fs-base,1)*var(--data-scale,1)); white-space:nowrap; }
+  .meter-val small { display:block; font-weight:400; color:var(--label-dim); font-size:calc(8px*var(--fs-base,1)); line-height:1.2; }
+
+  .hist-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; }
+  .hist { background:var(--bar-bg); border:1px solid var(--border); border-radius:4px; padding:8px 10px 6px; }
+  .hist-head { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px; }
+  .hist-name { font-size:calc(9px*var(--fs-base,1)); color:var(--label-dim); letter-spacing:.14em; }
+  .hist-val { font-family:monospace; font-weight:700; font-size:calc(12px*var(--fs-base,1)*var(--data-scale,1)); }
+  .hist svg { display:block; width:100%; height:56px; }
+  .hist-scale { display:flex; justify-content:space-between; font-size:calc(8px*var(--fs-base,1)); color:var(--label-dim); margin-top:2px; font-family:monospace; }
+
+  .sens-group td { color:var(--card-title); font-size:calc(9px*var(--fs-base,1)); letter-spacing:.16em; padding-top:12px; border-bottom:1px solid var(--border); }
+  .data-table td.v { text-align:right; font-family:monospace; color:var(--text); }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title">&#x25A9; GPU</div>
+      <div class="page-subtitle" id="gpu-sub">Loading...</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:calc(11px*var(--fs-base,1));color:var(--label-dim)" id="gpu-time">--:--:-- --</div>
+      <div id="gpu-badge" style="white-space:nowrap;font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--gpu-acc);font-weight:700;margin-top:2px">--</div>
+    </div>
+  </div>
+  <div class="page-body">
+    <div id="gpu-empty" class="empty-state">Waiting for GPU sensor data...</div>
+
+    <div id="gpu-main" style="display:none;flex-direction:column;gap:12px">
+      <!-- Headline numbers -->
+      <div class="hero-grid" id="hero"></div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">UTILIZATION</span></div>
+        <div id="m-load"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">CLOCKS</span><span style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim)">bar = session peak</span></div>
+        <div id="m-clk"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">TEMPERATURES</span></div>
+        <div id="m-temp"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">HISTORY</span><span id="hist-span" style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim)"></span></div>
+        <div class="hist-grid" id="hist"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">POWER &amp; COOLING</span></div>
+        <div id="pc-rows"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">ALL SENSORS</span><span id="sens-count" style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim)"></span></div>
+        <table class="data-table"><tbody id="sens-body"></tbody></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/nav.js?v=15" data-page="gpu"></script>
+<script>
+// ── Formatting ───────────────────────────────────────────────────────────────
+const fmt = {
+  pct:  v => Math.round(v) + '%',
+  temp: v => v.toFixed(1) + '°C',
+  mhz:  v => Math.round(v) + ' MHz',
+  w:    v => v.toFixed(1) + ' W',
+  v:    v => v.toFixed(3) + ' V',
+  rpm:  v => Math.round(v) + ' RPM',
+  mb:   v => v >= 1024 ? (v / 1024).toFixed(2) + ' GB' : Math.round(v) + ' MB',
+  bps:  v => v >= 1048576 ? (v / 1048576).toFixed(1) + ' MB/s' : v >= 1024 ? (v / 1024).toFixed(0) + ' KB/s' : Math.round(v) + ' B/s',
+  fps:  v => Math.round(v) + ' FPS',
+};
+const UNIT = { Temperature:'temp', Clock:'mhz', Load:'pct', Power:'w', Voltage:'v', Fan:'rpm', Control:'pct',
+               SmallData:'mb', Throughput:'bps', Factor:null, Current:'a', Data:'gb' };
+function fmtSensor(type, v) {
+  const u = UNIT[type];
+  if (u === 'a')  return v.toFixed(2) + ' A';
+  if (u === 'gb') return v.toFixed(2) + ' GB';
+  return u && fmt[u] ? fmt[u](v) : (Math.round(v * 100) / 100).toString();
+}
+function tempCol(t) { return t < 60 ? 'var(--temp-low)' : t < 80 ? 'var(--temp-warn)' : 'var(--temp-hot)'; }
+function $(id) { return document.getElementById(id); }
+function setText(id, v) { const el = $(id); if (el) el.textContent = v; }
+
+// ── Session peaks ────────────────────────────────────────────────────────────
+const PEAK = {};
+function peak(key, v) { if (v != null && (PEAK[key] == null || v > PEAK[key])) PEAK[key] = v; return PEAK[key]; }
+
+// ── Headline tiles ───────────────────────────────────────────────────────────
+const HERO = [
+  { id:'load',  label:'GPU LOAD',   get:g => g.load_core, f:'pct',  col:() => 'var(--gpu-acc)' },
+  { id:'temp',  label:'CORE TEMP',  get:g => g.temp_core, f:'temp', col:v => tempCol(v) },
+  { id:'power', label:'POWER',      get:g => g.power,     f:'w',    col:() => 'var(--pwr-col)' },
+  { id:'clk',   label:'CORE CLOCK', get:g => g.clk_core,  f:'mhz',  col:() => 'var(--peak-col)' },
+  { id:'vram',  label:'VRAM',       get:g => g.vram_used_mb, f:'mb', col:() => 'var(--mem-acc)',
+    sub:g => g.vram_total_mb ? 'of ' + fmt.mb(g.vram_total_mb) : null },
+  { id:'fps',   label:'FPS',        get:g => g.fps,       f:'fps',  col:() => 'var(--avg-col)' },
+];
+function renderHero(g) {
+  const box = $('hero');
+  HERO.forEach(h => {
+    const v = h.get(g);
+    let el = $('hero-' + h.id);
+    if (v == null) { if (el) el.style.display = 'none'; return; }
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'card hero'; el.id = 'hero-' + h.id;
+      el.innerHTML = `<div class="stat-label">${h.label}</div><div class="stat-value lg" id="hv-${h.id}">--</div><div class="stat-sub" id="hs-${h.id}"></div>`;
+      box.appendChild(el);
+    }
+    el.style.display = '';
+    const p = peak('hero-' + h.id, v);
+    const val = $('hv-' + h.id);
+    const m = /^([-\d.,]+)\s*(.*)$/.exec(fmt[h.f](v));
+    val.innerHTML = m ? `${m[1]}<span class="u">${m[2]}</span>` : fmt[h.f](v);
+    val.style.color = h.col(v);
+    const sub = h.sub ? h.sub(g) : null;
+    setText('hs-' + h.id, sub || 'PEAK ' + fmt[h.f](p));
+  });
+}
+
+// ── Meter rows (label | bar | value) ─────────────────────────────────────────
+// max: fixed scale, or null to scale to the session peak (clocks, power)
+function meter(boxId, key, label, v, f, max, col, extra) {
+  const box = $(boxId);
+  let row = $('mr-' + key);
+  if (v == null) { if (row) row.style.display = 'none'; return; }
+  if (!row) {
+    row = document.createElement('div');
+    row.className = 'meter'; row.id = 'mr-' + key;
+    row.innerHTML = `<div class="meter-lbl" title="${label}">${label}</div>
+      <div class="meter-bar"><div class="meter-fill" id="mf-${key}"></div><div class="meter-peak" id="mp-${key}"></div></div>
+      <div class="meter-val" id="mv-${key}">--</div>`;
+    box.appendChild(row);
+  }
+  row.style.display = '';
+  const p = peak('m-' + key, v);
+  const scale = max || (p > 0 ? p * 1.05 : 1);
+  const fill = $('mf-' + key);
+  fill.style.width = Math.max(0, Math.min(100, v / scale * 100)) + '%';
+  fill.style.background = `linear-gradient(90deg, var(--surface2), ${col})`;
+  const pk = $('mp-' + key);
+  if (max && p != null) { pk.style.display = 'block'; pk.style.left = `calc(${Math.min(100, p / max * 100)}% - 1px)`; pk.title = 'Peak ' + fmt[f](p); }
+  const mv = $('mv-' + key);
+  if (extra === true) extra = 'peak ' + fmt[f](p);
+  mv.innerHTML = fmt[f](v) + (extra ? `<small>${extra}</small>` : '');
+  mv.style.color = col;
+}
+
+// ── History charts ───────────────────────────────────────────────────────────
+const HIST_LEN = 90;
+const HIST = {};
+const HIST_DEF = [
+  { id:'load',  label:'LOAD',       get:g => g.load_core, f:'pct',  col:'var(--gpu-acc)',  min:0, max:100 },
+  { id:'temp',  label:'CORE TEMP',  get:g => g.temp_core, f:'temp', col:'var(--temp-warn)', min:null, max:null },
+  { id:'power', label:'POWER',      get:g => g.power,     f:'w',    col:'var(--pwr-col)',  min:0, max:null },
+  { id:'clk',   label:'CORE CLOCK', get:g => g.clk_core,  f:'mhz',  col:'var(--peak-col)', min:0, max:null },
+  { id:'vram',  label:'VRAM',       get:g => g.vram_used_mb, f:'mb', col:'var(--mem-acc)', min:0, max:g => g.vram_total_mb },
+];
+function renderHistory(g) {
+  const box = $('hist');
+  HIST_DEF.forEach(h => {
+    const v = h.get(g);
+    let el = $('h-' + h.id);
+    if (v == null) { if (el) el.style.display = 'none'; return; }
+    const arr = HIST[h.id] || (HIST[h.id] = []);
+    arr.push(v); if (arr.length > HIST_LEN) arr.shift();
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'hist'; el.id = 'h-' + h.id;
+      el.innerHTML = `<div class="hist-head"><span class="hist-name">${h.label}</span><span class="hist-val" id="hv2-${h.id}" style="color:${h.col}">--</span></div>
+        <svg viewBox="0 0 300 56" preserveAspectRatio="none" id="hsvg-${h.id}"></svg>
+        <div class="hist-scale"><span id="hlo-${h.id}"></span><span id="hhi-${h.id}"></span></div>`;
+      box.appendChild(el);
+    }
+    el.style.display = '';
+    setText('hv2-' + h.id, fmt[h.f](v));
+    // Scale: fixed where it makes sense, otherwise padded around the data
+    let lo = h.min, hi = typeof h.max === 'function' ? h.max(g) : h.max;
+    const dmin = Math.min(...arr), dmax = Math.max(...arr);
+    if (lo == null) lo = Math.max(0, Math.floor((dmin - 5) / 5) * 5);
+    if (hi == null) hi = Math.max(lo + 1, dmax * 1.1);
+    if (hi <= lo) hi = lo + 1;
+    setText('hlo-' + h.id, fmt[h.f](lo)); setText('hhi-' + h.id, fmt[h.f](hi));
+    const W = 300, H = 56;
+    const pts = arr.map((x, i) => {
+      const px = (i + HIST_LEN - arr.length) / (HIST_LEN - 1) * W;
+      const py = H - 2 - (Math.min(hi, Math.max(lo, x)) - lo) / (hi - lo) * (H - 4);
+      return px.toFixed(1) + ',' + py.toFixed(1);
+    });
+    const x0 = pts[0].split(',')[0];
+    $('hsvg-' + h.id).innerHTML = `
+      <defs><linearGradient id="hg-${h.id}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${h.col}" stop-opacity=".35"/><stop offset="100%" stop-color="${h.col}" stop-opacity="0"/>
+      </linearGradient></defs>
+      <line x1="0" y1="${H / 2}" x2="${W}" y2="${H / 2}" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 4" vector-effect="non-scaling-stroke"/>
+      <polygon points="${x0},${H} ${pts.join(' ')} ${W},${H}" fill="url(#hg-${h.id})"/>
+      <polyline points="${pts.join(' ')}" fill="none" stroke="${h.col}" stroke-width="1.6" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>`;
+  });
+}
+
+// ── Info rows ────────────────────────────────────────────────────────────────
+function infoRow(boxId, key, label, text, col) {
+  const box = $(boxId);
+  let row = $('ir-' + key);
+  if (text == null) { if (row) row.style.display = 'none'; return; }
+  if (!row) {
+    row = document.createElement('div');
+    row.className = 'info-row'; row.id = 'ir-' + key;
+    row.innerHTML = `<span class="info-key">${label}</span><span class="info-val" id="iv-${key}"></span>`;
+    box.appendChild(row);
+  }
+  row.style.display = '';
+  const v = $('iv-' + key); v.textContent = text; v.style.color = col || 'var(--text)';
+}
+
+// ── All sensors table ────────────────────────────────────────────────────────
+const TYPE_ORDER = ['Temperature','Load','Clock','Power','Voltage','Current','Fan','Control','SmallData','Data','Throughput','Factor'];
+const TYPE_NAME  = { SmallData:'MEMORY', Control:'FAN DUTY', Factor:'OTHER', Fan:'FANS' };
+let _sensSig = '';
+function renderSensors(list) {
+  const body = $('sens-body');
+  const sorted = [...list].sort((a, b) => {
+    const ta = TYPE_ORDER.indexOf(a.type), tb = TYPE_ORDER.indexOf(b.type);
+    return (ta < 0 ? 99 : ta) - (tb < 0 ? 99 : tb);
+  });
+  // Rebuild rows only when the sensor set changes; otherwise update values in place
+  const sig = sorted.map(s => s.type + s.name).join('|');
+  if (sig !== _sensSig) {
+    _sensSig = sig;
+    let html = '', last = '';
+    sorted.forEach((s, i) => {
+      if (s.type !== last) { last = s.type; html += `<tr class="sens-group"><td colspan="2">${TYPE_NAME[s.type] || s.type.toUpperCase()}</td></tr>`; }
+      html += `<tr><td>${s.name}</td><td class="v" id="sv-${i}"></td></tr>`;
+    });
+    body.innerHTML = html;
+  }
+  sorted.forEach((s, i) => { const c = $('sv-' + i); if (c) c.textContent = fmtSensor(s.type, s.value); });
+  setText('sens-count', list.length + ' sensors');
+}
+
+// ── Main update ──────────────────────────────────────────────────────────────
+let _lastT = 0, _dt = 0, _seen = 0;
+function receiveData(data) {
+  const g = data.gpu;
+  _seen++;
+  if (!g) { if (_seen > 8) setText('gpu-empty', 'No GPU sensors found. Integrated or unsupported GPUs may not report data.'); return; }
+  $('gpu-empty').style.display = 'none';
+  $('gpu-main').style.display = 'flex';
+
+  const now = performance.now();
+  if (_lastT) _dt = _dt ? _dt * 0.9 + (now - _lastT) * 0.1 : now - _lastT;
+  _lastT = now;
+  if (_dt) setText('hist-span', 'last ' + Math.round(_dt * HIST_LEN / 1000) + 's');
+
+  const vendor = { nvidia:'NVIDIA', amd:'AMD', intel:'INTEL' }[g.vendor] || '';
+  const vramGb = g.vram_total_mb ? Math.round(g.vram_total_mb / 1024) + 'GB' : (data.info && data.info.gpuVram ? data.info.gpuVram + 'GB' : '');
+  setText('gpu-sub', [vendor, g.name, vramGb].filter(Boolean).join(' · '));
+  setText('gpu-badge', [g.temp_core != null ? fmt.temp(g.temp_core) : null, g.load_core != null ? fmt.pct(g.load_core) : null].filter(Boolean).join(' · ') || '--');
+  setText('gpu-time', new Date().toLocaleTimeString());
+
+  renderHero(g);
+
+  const vramPct = g.vram_used_mb != null && g.vram_total_mb ? g.vram_used_mb / g.vram_total_mb * 100 : null;
+  meter('m-load', 'core',  'GPU Core',          g.load_core,     'pct', 100, 'var(--gpu-acc)');
+  meter('m-load', 'memc',  'Memory Controller', g.load_mem_ctrl, 'pct', 100, 'var(--mem-acc)');
+  meter('m-load', 'video', 'Video Engine',      g.load_video,    'pct', 100, 'var(--avg-col)');
+  meter('m-load', 'bus',   'PCIe Bus',          g.load_bus,      'pct', 100, 'var(--border-bright)');
+  meter('m-load', 'plim',  'Power Limit',       g.load_power,    'pct', 100, 'var(--pwr-col)');
+  meter('m-load', 'vram',  'VRAM',              vramPct,         'pct', 100, 'var(--mem-acc)',
+        vramPct != null ? fmt.mb(g.vram_used_mb) + ' / ' + fmt.mb(g.vram_total_mb) : null);
+
+  meter('m-clk', 'ccore', 'Core',   g.clk_core,  'mhz', null, 'var(--peak-col)', true);
+  meter('m-clk', 'cmem',  'Memory', g.clk_mem,   'mhz', null, 'var(--mem-acc)',  true);
+  meter('m-clk', 'cext',  g.clk_extra_name || 'Shader', g.clk_extra, 'mhz', null, 'var(--gpu-acc)', true);
+
+  meter('m-temp', 'tcore', 'Core',      g.temp_core,    'temp', 110, g.temp_core    != null ? tempCol(g.temp_core)    : '', true);
+  meter('m-temp', 'thot',  'Hot Spot',  g.temp_hotspot, 'temp', 110, g.temp_hotspot != null ? tempCol(g.temp_hotspot) : '', true);
+  meter('m-temp', 'tmem',  'Memory',    g.temp_mem,     'temp', 110, g.temp_mem     != null ? tempCol(g.temp_mem)     : '', true);
+
+  renderHistory(g);
+
+  infoRow('pc-rows', 'pw',  'Board power',  g.power   != null ? fmt.w(g.power) + '  (peak ' + fmt.w(peak('pc-pw', g.power)) + ')' : null, 'var(--pwr-col)');
+  infoRow('pc-rows', 'vc',  'Core voltage', g.voltage != null ? fmt.v(g.voltage) : null, 'var(--text)');
+  infoRow('pc-rows', 'fr',  'Fan speed',    g.fan_rpm != null ? fmt.rpm(g.fan_rpm) + (g.fan_rpm === 0 ? '  (fans stopped / zero-RPM mode)' : '') : null, 'var(--gpu-acc)');
+  infoRow('pc-rows', 'fp',  'Fan duty',     g.fan_pct != null ? fmt.pct(g.fan_pct) : null, 'var(--gpu-acc)');
+  infoRow('pc-rows', 'rx',  'PCIe receive', g.pcie_rx != null ? fmt.bps(g.pcie_rx) : null, 'var(--label)');
+  infoRow('pc-rows', 'tx',  'PCIe send',    g.pcie_tx != null ? fmt.bps(g.pcie_tx) : null, 'var(--label)');
+
+  if (g.sensors) renderSensors(g.sensors);
+}
+
+function onConfigReceived(cfg) { navOnConfig(cfg); }
+
+if (IS_WEBVIEW) {
+  window.chrome.webview.addEventListener('message', e => {
+    try {
+      const m = JSON.parse(e.data);
+      if (m.type === 'config') onConfigReceived(m);
+      else receiveData(m);
+    } catch {}
+  });
+  sendToHost({type:'requestConfig'});
+}
+</script>
+</body>
+</html>
