@@ -310,9 +310,18 @@ public class MainForm : Form
 
     private void OnWebMessage(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
+        try { HandleMessage(e.TryGetWebMessageAsString()); }
+        catch (Exception ex) { Console.WriteLine($"[msg] error: {ex.Message}"); }
+    }
+
+    // Messages that only make sense for the main window (popouts must not drive it)
+    private static readonly HashSet<string> MainWindowOnly =
+        new() { "navigate", "popOut", "minimize", "exit", "toggleFullscreen", "requestConfig", "getLogs" };
+
+    private void HandleMessage(string raw)
+    {
         try
         {
-            string raw = e.TryGetWebMessageAsString();
             Console.WriteLine($"[msg] {raw[..Math.Min(80,raw.Length)]}");
             var msg = JsonSerializer.Deserialize<IncomingMessage>(raw, _json);
             if (msg == null) return;
@@ -369,6 +378,14 @@ public class MainForm : Form
                             _config.Settings[kv.Key] = kv.Value;
                         _config.Save();
                         Console.WriteLine("[config] Settings saved");
+                        if (msg.settings.Keys.Any(k => k.StartsWith("alert")))
+                        {
+                            // New limits/state: evaluate from scratch (no latch, no cooldown)
+                            _alertActive.Clear(); _alertLast.Clear();
+                            var st = _config.Settings;
+                            Console.WriteLine($"[alert] settings: enabled={st.GetValueOrDefault("alertsEnabled", "false")} " +
+                                              $"cpu={st.GetValueOrDefault("alertCpu", "90")} gpu={st.GetValueOrDefault("alertGpu", "85")}");
+                        }
                     }
                     break;
 
@@ -668,6 +685,10 @@ public class MainForm : Form
                             await form!.ExecuteScriptAsync(
                                 $"typeof orgbCheckResult==='function'&&orgbCheckResult('{cid3}',{connected.ToString().ToLower()})");
                         }
+                        // Everything else (settings, fan control, alerts, ...) goes through the
+                        // main handler — previously these were silently dropped for popouts.
+                        else if (msg2.type != null && !MainWindowOnly.Contains(msg2.type))
+                            BeginInvoke(() => HandleMessage(raw));
                     }
                     catch { }
                 });
@@ -743,28 +764,38 @@ public class MainForm : Form
     private void CheckTempAlerts(SensorData d)
     {
         var s = _config.Settings;
-        if (s == null || !s.TryGetValue("alertsEnabled", out var on) || on != "true") return;
+        if (s == null || !s.TryGetValue("alertsEnabled", out var on) || on != "true")
+        {
+            d.alert_status = "Alerts are off";
+            return;
+        }
         float Limit(string key, float def) =>
             s.TryGetValue(key, out var v) && float.TryParse(v, System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out var f) && f > 0 ? f : def;
-        CheckAlert("CPU", d.cpu_temp, Limit("alertCpu", 90));
-        CheckAlert("GPU", d.gpu_temp, Limit("alertGpu", 85));
+        d.alert_status = CheckAlert("CPU", d.cpu_temp, Limit("alertCpu", 90)) + " · " +
+                         CheckAlert("GPU", d.gpu_temp, Limit("alertGpu", 85));
     }
 
-    private void CheckAlert(string name, float? temp, float limit)
+    // Returns a short status for the settings panel, e.g. "CPU 55°/40° sent 14:02"
+    private string CheckAlert(string name, float? temp, float limit)
     {
-        if (temp is not float t) return;
+        if (temp is not float t) return $"{name} no reading";
+        string state = $"{name} {t:F0}°/{limit:F0}°";
         if (t >= limit)
         {
-            if (_alertActive.Contains(name)) return;
-            if (_alertLast.TryGetValue(name, out var last) && DateTime.Now - last < TimeSpan.FromMinutes(5)) return;
+            if (_alertActive.Contains(name))
+                return $"{state} sent {_alertLast[name]:HH:mm}";
+            if (_alertLast.TryGetValue(name, out var last) && DateTime.Now - last < TimeSpan.FromMinutes(5))
+                return $"{state} waiting (5 min limit)";
             _alertActive.Add(name);
             _alertLast[name] = DateTime.Now;
             _tray.ShowBalloonTip(8000, $"Vexis — {name} temperature high",
                 $"{name} is at {t:F0} °C (your limit is {limit:F0} °C).", ToolTipIcon.Warning);
             Console.WriteLine($"[alert] {name} {t:F1}°C ≥ limit {limit:F0}°C — notification shown");
+            return $"{state} sent {DateTime.Now:HH:mm}";
         }
-        else if (t < limit - 5) _alertActive.Remove(name);
+        if (t < limit - 5) _alertActive.Remove(name);
+        return _alertActive.Contains(name) ? $"{state} cooling" : $"{state} ok";
     }
     private void OnResize(object? s, EventArgs e) { if (WindowState==FormWindowState.Minimized) Hide(); }
 

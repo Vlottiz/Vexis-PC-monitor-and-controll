@@ -577,13 +577,14 @@ function buildPanelHTML() {
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
           <span style="font-size:9px;color:var(--label);opacity:.8">CPU limit</span>
           <span><input type="number" id="nv-alertCpu" class="nv-select nv-num" min="40" max="115" step="1" value="90"
-            onchange="navSaveSetting('alertCpu', this.value)"> <span style="font-size:9px;color:var(--label);opacity:.8">°C</span></span>
+            oninput="navSetAlertLimit('alertCpu', this.value)"> <span style="font-size:9px;color:var(--label);opacity:.8">°C</span></span>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
           <span style="font-size:9px;color:var(--label);opacity:.8">GPU limit</span>
           <span><input type="number" id="nv-alertGpu" class="nv-select nv-num" min="40" max="115" step="1" value="85"
-            onchange="navSaveSetting('alertGpu', this.value)"> <span style="font-size:9px;color:var(--label);opacity:.8">°C</span></span>
+            oninput="navSetAlertLimit('alertGpu', this.value)"> <span style="font-size:9px;color:var(--label);opacity:.8">°C</span></span>
         </div>
+        <div id="nv-alert-status" style="font-size:9px;font-family:monospace;color:var(--label);opacity:.75;margin:2px 0 6px;min-height:12px"></div>
         <button onclick="sendToHost({type:'testAlert'})" class="nvc-reset-all" style="width:100%;justify-content:center;margin-top:2px">
           🔔 Send test notification
         </button>
@@ -691,6 +692,23 @@ window.navSaveSetting = function(key, val) {
   sendToHost({ type:'saveSettings', settings: { [key]: String(val) } });
 };
 
+// Alert limits save as you type (debounced) and switch alerts on
+let _navAlertTimer = null;
+window.navSetAlertLimit = function(key, val) {
+  if (!(parseFloat(val) > 0)) return;
+  clearTimeout(_navAlertTimer);
+  _navAlertTimer = setTimeout(() => {
+    const sw = document.getElementById('nv-alertsEnabled');
+    if (sw && !sw.checked) { sw.checked = true; navSaveSetting('alertsEnabled', 'true'); }
+    navSaveSetting(key, val);
+  }, 400);
+};
+// Live alert state from the host, e.g. "CPU 55°/40° sent 14:02 · GPU 47°/85° ok"
+window.navAlertStatus = function(text) {
+  const el = document.getElementById('nv-alert-status');
+  if (el && text != null && el.textContent !== text) el.textContent = text;
+};
+
 // Start with Windows — the host owns the real state (a scheduled task)
 window.navSetStartup = function(on) { sendToHost({ type:'setStartup', enabled: !!on }); };
 window.navSetStartupState = function(on) {
@@ -767,12 +785,72 @@ function initPopoutBadge() {
   b.id = 'popout-badge'; b.innerHTML = '⊞ INSTANCE';
   document.body.appendChild(b);
   const s = document.createElement('style');
-  s.textContent = `#popout-badge{position:fixed;top:5px;left:8px;z-index:9000;font-size:9px;font-family:monospace;letter-spacing:.1em;color:var(--header-title,#ffcc00);opacity:.4;background:rgba(0,0,0,.4);padding:3px 8px;border:1px solid rgba(68,51,0,.3);border-radius:2px;pointer-events:none;}`;
+  s.textContent = `#popout-badge{position:fixed;bottom:5px;left:8px;z-index:9000;font-size:9px;font-family:monospace;letter-spacing:.1em;color:var(--header-title,#ffcc00);opacity:.4;background:rgba(0,0,0,.4);padding:3px 8px;border:1px solid rgba(68,51,0,.3);border-radius:2px;pointer-events:none;}`;
   document.head.appendChild(s);
   applyStoredLightMode();
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
+// Page-level styles every page needs, including popout windows:
+// collapsible sections, switches, selects and the text-scale variables.
+function injectSharedStyles() {
+  const s = document.createElement('style');
+  s.textContent = `
+    /* ── Collapsible sections ─────────────────────────────────────────────── */
+    .pcm-collapsible {
+      cursor:pointer; user-select:none;
+      color:var(--header-title) !important; font-weight:700 !important; letter-spacing:.2em;
+      text-shadow:0 0 10px color-mix(in srgb, var(--title-glow, transparent) 45%, transparent);
+      transition:filter .15s;
+    }
+    .pcm-collapsible:hover { filter:brightness(1.25); }
+    .pcm-collapsible::after {
+      content:'▾'; display:inline-block; margin-left:6px; font-size:.9em;
+      opacity:.6; transition:transform .15s, opacity .15s;
+    }
+    .pcm-collapsible:hover::after { opacity:1; }
+    .pcm-collapsible.pcm-is-collapsed::after { transform:rotate(-90deg); }
+    .pcm-collapsed > :not(.pcm-collapse-head) { display:none !important; }
+    .pcm-collapsed .pcm-collapse-head, .pcm-collapsed .pcm-collapse-head .card-title { margin-bottom:0 !important; }
+    .pcm-hidden { display:none !important; }
+
+    /* ── Text scaling ──────────────────────────────────────────────────────── */
+    /* Pages size text as calc(Npx * var(--fs-base)) — "Page UI Font" slider — and
+       live readings additionally * var(--data-scale) — "Data Text" slider. */
+    :root { --fs-base:1; --data-scale:1; --nv-scale:1; }
+    /* On/off switch — shared by all pages */
+    .nv-switch { display:inline-flex; align-items:center; gap:6px; cursor:pointer; user-select:none; }
+    .nv-switch input { position:absolute; opacity:0; width:0; height:0; }
+    .nv-switch-track {
+      position:relative; width:28px; height:14px; border-radius:7px; flex-shrink:0;
+      background:var(--bar-bg,#120a00); border:1px solid var(--border,#443300); transition:background .15s, border-color .15s;
+    }
+    .nv-switch-knob {
+      position:absolute; top:1px; left:1px; width:10px; height:10px; border-radius:50%;
+      background:var(--label,#aa7700); transition:transform .15s, background .15s;
+    }
+    .nv-switch input:checked + .nv-switch-track {
+      background:color-mix(in srgb, var(--header-title,#ffcc00) 22%, transparent); border-color:var(--header-title,#ffcc00);
+    }
+    .nv-switch input:checked + .nv-switch-track .nv-switch-knob {
+      transform:translateX(14px); background:var(--header-title,#ffcc00);
+      box-shadow:0 0 6px var(--title-glow,transparent);
+    }
+    .nv-switch-text {
+      font-size:calc(9px * var(--fs-base,1)); font-family:monospace; letter-spacing:.14em;
+      color:var(--label,#aa7700); transition:color .15s;
+    }
+    .nv-switch input:checked ~ .nv-switch-text { color:var(--header-title,#ffcc00); }
+
+    .nv-num { width:52px; text-align:right; }
+    .nv-select {
+      background:var(--surface2,#1e1608); border:1px solid var(--border,#443300); color:var(--text,#e8d080);
+      font-size:calc(9px * var(--nv-scale,1)); padding:3px 6px; border-radius:3px; font-family:monospace; cursor:pointer;
+    }
+  `;
+  document.head.appendChild(s);
+}
+
 function injectNavStyles() {
   const s = document.createElement('style');
   s.textContent = `
@@ -981,57 +1059,6 @@ function injectNavStyles() {
 
     body.nav-light-mode { filter:invert(1) hue-rotate(180deg); }
 
-    /* ── Collapsible sections ─────────────────────────────────────────────── */
-    .pcm-collapsible {
-      cursor:pointer; user-select:none;
-      color:var(--header-title) !important; font-weight:700 !important; letter-spacing:.2em;
-      text-shadow:0 0 10px color-mix(in srgb, var(--title-glow, transparent) 45%, transparent);
-      transition:filter .15s;
-    }
-    .pcm-collapsible:hover { filter:brightness(1.25); }
-    .pcm-collapsible::after {
-      content:'▾'; display:inline-block; margin-left:6px; font-size:.9em;
-      opacity:.6; transition:transform .15s, opacity .15s;
-    }
-    .pcm-collapsible:hover::after { opacity:1; }
-    .pcm-collapsible.pcm-is-collapsed::after { transform:rotate(-90deg); }
-    .pcm-collapsed > :not(.pcm-collapse-head) { display:none !important; }
-    .pcm-collapsed .pcm-collapse-head, .pcm-collapsed .pcm-collapse-head .card-title { margin-bottom:0 !important; }
-    .pcm-hidden { display:none !important; }
-
-    /* ── Text scaling ──────────────────────────────────────────────────────── */
-    /* Pages size text as calc(Npx * var(--fs-base)) — "Page UI Font" slider — and
-       live readings additionally * var(--data-scale) — "Data Text" slider. */
-    :root { --fs-base:1; --data-scale:1; --nv-scale:1; }
-    /* On/off switch — shared by all pages */
-    .nv-switch { display:inline-flex; align-items:center; gap:6px; cursor:pointer; user-select:none; }
-    .nv-switch input { position:absolute; opacity:0; width:0; height:0; }
-    .nv-switch-track {
-      position:relative; width:28px; height:14px; border-radius:7px; flex-shrink:0;
-      background:var(--bar-bg,#120a00); border:1px solid var(--border,#443300); transition:background .15s, border-color .15s;
-    }
-    .nv-switch-knob {
-      position:absolute; top:1px; left:1px; width:10px; height:10px; border-radius:50%;
-      background:var(--label,#aa7700); transition:transform .15s, background .15s;
-    }
-    .nv-switch input:checked + .nv-switch-track {
-      background:color-mix(in srgb, var(--header-title,#ffcc00) 22%, transparent); border-color:var(--header-title,#ffcc00);
-    }
-    .nv-switch input:checked + .nv-switch-track .nv-switch-knob {
-      transform:translateX(14px); background:var(--header-title,#ffcc00);
-      box-shadow:0 0 6px var(--title-glow,transparent);
-    }
-    .nv-switch-text {
-      font-size:calc(9px * var(--fs-base,1)); font-family:monospace; letter-spacing:.14em;
-      color:var(--label,#aa7700); transition:color .15s;
-    }
-    .nv-switch input:checked ~ .nv-switch-text { color:var(--header-title,#ffcc00); }
-
-    .nv-num { width:52px; text-align:right; }
-    .nv-select {
-      background:var(--surface2,#1e1608); border:1px solid var(--border,#443300); color:var(--text,#e8d080);
-      font-size:calc(9px * var(--nv-scale,1)); padding:3px 6px; border-radius:3px; font-family:monospace; cursor:pointer;
-    }
   `;
   document.head.appendChild(s);
 }
@@ -1115,6 +1142,11 @@ new MutationObserver(() => {
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 function boot() {
+  injectSharedStyles();
+  // Every page defines receiveData(); tap it for nav-level info (alert status)
+  const pageReceive = window.receiveData;
+  if (typeof pageReceive === 'function')
+    window.receiveData = function(d) { if (d && d.alert_status) navAlertStatus(d.alert_status); return pageReceive.apply(this, arguments); };
   if (NAV_IS_POPOUT) initPopoutBadge();
   else               initNav();
   navApplyStoredFontScale();
