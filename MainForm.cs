@@ -699,6 +699,7 @@ public class MainForm : Form
         }
         catch (Exception ex)
         {
+            try { _orgbClient?.Dispose(); } catch { } // don't leak the old socket
             _orgbClient = null;
             Console.WriteLine($"[rgb] proxy error: {ex.Message}");
             return (false, ex.Message);

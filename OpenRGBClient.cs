@@ -56,7 +56,7 @@ public class OpenRGBClient : IDisposable
         try
         {
             await SendAsync(0, 40, BitConverter.GetBytes(MAX_PROTOCOL));
-            var (_, _, verData) = await RecvAsync();
+            var verData = await RecvReplyAsync(40);
             uint serverVer = verData.Length >= 4 ? BitConverter.ToUInt32(verData, 0) : 0;
             _proto = Math.Min(MAX_PROTOCOL, serverVer);
             Console.WriteLine($"[orgb] Connected on port {_port}, server protocol v{serverVer}, using v{_proto}");
@@ -110,6 +110,19 @@ public class OpenRGBClient : IDisposable
         return (devIdx, pktId, data);
     }
 
+    // OpenRGB also sends unsolicited packets (e.g. DEVICE_LIST_UPDATED, id 100, while it
+    // is still detecting hardware). Skip anything that isn't the reply we asked for.
+    private async Task<byte[]> RecvReplyAsync(uint expectedPktId)
+    {
+        for (int skipped = 0; ; skipped++)
+        {
+            var (_, pktId, data) = await RecvAsync();
+            if (pktId == expectedPktId) return data;
+            Console.WriteLine($"[orgb] skipped unsolicited packet id={pktId} len={data.Length}");
+            if (skipped > 50) throw new IOException("no reply from OpenRGB");
+        }
+    }
+
     private async Task ReadExactAsync(byte[] buf, int count)
     {
         int got = 0;
@@ -129,15 +142,18 @@ public class OpenRGBClient : IDisposable
         {
             // Get count
             await SendAsync(0, PKT_COUNT, Array.Empty<byte>());
-            var (_, _, cntData) = await RecvAsync();
+            var cntData = await RecvReplyAsync(PKT_COUNT);
             int count = (int)Read32(cntData, 0);
             Console.WriteLine($"[orgb] Device count: {count}");
 
             var arr = new JsonArray();
             for (int i = 0; i < count; i++)
             {
-                await SendAsync((uint)i, PKT_DEV_DATA, BitConverter.GetBytes((uint)i));
-                var (_, _, dd) = await RecvAsync();
+                // The 4-byte payload is the protocol version to describe the device in
+                // (NetworkServer: REQUEST_CONTROLLER_DATA) — not the device index. Sending
+                // the index made OpenRGB describe device 0 in protocol v0, device 1 in v1, ...
+                await SendAsync((uint)i, PKT_DEV_DATA, BitConverter.GetBytes(_proto));
+                var dd = await RecvReplyAsync(PKT_DEV_DATA);
                 var dev = ParseDevice(i, dd);
                 _modes[(uint)i] = _lastParsedModes;
                 arr.Add(dev);
@@ -368,7 +384,9 @@ public class OpenRGBClient : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[orgb] Device {idx} ({name}) parse error: {ex.Message}");
+            Console.WriteLine($"[orgb] Device {idx} ({name}) parse error: {ex.Message} — " +
+                              $"{d.Length} bytes, protocol v{_proto}, first bytes: " +
+                              BitConverter.ToString(d, 0, Math.Min(64, d.Length)));
         }
 
         int effectiveLeds = colors.Count > 0 ? colors.Count : Math.Max(numLeds, zoneLeds);
