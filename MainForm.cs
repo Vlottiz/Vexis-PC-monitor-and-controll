@@ -655,6 +655,7 @@ public class MainForm : Form
     //                                 {mode:n}                  switch to mode n
     //                                 {mode:n, r, g, b}         mode n with that colour
     //                                                           (mode-specific colours, e.g. GPU Static)
+    //                                 {mode:n, brightness:0-100} hardware brightness, if the mode has one
     private async Task<(bool ok, string json)> OpenRgbProxyAsync(IncomingMessage msg)
     {
         await _orgbLock.WaitAsync();
@@ -692,7 +693,8 @@ public class MainForm : Form
                            (byte)(m.TryGetProperty("g", out var gv) ? gv.GetInt32() : 0),
                            (byte)(m.TryGetProperty("b", out var bv) ? bv.GetInt32() : 0))
                         : null;
-                    await _orgbClient.SetModeAsync(dev, mv.GetInt32(), color);
+                    int? bright = m.TryGetProperty("brightness", out var brv) ? brv.GetInt32() : null;
+                    await _orgbClient.SetModeAsync(dev, mv.GetInt32(), color, bright);
                 }
             }
             return (true, "{}");

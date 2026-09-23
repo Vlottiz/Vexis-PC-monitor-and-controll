@@ -20,6 +20,7 @@ public class OpenRGBClient : IDisposable
 
     // Mode colour types (RGBController.h)
     public const int MODE_COLORS_NONE = 0, MODE_COLORS_PER_LED = 1, MODE_COLORS_MODE_SPECIFIC = 2, MODE_COLORS_RANDOM = 3;
+    private const uint MODE_FLAG_HAS_BRIGHTNESS = 1 << 4;
 
     // One device mode, exactly as OpenRGB describes it — kept so UpdateMode can send it back
     private sealed class ModeInfo
@@ -189,7 +190,9 @@ public class OpenRGBClient : IDisposable
     /// mode takes mode-specific colours (e.g. a GPU's "Static"), every mode colour is set
     /// to it — that is how devices without a per-LED mode get a colour.
     /// </summary>
-    public async Task SetModeAsync(uint devIdx, int modeIdx, (byte r, byte g, byte b)? color = null)
+    /// <param name="brightnessPct">0-100, mapped onto the mode's own brightness range
+    /// (only for modes that have one, protocol 3+).</param>
+    public async Task SetModeAsync(uint devIdx, int modeIdx, (byte r, byte g, byte b)? color = null, int? brightnessPct = null)
     {
         await _lock.WaitAsync();
         try
@@ -207,6 +210,11 @@ public class OpenRGBClient : IDisposable
                 int n = Math.Max(Math.Max(1, (int)m.ColorsMin), m.Colors.Count);
                 if (m.ColorsMax > 0) n = Math.Min(n, (int)m.ColorsMax);
                 m.Colors = Enumerable.Repeat(packed, n).ToList();
+            }
+            if (brightnessPct is int bp && (m.Flags & MODE_FLAG_HAS_BRIGHTNESS) != 0 && _proto >= 3)
+            {
+                uint lo = Math.Min(m.BrightMin, m.BrightMax), hi = Math.Max(m.BrightMin, m.BrightMax);
+                m.Brightness = lo + (uint)Math.Round((hi - lo) * Math.Clamp(bp, 0, 100) / 100.0);
             }
 
             var body = new List<byte>();
@@ -397,7 +405,8 @@ public class OpenRGBClient : IDisposable
             modeArr.Add(new JsonObject
             {
                 ["name"] = m.Name, ["flags"] = (int)m.Flags, ["color_mode"] = (int)m.ColorMode,
-                ["colors_min"] = (int)m.ColorsMin, ["colors_max"] = (int)m.ColorsMax
+                ["colors_min"] = (int)m.ColorsMin, ["colors_max"] = (int)m.ColorsMax,
+                ["has_brightness"] = (m.Flags & MODE_FLAG_HAS_BRIGHTNESS) != 0 && _proto >= 3
             });
         bool perLed      = modes.Any(m => m.ColorMode == MODE_COLORS_PER_LED);
         bool modeColored = modes.Any(m => m.ColorMode == MODE_COLORS_MODE_SPECIFIC);
