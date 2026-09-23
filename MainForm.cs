@@ -353,7 +353,7 @@ public class MainForm : Form
                 }
 
                 case "testAlert":
-                    Invoke(() => _tray.ShowBalloonTip(6000, "Vexis — test alert",
+                    Invoke(() => QueueNotification("test alert",
                         "Temperature alerts are working. You'll see this when a limit is passed.",
                         ToolTipIcon.Info));
                     break;
@@ -761,8 +761,42 @@ public class MainForm : Form
     private readonly HashSet<string>             _alertActive = new();
     private readonly Dictionary<string, DateTime> _alertLast  = new();
 
+    // ── Tray notification queue ─────────────────────────────────────────────────
+    // A NotifyIcon shows one balloon at a time and a new ShowBalloonTip replaces the
+    // one on screen — a GPU alert 1.5 s after a CPU alert wiped the CPU one out.
+    // Alerts raised close together are merged into one notification, and the next
+    // one waits until the previous has had time to be seen. Windows also tends to
+    // drop balloons from a tray icon that was only just created, hence the startup
+    // delay before alerts are evaluated.
+    private static readonly TimeSpan AlertStartupDelay = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan BalloonGap        = TimeSpan.FromSeconds(7);
+    private readonly DateTime _startedAt = DateTime.Now;
+    private readonly List<(string Title, string Text, ToolTipIcon Icon)> _pendingBalloons = new();
+    private DateTime _lastBalloon = DateTime.MinValue;
+
+    private void QueueNotification(string title, string text, ToolTipIcon icon)
+    {
+        _pendingBalloons.Add((title, text, icon));
+        FlushNotifications();
+    }
+
+    // Called on every poll tick (UI thread) and when something is queued
+    private void FlushNotifications()
+    {
+        if (_pendingBalloons.Count == 0 || DateTime.Now - _lastBalloon < BalloonGap) return;
+        var items = _pendingBalloons.ToList();
+        _pendingBalloons.Clear();
+        string title = items.Count == 1 ? $"Vexis — {items[0].Title}" : "Vexis — temperatures high";
+        string text  = string.Join("\n", items.Select(i => i.Text));
+        var icon     = items.Any(i => i.Icon == ToolTipIcon.Warning) ? ToolTipIcon.Warning : items[0].Icon;
+        _tray.ShowBalloonTip(8000, title, text, icon);
+        _lastBalloon = DateTime.Now;
+        Console.WriteLine($"[alert] notification shown: {title} | {text.Replace("\n", " | ")}");
+    }
+
     private void CheckTempAlerts(SensorData d)
     {
+        FlushNotifications();
         var s = _config.Settings;
         if (s == null || !s.TryGetValue("alertsEnabled", out var on) || on != "true")
         {
@@ -787,11 +821,13 @@ public class MainForm : Form
                 return $"{state} sent {_alertLast[name]:HH:mm}";
             if (_alertLast.TryGetValue(name, out var last) && DateTime.Now - last < TimeSpan.FromMinutes(5))
                 return $"{state} waiting (5 min limit)";
+            if (DateTime.Now - _startedAt < AlertStartupDelay)
+                return $"{state} starting up";
             _alertActive.Add(name);
             _alertLast[name] = DateTime.Now;
-            _tray.ShowBalloonTip(8000, $"Vexis — {name} temperature high",
+            QueueNotification($"{name} temperature high",
                 $"{name} is at {t:F0} °C (your limit is {limit:F0} °C).", ToolTipIcon.Warning);
-            Console.WriteLine($"[alert] {name} {t:F1}°C ≥ limit {limit:F0}°C — notification shown");
+            Console.WriteLine($"[alert] {name} {t:F1}°C ≥ limit {limit:F0}°C — notification queued");
             return $"{state} sent {DateTime.Now:HH:mm}";
         }
         if (t < limit - 5) _alertActive.Remove(name);
