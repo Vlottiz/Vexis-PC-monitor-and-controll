@@ -5,7 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PC Monitor</title>
-<link rel="stylesheet" href="/ui.css?v=10">
+<link rel="stylesheet" href="/ui.css?v=11">
 <style>
   .hw-name { font-size:calc(15px*var(--fs-base,1)); font-weight: 700; letter-spacing: .14em; color: var(--header-title); text-shadow: 0 0 18px var(--title-glow); }
   .hw-sub  { font-size:calc(10px*var(--fs-base,1)); color: var(--label-dim); letter-spacing: .1em; margin-top: 2px; }
@@ -120,11 +120,11 @@
             <span class="stat-value sm glow" id="h-avg" style="color:var(--avg-col)">--</span>
           </div>
           <div class="stat">
-            <span class="stat-label">CCD0 TEMP</span>
+            <span class="stat-label" id="h-ccd0-lbl">CCD0 TEMP</span>
             <span class="stat-value sm" id="h-ccd0" style="color:var(--temp-val)">--</span>
           </div>
           <div class="stat">
-            <span class="stat-label">CCD1 TEMP</span>
+            <span class="stat-label" id="h-ccd1-lbl">CCD1 TEMP</span>
             <span class="stat-value sm" id="h-ccd1" style="color:var(--temp-val)">--</span>
           </div>
         </div>
@@ -208,7 +208,7 @@
           <span class="nav-tile-label" style="font-size:calc(10px*var(--fs-base,1))">FAN CONTROL</span>
         </div>
         <div style="font-size:calc(18px*var(--fs-base,1)*var(--data-scale,1));font-weight:700;color:var(--mem-acc)" id="nt-fanrpm">-- RPM</div>
-        <div style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);margin-top:2px">GPU FAN</div>
+        <div id="nt-fanname" style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);margin-top:2px">FANS</div>
       </button>
 
       <button class="nav-tile" onclick="navView('rgb.html')"
@@ -237,11 +237,12 @@
   </div>
 </div>
 
-<script src="/nav.js?v=10" data-page="home"></script>
+<script src="/nav.js?v=11" data-page="home"></script>
 <script>
 setInterval(()=>{ const e=document.getElementById('htime'); if(e)e.textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}); },1000);
 
 let _hwDone=false;
+const _fansSeen=new Set(); // fans that have reported RPM > 0 this session
 function applyHwInfo(info){
   const warn = document.getElementById('driver-warn');
   if (warn && info) {
@@ -293,13 +294,24 @@ function receiveData(data){
   if(ntP)ntP.textContent=peakClk>0?Math.round(peakClk)+' MHz':'-- MHz';
   const ntG=document.getElementById('nt-gputemp');
   if(ntG)ntG.textContent=data.gpu_temp!=null?data.gpu_temp.toFixed(1)+' °C':'-- °C';
+  // Fan tile: the busiest fan, not just the first header (often an empty CPU_FAN)
   const ntF=document.getElementById('nt-fanrpm');
-  if(ntF&&data.fans&&data.fans.length)ntF.textContent=Math.round(data.fans[0].rpm)+' RPM';
+  if(ntF&&data.fans&&data.fans.length){
+    const top=data.fans.reduce((a,f)=>f.rpm>a.rpm?f:a,data.fans[0]);
+    ntF.textContent=Math.round(top.rpm)+' RPM';
+    sv('nt-fanname',top.name.toUpperCase());
+  }
 
   if(data.info)applyHwInfo(data.info);
   if(data.fans&&data.fans.length>0){
     const div=document.getElementById('h-fans');
-    div.innerHTML=data.fans.map(f=>`<div class="fan-row"><span class="fan-name">${f.name}</span><span class="fan-rpm">${Math.round(f.rpm)} <span style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim)">RPM</span></span></div>`).join('');
+    // Only fans that spin (or have spun this session); empty headers are summarised
+    data.fans.forEach(f=>{if(f.rpm>0)_fansSeen.add(f.name);});
+    const shown=data.fans.filter(f=>_fansSeen.has(f.name));
+    const idle=data.fans.length-shown.length;
+    div.innerHTML=shown.map(f=>`<div class="fan-row"><span class="fan-name">${f.name}</span><span class="fan-rpm">${Math.round(f.rpm)} <span style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim)">RPM</span></span></div>`).join('')
+      +(idle?`<div class="fan-row" style="opacity:.55"><span class="fan-name">+${idle} idle header${idle>1?'s':''} (0 RPM)</span><span></span></div>`:'')
+      +(!shown.length&&!idle?'<div class="empty-state">No fans detected</div>':'');
   }
   const ct=data.cpu_temp;
   const cpuFmt=ct!=null?ct.toFixed(1)+'°C':'--°C';
@@ -335,8 +347,12 @@ function receiveData(data){
   Object.values(cores).forEach(c=>{if(c.clk>peak)peak=c.clk;if(c.clk>0){tot+=c.clk;cnt++;}});
   sv('h-peak',peak>0?Math.round(peak)+' MHz':'--');
   sv('h-avg',cnt>0?Math.round(tot/cnt)+' MHz':'--');
-  sv('h-ccd0',data.ccd0_temp!=null?data.ccd0_temp.toFixed(1)+'°C':'--');
-  sv('h-ccd1',data.ccd1_temp!=null?data.ccd1_temp.toFixed(1)+'°C':'--');
+  // CPUs without two CCDs (Intel, single-CCD Ryzen): use those slots for CPU temp / power
+  const hasCcd0=data.ccd0_temp!=null, hasCcd1=data.ccd1_temp!=null;
+  sv('h-ccd0-lbl',hasCcd0?'CCD0 TEMP':'CPU TEMP');
+  sv('h-ccd1-lbl',hasCcd1?'CCD1 TEMP':'POWER');
+  sv('h-ccd0',hasCcd0?data.ccd0_temp.toFixed(1)+'°C':data.cpu_temp!=null?data.cpu_temp.toFixed(1)+'°C':'--');
+  sv('h-ccd1',hasCcd1?data.ccd1_temp.toFixed(1)+'°C':data.pkg_power!=null?Math.round(data.pkg_power)+' W':'--');
   sv('h-gv',data.gpu_voltage!=null?data.gpu_voltage.toFixed(3)+'V':'--');
   sv('h-gclk',data.gpu_clock!=null?Math.round(data.gpu_clock)+' MHz':'--');
   sv('h-gpwr',data.gpu_power!=null?Math.round(data.gpu_power)+'W':'--');
