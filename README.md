@@ -28,7 +28,7 @@ Unlike traditional monitoring tools, Vexis offers:
 | **GPU Monitoring** | Temperature, clock speed, voltage, power draw, VRAM |
 | **Fan Control** | Auto / Manual / Custom curve editor with hysteresis and minimum speed |
 | **Temperature History** | Min / Max / Avg for every thermal sensor on the system |
-| **RGB Control** | OpenRGB integration — auto-launch, color persistence, GUI toggle |
+| **RGB Control** | OpenRGB integration — auto-launch, brightness, looping effects on all devices, GUI toggle |
 | **Multi-window** | Pop out any page to a separate window |
 | **Themes** | 8 built-in color presets + full per-color customization + 3 saved profiles |
 | **Nav Scaling** | Separate text size sliders for UI, data values, and nav panel |

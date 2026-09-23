@@ -17,7 +17,7 @@ window.navSetUpdateAvailable = function(version) {
   if (!badge) {
     badge = document.createElement('div');
     badge.id = 'nav-update-badge';
-    badge.style.cssText = 'position:fixed;top:5px;right:30px;z-index:9001;background:#ffaa00;color:#000;font-size:8px;font-family:monospace;letter-spacing:.06em;padding:2px 6px;border-radius:3px;cursor:pointer;font-weight:700;';
+    badge.style.cssText = 'position:fixed;top:34px;right:8px;z-index:9001;background:#ffaa00;color:#000;font-size:8px;font-family:monospace;letter-spacing:.06em;padding:2px 6px;border-radius:3px;cursor:pointer;font-weight:700;';
     badge.onclick = () => sendToHost({type:'navigate', file:'info.html'});
     document.body.appendChild(badge);
   }
@@ -801,6 +801,7 @@ function navInitZoom() {
   if (document.getElementById('nav-zoom')) return;
   const z = document.createElement('div');
   z.id = 'nav-zoom';
+  if (NAV_IS_POPOUT) z.style.right = '8px'; // popouts have no ⛶ / ⚙ buttons
   z.innerHTML =
     `<button type="button" title="Zoom out (Ctrl −)" aria-label="Zoom out" data-d="-1">${NAV_ZOOM_SVG('-')}</button>` +
     `<button type="button" id="nav-zoom-pct" title="Reset zoom (Ctrl 0)" aria-label="Reset zoom" data-d="0">100%</button>` +
@@ -922,21 +923,21 @@ function injectSharedStyles() {
 
     .nv-num { width:52px; text-align:right; }
 
-    /* Zoom − 100% + (bottom-right corner, every page and popout) */
+    /* Zoom − 100% + (top-right, left of ⛶ ⚙ — pages keep that corner clear) */
     #nav-zoom {
-      position:fixed; right:8px; bottom:8px; z-index:9998; display:flex; align-items:center; gap:2px;
+      position:fixed; right:68px; top:6px; z-index:9998; display:flex; align-items:center; gap:2px;
       padding:2px; border-radius:14px; background:rgba(0,0,0,.45);
       border:1px solid color-mix(in srgb, var(--border,#443300) 70%, transparent);
       opacity:.55; transition:opacity .15s;
     }
     #nav-zoom:hover, #nav-zoom:focus-within { opacity:1; }
     #nav-zoom button {
-      display:flex; align-items:center; justify-content:center; height:24px; min-width:26px; padding:0 5px;
+      display:flex; align-items:center; justify-content:center; height:20px; min-width:22px; padding:0 4px;
       border:none; border-radius:12px; background:transparent; cursor:pointer;
       color:var(--header-title,#ffcc00); font-family:monospace; font-size:10px;
     }
     #nav-zoom button:hover { background:color-mix(in srgb, var(--header-title,#ffcc00) 18%, transparent); }
-    #nav-zoom-pct { min-width:40px !important; color:var(--label,#aa7700) !important; }
+    #nav-zoom-pct { min-width:36px !important; color:var(--label,#aa7700) !important; }
     .nv-select {
       background:var(--surface2,#1e1608); border:1px solid var(--border,#443300); color:var(--text,#e8d080);
       font-size:calc(9px * var(--nv-scale,1)); padding:3px 6px; border-radius:3px; font-family:monospace; cursor:pointer;

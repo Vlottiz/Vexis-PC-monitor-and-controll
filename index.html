@@ -21,7 +21,7 @@
 }
 *{margin:0;padding:0;box-sizing:border-box;}
 html,body{height:100%;overflow:hidden;}
-body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;background:var(--bg);color:var(--text,#eeddff);font-family:monospace;padding:8px;display:flex;flex-direction:column;transform:scale(var(--scale));transform-origin:top left;width:calc((100vw - 24px)/var(--scale));height:calc(100vh/var(--scale));padding-right:24px;}
+body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;background:var(--bg);color:var(--text,#eeddff);font-family:monospace;padding:8px;display:flex;flex-direction:column;width:100%;height:100vh;}
 #root{flex:1;display:flex;flex-direction:column;overflow:hidden;}
 .divider{display:flex;align-items:center;gap:8px;margin:6px 0 4px;}
 .divider-line{flex:1;height:1px;background:var(--divider-line);}
@@ -33,7 +33,7 @@ body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;backgr
 .card-title{font-size:calc(9px*var(--fs-base,1));color:var(--card-title);letter-spacing:.12em;margin-bottom:6px;text-align:center;}
 #hcpu,#hpwr,#peakclk,#avgclk,#pkgpwr,#sgpuT,#sgpuV,#sgpuP,#sgpuC{text-shadow:0 0 14px var(--glow-col),0 0 5px var(--glow-col);}
 .accent-line{height:1px;background:linear-gradient(90deg,transparent,var(--line-col1),var(--line-col2),var(--line-col1),transparent);}
-#status{position:fixed;bottom:6px;right:118px;font-size:calc(8px*var(--fs-base,1));letter-spacing:.08em;color:var(--label-dim,#2a0a3a);opacity:.5;}
+#status{position:fixed;bottom:6px;right:10px;font-size:calc(8px*var(--fs-base,1));letter-spacing:.08em;color:var(--label-dim,#2a0a3a);opacity:.5;}
 #status.ok{color:var(--label-dim,#2a0a3a);}
 #update-pulse{text-align:center;font-size:calc(7px*var(--fs-base,1));font-family:monospace;color:var(--label-dim,#3a1540);letter-spacing:.12em;margin:-1px 0 3px;opacity:0.18;transition:opacity 0.6s ease;flex-shrink:0;}
 #update-pulse.flash{opacity:0.55;transition:opacity 0s;}
@@ -112,7 +112,7 @@ body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;backgr
     </div>
 
     <!-- CENTER: CORE BARS (always visible) -->
-    <div id="cores-center" style="flex:1;display:flex;flex-direction:column;min-width:0">
+    <div id="cores-center" style="flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin">
       <div style="margin-bottom:4px;display:flex;justify-content:space-between;flex-shrink:0">
         <div style="font-size:calc(13px*var(--fs-base,1));color:var(--ccd-lbl);font-weight:600" data-ccd0-lbl>CCD0</div>
         <div style="font-size:calc(13px*var(--fs-base,1));color:var(--ccd-lbl);font-weight:600" data-ccd0-type>V-Cache</div>
@@ -229,7 +229,7 @@ body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;backgr
 
 <div id="status">LIVE</div>
 
-<script src="/nav.js?v=13" data-page="performance"></script>
+<script src="/nav.js?v=14" data-page="performance"></script>
 <script>
 // ══════════════════════════════════════════════════════════════════════════════
 // WEBVIEW2 IPC — IS_WEBVIEW and sendToHost defined in nav.js
@@ -606,8 +606,6 @@ function applyData(data){
 }
 
 // ── Boot ───────────────────────────────────────────────────────────────────
-function fitDisplay(){document.documentElement.style.setProperty('--scale',Math.min(window.innerWidth/400,window.innerHeight/800));}
-window.addEventListener('resize',fitDisplay);fitDisplay();
 applyAllColors();updateTempBars();updateAvgLabel();
 buildBars();startApplyTimer();setInterval(updateClock,1000);updateClock();
 </script>
