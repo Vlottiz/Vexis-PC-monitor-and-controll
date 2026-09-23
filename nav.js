@@ -577,13 +577,14 @@ function buildPanelHTML() {
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
           <span style="font-size:9px;color:var(--label);opacity:.8">CPU limit</span>
           <span><input type="number" id="nv-alertCpu" class="nv-select nv-num" min="40" max="115" step="1" value="90"
-            onchange="navSaveSetting('alertCpu', this.value)"> <span style="font-size:9px;color:var(--label);opacity:.8">°C</span></span>
+            oninput="navSetAlertLimit('alertCpu', this.value)"> <span style="font-size:9px;color:var(--label);opacity:.8">°C</span></span>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
           <span style="font-size:9px;color:var(--label);opacity:.8">GPU limit</span>
           <span><input type="number" id="nv-alertGpu" class="nv-select nv-num" min="40" max="115" step="1" value="85"
-            onchange="navSaveSetting('alertGpu', this.value)"> <span style="font-size:9px;color:var(--label);opacity:.8">°C</span></span>
+            oninput="navSetAlertLimit('alertGpu', this.value)"> <span style="font-size:9px;color:var(--label);opacity:.8">°C</span></span>
         </div>
+        <div id="nv-alert-status" style="font-size:9px;font-family:monospace;color:var(--label);opacity:.75;margin:2px 0 6px;min-height:12px"></div>
         <button onclick="sendToHost({type:'testAlert'})" class="nvc-reset-all" style="width:100%;justify-content:center;margin-top:2px">
           🔔 Send test notification
         </button>
@@ -689,6 +690,23 @@ function navApplyStoredFontScale() {
 window.navSaveSetting = function(key, val) {
   NAV_SETTINGS[key] = String(val);
   sendToHost({ type:'saveSettings', settings: { [key]: String(val) } });
+};
+
+// Alert limits save as you type (debounced) and switch alerts on
+let _navAlertTimer = null;
+window.navSetAlertLimit = function(key, val) {
+  if (!(parseFloat(val) > 0)) return;
+  clearTimeout(_navAlertTimer);
+  _navAlertTimer = setTimeout(() => {
+    const sw = document.getElementById('nv-alertsEnabled');
+    if (sw && !sw.checked) { sw.checked = true; navSaveSetting('alertsEnabled', 'true'); }
+    navSaveSetting(key, val);
+  }, 400);
+};
+// Live alert state from the host, e.g. "CPU 55°/40° sent 14:02 · GPU 47°/85° ok"
+window.navAlertStatus = function(text) {
+  const el = document.getElementById('nv-alert-status');
+  if (el && text != null && el.textContent !== text) el.textContent = text;
 };
 
 // Start with Windows — the host owns the real state (a scheduled task)
@@ -1125,6 +1143,10 @@ new MutationObserver(() => {
 // ── Boot ──────────────────────────────────────────────────────────────────────
 function boot() {
   injectSharedStyles();
+  // Every page defines receiveData(); tap it for nav-level info (alert status)
+  const pageReceive = window.receiveData;
+  if (typeof pageReceive === 'function')
+    window.receiveData = function(d) { if (d && d.alert_status) navAlertStatus(d.alert_status); return pageReceive.apply(this, arguments); };
   if (NAV_IS_POPOUT) initPopoutBadge();
   else               initNav();
   navApplyStoredFontScale();

@@ -44,6 +44,7 @@ public class SensorData
     public Dictionary<string, float>  all_temps { get; set; } = new();
     public List<FanInfo>?             fans      { get; set; }
     public HwInfo?                    info      { get; set; }
+    public string?                    alert_status { get; set; } // set by MainForm for the settings panel
 }
 
 public class CoreInfo
