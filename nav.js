@@ -392,10 +392,7 @@ function initNav() {
   panel.id = 'nav-panel';
   panel.innerHTML = buildPanelHTML();
   document.body.appendChild(panel);
-  // Force exact width after insertion (overrides any CSS inheritance)
-  requestAnimationFrame(() => {
-    if (panel) { panel.style.setProperty('width','300px','important'); panel.style.setProperty('min-width','300px','important'); panel.style.setProperty('max-width','300px','important'); }
-  });
+  navInitPanelResize(panel);
 
   // ☰ nav button — TOP LEFT
   const btn = document.createElement('button');
@@ -790,6 +787,56 @@ function initPopoutBadge() {
   applyStoredLightMode();
 }
 
+// ── Resizable nav panel ───────────────────────────────────────────────────────
+const NAV_WIDTH_DEFAULT = 300, NAV_WIDTH_MIN = 240, NAV_WIDTH_MAX = 640;
+
+function navSetPanelWidth(px, save) {
+  const max = Math.min(NAV_WIDTH_MAX, window.innerWidth - 40);
+  const w = Math.round(Math.max(NAV_WIDTH_MIN, Math.min(max, px)));
+  document.documentElement.style.setProperty('--nv-width', w + 'px');
+  if (save) { try { localStorage.setItem('pcm-nav-width', String(w)); } catch {} }
+}
+
+function navInitPanelResize(panel) {
+  let stored = NAV_WIDTH_DEFAULT;
+  try { stored = parseInt(localStorage.getItem('pcm-nav-width')) || NAV_WIDTH_DEFAULT; } catch {}
+  navSetPanelWidth(stored, false);
+
+  const grip = document.createElement('div');
+  grip.id = 'nav-resize';
+  grip.title = 'Drag to resize · double-click to reset';
+  panel.appendChild(grip);
+
+  let lastDown = 0;
+  grip.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    // Double-click (two presses within 350 ms) resets to the default width
+    const now = Date.now();
+    if (now - lastDown < 350) { lastDown = 0; navSetPanelWidth(NAV_WIDTH_DEFAULT, true); return; }
+    lastDown = now;
+
+    const startX = e.clientX;
+    let moved = false;
+    grip.setPointerCapture(e.pointerId);
+    document.body.classList.add('nv-resizing');
+    const move = ev => {
+      if (!moved && Math.abs(ev.clientX - startX) < 3) return; // ignore plain clicks
+      moved = true;
+      navSetPanelWidth(ev.clientX, false);
+    };
+    const up = ev => {
+      grip.releasePointerCapture(e.pointerId);
+      grip.removeEventListener('pointermove', move);
+      grip.removeEventListener('pointerup', up);
+      document.body.classList.remove('nv-resizing');
+      if (moved) navSetPanelWidth(ev.clientX, true);
+    };
+    grip.addEventListener('pointermove', move);
+    grip.addEventListener('pointerup', up);
+  });
+}
+
 // ── Styles ────────────────────────────────────────────────────────────────────
 // Page-level styles every page needs, including popout windows:
 // collapsible sections, switches, selects and the text-scale variables.
@@ -863,7 +910,7 @@ function injectNavStyles() {
       transition:transform .22s cubic-bezier(.4,0,.2,1),opacity .2s !important;
     }
     #nav-btn:hover { opacity:1 !important; }
-    #nav-btn.nv-shifted { transform:translateX(300px) !important; }
+    #nav-btn.nv-shifted { transform:translateX(var(--nv-width,300px)) !important; }
 
     #nav-gear-btn {
       position:fixed !important;top:6px !important;right:8px !important;left:auto !important;
@@ -881,7 +928,7 @@ function injectNavStyles() {
 
     #nav-panel {
       position:fixed !important;top:0;left:0;bottom:0;
-      width:300px !important;min-width:300px !important;max-width:300px !important;z-index:8900;
+      width:var(--nv-width,300px) !important;min-width:var(--nv-width,300px) !important;max-width:var(--nv-width,300px) !important;z-index:8900;
       display:flex;flex-direction:column;
       background:color-mix(in srgb,var(--card-bg,#030108) 97%,transparent);
       backdrop-filter:blur(28px) saturate(1.6);
@@ -889,6 +936,17 @@ function injectNavStyles() {
       transform:translateX(-100%);
       transition:transform .22s cubic-bezier(.4,0,.2,1);
     }
+    /* Drag the right edge to resize the panel (double-click resets) */
+    #nav-resize {
+      position:absolute;top:0;right:0;bottom:0;width:8px;cursor:ew-resize;z-index:2;
+    }
+    #nav-resize::after {
+      content:'';position:absolute;top:50%;left:3px;width:2px;height:48px;margin-top:-24px;border-radius:1px;
+      background:var(--border-bright,#886600);opacity:0;transition:opacity .15s;
+    }
+    #nav-resize:hover::after, body.nv-resizing #nav-resize::after { opacity:.9; }
+    body.nv-resizing, body.nv-resizing * { cursor:ew-resize !important; user-select:none !important; }
+    body.nv-resizing #nav-panel, body.nv-resizing #nav-btn { transition:none !important; }
     #nav-panel.nv-open {
       transform:translateX(0);
       box-shadow:6px 0 32px rgba(0,0,0,.7);

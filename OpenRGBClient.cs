@@ -155,21 +155,24 @@ public class OpenRGBClient : IDisposable
         {
             if (!IsConnected) { await ConnectAsync(); }
             if (leds.Count == 0) { Console.WriteLine($"[orgb] SetLEDs dev={devIdx} skipped (0 LEDs)"); return; }
-            // OpenRGB UpdateLEDs format: no count prefix, raw RGBW colors only
-            // OpenRGB computes count from packet size: count = packet_size / 4
             int numLeds = leds.Count;
 
             // Skip devices that have failed repeatedly
             if (_failedDevices.Contains(devIdx))
             {
                 Console.WriteLine($"[orgb] SetLEDs dev={devIdx} skipped (marked failed)");
-                _lock.Release();
-                return;
+                return; // the finally below releases the lock
             }
 
-            var pkt = new List<byte>();
-            // UpdateLEDs body: uint16 num_leds + RGBColor[N] (4 bytes each: RGBW)
-            // Validated: packet_size == 2 + num_leds*4
+            // UpdateLEDs body (OpenRGB NetworkServer / RGBController::SetColorDescription):
+            //   uint32 data_size   — total body size, including these 4 bytes
+            //   uint16 num_colors
+            //   RGBColor[num]      — 4 bytes each (R, G, B, pad)
+            // OpenRGB checks data_size against the packet size; without it the packet
+            // is malformed and OpenRGB drops the connection ("aborted by the host").
+            uint bodySize = (uint)(4 + 2 + numLeds * 4);
+            var pkt = new List<byte>((int)bodySize);
+            pkt.AddRange(BitConverter.GetBytes(bodySize));
             pkt.Add((byte)( numLeds       & 0xFF));
             pkt.Add((byte)((numLeds >> 8) & 0xFF));
             foreach (var led in leds)
