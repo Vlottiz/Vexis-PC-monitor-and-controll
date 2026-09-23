@@ -118,7 +118,8 @@ public class PopoutForm : Form
             var payload = new
             {
                 type = "config", colors = _config.Colors, settings = _config.Settings,
-                colorProfiles = _config.ColorProfiles, fanCurves = _config.FanCurves
+                colorProfiles = _config.ColorProfiles, fanCurves = _config.FanCurves,
+                appVersion = MainForm.AppVersionText, startWithWindows = MainForm.StartWithWindowsEnabled
             };
             string json = JsonSerializer.Serialize(payload, _json);
             await _webView.CoreWebView2.ExecuteScriptAsync(

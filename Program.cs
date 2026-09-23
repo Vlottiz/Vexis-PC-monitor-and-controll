@@ -65,8 +65,11 @@ internal sealed class TeeWriter : TextWriter
 internal static class Program
 {
     [STAThread]
-    static void Main()
+    static void Main(string[] args)
     {
+        // --minimized: started by the "Start with Windows" logon task — go straight to the tray
+        bool startMinimized = args.Any(a => a.Equals("--minimized", StringComparison.OrdinalIgnoreCase));
+
         // ── Admin check ───────────────────────────────────────────────────────
         if (!IsAdministrator())
         {
@@ -88,6 +91,7 @@ internal static class Program
                 Process.Start(new ProcessStartInfo
                 {
                     FileName        = Process.GetCurrentProcess().MainModule!.FileName,
+                    Arguments       = startMinimized ? "--minimized" : "",
                     UseShellExecute = true,
                     Verb            = "runas"
                 });
@@ -122,7 +126,7 @@ internal static class Program
         Application.SetHighDpiMode(HighDpiMode.SystemAware);
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
-        Application.Run(new MainForm());
+        Application.Run(new MainForm(startMinimized));
     }
 
     static bool IsAdministrator()

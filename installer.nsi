@@ -151,6 +151,9 @@ Section "Uninstall"
   ; Stop running instance
   nsExec::ExecToLog 'taskkill /IM Vexis.exe /F'
 
+  ; Remove the "Start with Windows" logon task, if the user turned it on
+  nsExec::ExecToLog 'schtasks /Delete /TN "Vexis" /F'
+
   ; Remove files
   RMDir /r "$INSTDIR"
 

@@ -37,71 +37,6 @@ body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;backgr
 #status.ok{color:var(--label-dim,#2a0a3a);}
 #update-pulse{text-align:center;font-size:calc(7px*var(--fs-base,1));font-family:monospace;color:var(--label-dim,#3a1540);letter-spacing:.12em;margin:-1px 0 3px;opacity:0.18;transition:opacity 0.6s ease;flex-shrink:0;}
 #update-pulse.flash{opacity:0.55;transition:opacity 0s;}
-#settings-btn{position:fixed;top:6px;right:8px;z-index:1500;background:none;border:none;cursor:pointer;font-size:calc(14px*var(--fs-base,1));color:#cc88aa;padding:4px;line-height:1;opacity:0.2;transition:opacity .2s;}
-#settings-btn:hover{opacity:0.9;}
-@keyframes gearBlink{0%,100%{opacity:0.2;}50%{opacity:1;text-shadow:0 0 8px var(--glow-col),0 0 16px var(--line-col1);}}
-#settings-btn.blinking{animation:gearBlink 0.7s ease-in-out infinite;}
-/* Legacy customize drawer — replaced by the shared nav panel (☰ / ⚙), kept hidden */
-#settings-drawer{display:none !important;position:fixed;left:0;right:0;bottom:0;top:0;z-index:1600;background:rgba(0,0,0,0.94);backdrop-filter:blur(10px);display:flex;flex-direction:column;transform:translateY(100%);transition:transform 0.3s ease;}
-#settings-drawer.open{transform:translateY(0);}
-#drawer-handle{height:22px;display:flex;align-items:center;justify-content:center;cursor:ns-resize;flex-shrink:0;background:rgba(0,0,0,0.6);border-bottom:1px solid #1a0828;user-select:none;touch-action:none;}
-#drawer-grip{font-size:calc(14px*var(--fs-base,1));color:#2a0a3a;letter-spacing:6px;transition:color .2s;}
-#drawer-handle:hover #drawer-grip{color:var(--line-col1);}
-#settings-header{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;border-bottom:1px solid #3a1540;flex-shrink:0;background:rgba(0,0,0,0.7);}
-#settings-header>span{font-size:calc(11px*var(--fs-base,1));color:#cc88aa;letter-spacing:.2em;}
-#settings-header-btns{display:flex;gap:5px;}
-#settings-header-btns button{background:#1a0828;border:1px solid #5c2278;color:#cc88aa;font-size:calc(8px*var(--fs-base,1));padding:4px 8px;border-radius:2px;cursor:pointer;letter-spacing:.08em;font-family:monospace;}
-#settings-header-btns button:hover{background:#2a0a3a;}
-#settings-header-btns button.active{background:#3a0060;border-color:var(--line-col1);color:#dd88ff;}
-.tab-bar{display:flex;border-bottom:1px solid #2a0a2a;flex-shrink:0;background:rgba(0,0,0,0.7);}
-.tab-btn{flex:1;padding:7px 4px;font-size:calc(9px*var(--fs-base,1));color:#4a1a4a;background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;letter-spacing:.1em;font-family:monospace;transition:color .2s,border-color .2s;}
-.tab-btn:hover{color:#8a4a6a;}
-.tab-btn.active{color:#cc88aa;border-bottom-color:var(--line-col1);}
-.tab-panel{display:none;flex:1;overflow-y:auto;padding:10px 14px;}
-.tab-panel.active{display:block;}
-.settings-section{margin-bottom:14px;}
-.settings-section-title{font-size:calc(9px*var(--fs-base,1));color:#8a3a5a;letter-spacing:.2em;margin-bottom:8px;text-transform:uppercase;display:flex;align-items:center;gap:8px;}
-.settings-section-title::after{content:'';flex:1;height:1px;background:#2a0a2a;}
-.grad-preview{width:100%;height:10px;border-radius:3px;margin-bottom:8px;border:1px solid #2a0a2a;}
-.grad-row{display:flex;align-items:center;gap:6px;background:#0f060f;border:1px solid #2a0a2a;border-radius:3px;padding:6px 8px;margin-bottom:4px;}
-.grad-row label{font-size:calc(8px*var(--fs-base,1));color:#9a6a8a;flex:1;}
-.grad-row input[type=color]{width:22px;height:18px;border:1px solid #5c2278;border-radius:2px;cursor:pointer;background:none;padding:1px;flex-shrink:0;}
-.grad-row .c-reset{background:none;border:none;color:#4a1a4a;cursor:pointer;font-size:calc(10px*var(--fs-base,1));padding:0 1px;transition:color .15s;}
-.grad-row .c-reset:hover{color:#cc88aa;}
-.color-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
-.color-row{background:#0f060f;border:1px solid #2a0a2a;border-radius:3px;padding:5px 8px;transition:border-color .2s;}
-.color-row:hover{border-color:#5c2278;}
-.color-row-top{display:flex;align-items:center;gap:5px;}
-.color-row label{font-size:calc(8px*var(--fs-base,1));color:#9a6a8a;flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
-.c-preview{width:20px;height:16px;border-radius:2px;flex-shrink:0;border:1px solid #2a0a2a;font-size:calc(7px*var(--fs-base,1));display:flex;align-items:center;justify-content:center;overflow:hidden;}
-.c-reset{background:none;border:none;color:#4a1a4a;cursor:pointer;font-size:calc(10px*var(--fs-base,1));padding:0 1px;transition:color .15s;flex-shrink:0;}
-.c-reset:hover{color:#cc88aa;}
-.color-row input[type=color]{width:22px;height:18px;border:1px solid #5c2278;border-radius:2px;cursor:pointer;background:none;padding:1px;flex-shrink:0;}
-.bright-wrap{margin-top:4px;}
-.bright-slider{width:100%;height:3px;-webkit-appearance:none;appearance:none;border-radius:2px;cursor:pointer;outline:none;background:linear-gradient(90deg,#000,transparent 50%,#fff);}
-.bright-slider::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;border-radius:50%;background:#cc88aa;cursor:pointer;border:1px solid #5c2278;}
-.setting-row{display:flex;align-items:center;justify-content:space-between;background:#0f060f;border:1px solid #2a0a2a;border-radius:3px;padding:6px 10px;gap:8px;margin-bottom:6px;}
-.setting-row label{font-size:calc(9px*var(--fs-base,1));color:#9a6a8a;flex:1;}
-.setting-row select{background:#1a0828;border:1px solid #5c2278;color:#cc88aa;font-size:calc(9px*var(--fs-base,1));padding:3px 6px;border-radius:2px;font-family:monospace;cursor:pointer;outline:none;}
-.preset-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:14px;}
-.preset-btn{background:#0f060f;border:1px solid #2a0a2a;border-radius:3px;padding:6px 4px;cursor:pointer;text-align:center;transition:border-color .2s,background .2s;display:flex;flex-direction:column;align-items:center;gap:4px;}
-.preset-btn:hover{border-color:#5c2278;background:#1a0828;}
-.preset-name{font-size:calc(7px*var(--fs-base,1));color:#9a6a8a;letter-spacing:.08em;font-family:monospace;}
-.preset-swatch{display:flex;gap:2px;}
-.preset-dot{width:7px;height:7px;border-radius:50%;}
-.profile-card{background:#0f060f;border:1px solid #2a0a2a;border-radius:3px;padding:8px 10px;margin-bottom:8px;}
-.profile-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
-.profile-name{font-size:calc(10px*var(--fs-base,1));color:#8a4a6a;letter-spacing:.12em;flex:1;}
-.profile-dots{display:flex;gap:3px;}
-.profile-dot{width:10px;height:10px;border-radius:50%;border:1px solid rgba(255,255,255,0.1);}
-.profile-btns{display:flex;gap:5px;}
-.pbtn{background:#1a0828;border:1px solid #3a1540;color:#7a4a6a;font-size:calc(8px*var(--fs-base,1));padding:3px 8px;border-radius:2px;cursor:pointer;font-family:monospace;letter-spacing:.06em;transition:all .15s;}
-.pbtn:hover:not(:disabled){background:#2a0a3a;border-color:#5c2278;color:#cc88aa;}
-.pbtn.load{border-color:#5c2278;color:#aa66cc;}
-.pbtn.danger{border-color:#3a1520;color:#6a2a3a;}
-.pbtn.danger:hover{background:#2a0010;border-color:#8a2255;color:#ff4488;}
-.pbtn:disabled{opacity:0.3;cursor:default;}
-.profile-empty{font-size:calc(8px*var(--fs-base,1));color:#3a1540;letter-spacing:.08em;}
 </style>
 </head>
 <body>
@@ -142,10 +77,11 @@ body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;backgr
   <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-top:0">
     <div style="flex:1;height:1px;background:var(--divider-line)"></div>
     <span data-collapse data-collapse-key="cpu-cores" data-collapse-target="#spark-layout" style="font-size:calc(9px*var(--fs-base,1));color:var(--divider-lbl);letter-spacing:.18em;white-space:nowrap">CPU CORES</span>
-    <button id="spark-toggle" onclick="toggleSparklines()"
-      style="font-size:calc(8px*var(--fs-base,1));font-family:monospace;letter-spacing:.08em;background:rgba(0,255,204,.08);border:1px solid rgba(0,255,204,.2);color:var(--avg-col);padding:1px 6px;border-radius:2px;cursor:pointer">
-      ▾ SPARK
-    </button>
+    <label class="nv-switch" title="Show per-core clock history and side panels">
+      <input type="checkbox" id="spark-toggle" onchange="setSparklines(this.checked)">
+      <span class="nv-switch-track"><span class="nv-switch-knob"></span></span>
+      <span class="nv-switch-text">SPARKLINES</span>
+    </label>
     <div style="flex:1;height:1px;background:var(--divider-line)"></div>
   </div>
   <div id="update-pulse" style="flex-shrink:0">···</div>
@@ -154,7 +90,7 @@ body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;backgr
   <div id="spark-layout" style="display:flex;gap:6px;flex:1;min-height:0;overflow:hidden">
 
     <!-- LEFT SIDE PANEL (hidden when spark off) -->
-    <div id="side-left" style="display:none;width:calc(88px*var(--fs-base,1)*var(--data-scale,1));flex-shrink:0;flex-direction:column;gap:4px;justify-content:space-evenly">
+    <div id="side-left" style="display:none;width:calc(88px*var(--fs-base,1)*var(--data-scale,1));flex-shrink:0;flex-direction:column;gap:6px;justify-content:flex-start;overflow:hidden">
       <div class="card" style="padding:8px;flex-shrink:0">
         <div style="font-size:calc(8px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">PEAK</div>
         <div id="peakclk" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--peak-col);font-weight:700;font-family:monospace">--</div>
@@ -191,7 +127,7 @@ body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;backgr
     </div>
 
     <!-- RIGHT SIDE PANEL (hidden when spark off) -->
-    <div id="side-right" style="display:none;width:calc(88px*var(--fs-base,1)*var(--data-scale,1));flex-shrink:0;flex-direction:column;gap:4px;justify-content:space-evenly">
+    <div id="side-right" style="display:none;width:calc(88px*var(--fs-base,1)*var(--data-scale,1));flex-shrink:0;flex-direction:column;gap:6px;justify-content:flex-start;overflow:hidden">
       <div class="card" style="padding:8px;flex-shrink:0">
         <div style="font-size:calc(8px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">POWER</div>
         <div id="pkgpwr" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--pwr-col);font-weight:700;font-family:monospace">--</div>
@@ -293,48 +229,7 @@ body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;backgr
 
 <div id="status">LIVE</div>
 
-<div id="settings-drawer">
-  <div id="drawer-handle"><div id="drawer-grip">· · ·</div></div>
-  <div id="settings-header">
-    <span>CUSTOMIZE</span>
-    <div id="settings-header-btns">
-      <button id="peek-btn" onclick="togglePeek()">PEEK</button>
-      <button onclick="resetAll()">RESET</button>
-      <button onclick="closeSettings()">CLOSE</button>
-    </div>
-  </div>
-  <div class="tab-bar">
-    <button class="tab-btn active" onclick="showTab('display')">DISPLAY</button>
-    <button class="tab-btn" onclick="showTab('colors')">COLORS</button>
-    <button class="tab-btn" onclick="showTab('profiles')">PROFILES</button>
-  </div>
-  <div id="tab-display" class="tab-panel active">
-    <div class="settings-section">
-      <div class="settings-section-title">PERFORMANCE</div>
-      <div class="setting-row"><label>Gear blink on startup</label><select id="s-gearBlink" onchange="setSetting('gearBlinkDuration',parseInt(this.value))"><option value="0">Never</option><option value="5">5 seconds</option><option value="10">10 seconds</option><option value="20">20 seconds</option><option value="30">30 seconds</option></select></div>
-      <div class="setting-row"><label>Update speed</label><select id="s-updateInterval" onchange="setSetting('updateInterval',parseInt(this.value))"><option value="250">Max (4/sec)</option><option value="500">Fast (2/sec)</option><option value="1000">Normal (1/sec)</option><option value="2000">Slow (0.5/sec)</option><option value="5000">Very Slow</option></select></div>
-      <div class="setting-row"><label>Thermal decimal places</label><select id="s-thermalDecimals" onchange="setSetting('thermalDecimals',parseInt(this.value))"><option value="0">None (45°)</option><option value="1">.X (45.5°)</option><option value="2">.XX (45.50°)</option><option value="3">.XXX</option><option value="4">.XXXX</option></select></div>
-      <div class="setting-row"><label>AVG MHz window</label><select id="s-avgWindow" onchange="setSetting('avgWindow',this.value)"><option value="sync">Sync with update</option><option value="1000">1 second</option><option value="5000">5 seconds</option><option value="15000">15 seconds</option><option value="30000">30 seconds</option><option value="60000">1 minute</option></select></div>
-    </div>
-  </div>
-  <div id="tab-colors" class="tab-panel">
-    <div class="settings-section"><div class="settings-section-title">ACCENT LINES</div><div class="accent-line grad-preview"></div><div class="grad-row"><label>Color 1</label><button class="c-reset" onclick="resetGrad('lineCol1')">↺</button><input type="color" data-ck="lineCol1" value="#9900ff" oninput="onColorPickerChange('lineCol1',this.value)"></div><div class="grad-row"><label>Color 2</label><button class="c-reset" onclick="resetGrad('lineCol2')">↺</button><input type="color" data-ck="lineCol2" value="#ff0044" oninput="onColorPickerChange('lineCol2',this.value)"></div></div>
-    <div class="settings-section"><div class="settings-section-title">CORE BAR GRADIENT</div><div id="barGradPreview" class="grad-preview"></div><div class="grad-row"><label>Start</label><button class="c-reset" onclick="resetGrad('barStart')">↺</button><input type="color" data-ck="barStart" oninput="onColorPickerChange('barStart',this.value)"></div><div class="grad-row"><label>Low clock</label><button class="c-reset" onclick="resetGrad('barLow')">↺</button><input type="color" data-ck="barLow" oninput="onColorPickerChange('barLow',this.value)"></div><div class="grad-row"><label>Mid clock</label><button class="c-reset" onclick="resetGrad('barMid')">↺</button><input type="color" data-ck="barMid" oninput="onColorPickerChange('barMid',this.value)"></div><div class="grad-row"><label>High clock</label><button class="c-reset" onclick="resetGrad('barHigh')">↺</button><input type="color" data-ck="barHigh" oninput="onColorPickerChange('barHigh',this.value)"></div><div class="grad-row"><label>Boost</label><button class="c-reset" onclick="resetGrad('barBoost')">↺</button><input type="color" data-ck="barBoost" oninput="onColorPickerChange('barBoost',this.value)"></div></div>
-    <div class="settings-section"><div class="settings-section-title">TEMPERATURE GRADIENT</div><div id="tempGradPreview" class="grad-preview"></div><div class="grad-row"><label>Cold</label><button class="c-reset" onclick="resetGrad('tempCold')">↺</button><input type="color" data-ck="tempCold" oninput="onColorPickerChange('tempCold',this.value)"></div><div class="grad-row"><label>Mid</label><button class="c-reset" onclick="resetGrad('tempMid')">↺</button><input type="color" data-ck="tempMid" oninput="onColorPickerChange('tempMid',this.value)"></div><div class="grad-row"><label>Hot</label><button class="c-reset" onclick="resetGrad('tempHot')">↺</button><input type="color" data-ck="tempHot" oninput="onColorPickerChange('tempHot',this.value)"></div></div>
-    <div class="settings-section"><div class="settings-section-title">TEMP DISPLAY COLORS</div><div class="color-grid" id="cg-tempdisp"></div></div>
-    <div class="settings-section"><div class="settings-section-title">GLOW &amp; FX</div><div class="color-grid" id="cg-glow"></div></div>
-    <div class="settings-section"><div class="settings-section-title">GLOBAL</div><div class="color-grid" id="cg-global"></div></div>
-    <div class="settings-section"><div class="settings-section-title">HEADER</div><div class="color-grid" id="cg-header"></div></div>
-    <div class="settings-section"><div class="settings-section-title">SUMMARY BAR</div><div class="color-grid" id="cg-summary"></div></div>
-    <div class="settings-section"><div class="settings-section-title">GPU &amp; MEMORY</div><div class="color-grid" id="cg-gpu"></div></div>
-  </div>
-  <div id="tab-profiles" class="tab-panel">
-    <div class="settings-section"><div class="settings-section-title">QUICK PRESETS</div><div class="preset-grid" id="preset-grid"></div></div>
-    <div class="settings-section"><div class="settings-section-title">SAVED PROFILES</div><div id="profiles-list"></div></div>
-  </div>
-</div>
-
-<script src="/nav.js?v=9" data-page="performance"></script>
+<script src="/nav.js?v=10" data-page="performance"></script>
 <script>
 // ══════════════════════════════════════════════════════════════════════════════
 // WEBVIEW2 IPC — IS_WEBVIEW and sendToHost defined in nav.js
@@ -358,34 +253,24 @@ if (IS_WEBVIEW) {
 
 // ── Config received from C# ────────────────────────────────────────────────
 function onConfigReceived(cfg) {
+  if (typeof navOnConfig === 'function') navOnConfig(cfg); // shared nav: settings, version, theme
   if (cfg.colors && Object.keys(cfg.colors).length > 0) {
     COLORS = {...COLOR_DEFAULTS, ...cfg.colors};
     Object.assign(_baseColors, COLORS);
     applyAllColors();
-    buildColorPickers();
   }
   if (cfg.settings && Object.keys(cfg.settings).length > 0) {
-    if (cfg.settings.gearBlinkDuration) SETTINGS.gearBlinkDuration = parseInt(cfg.settings.gearBlinkDuration);
-    if (cfg.settings.updateInterval)    SETTINGS.updateInterval    = parseInt(cfg.settings.updateInterval);
-    if (cfg.settings.avgWindow)         SETTINGS.avgWindow         = cfg.settings.avgWindow;
-    syncSettingsPickers();
+    if (cfg.settings.updateInterval) SETTINGS.updateInterval = parseInt(cfg.settings.updateInterval);
+    if (cfg.settings.avgWindow)      SETTINGS.avgWindow      = cfg.settings.avgWindow;
+    updateAvgLabel();
     startApplyTimer();
   }
-  if (cfg.colorProfiles) _serverProfiles = cfg.colorProfiles;
-  renderProfiles();
-  startGearBlink();
 }
 
 // ── Save helpers — persist to C# AppData ──────────────────────────────────
-function persistColors() {
-  sendToHost({ type: 'saveColors', colors: COLORS });
-}
 function persistSettings() {
-  const s = {};
-  s.gearBlinkDuration = String(SETTINGS.gearBlinkDuration);
-  s.updateInterval    = String(SETTINGS.updateInterval);
-  s.avgWindow         = SETTINGS.avgWindow;
-  sendToHost({ type: 'saveSettings', settings: s });
+  sendToHost({ type: 'saveSettings', settings: {
+    updateInterval: String(SETTINGS.updateInterval), avgWindow: SETTINGS.avgWindow } });
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -452,10 +337,6 @@ function applyHwInfo(info) {
 // ══════════════════════════════════════════════════════════════════════════════
 const COLOR_DEFAULTS={bg:'#0a0808',cardBg:'#120e08',border:'#443300',label:'#aa7700',dividerLine:'#443300',dividerLbl:'#ffcc00',headerTitle:'#ffcc00',headerSub:'#aa8800',headerAcc:'#00ffcc',headerTime:'#776600',titleGlow:'#ffcc00',glowCol:'#ffcc00',lineCol1:'#ffcc00',lineCol2:'#00ffcc',ccdLbl:'#ffcc00',coreLbl:'#aa8800',barBg:'#120a00',barStart:'#221100',barLow:'#443300',barMid:'#886600',barHigh:'#ffaa00',barBoost:'#ffcc00',tempCold:'#007799',tempMid:'#00ccaa',tempHot:'#00ffcc',tempVal:'#00ddaa',tempLow:'#00aacc',tempWarn:'#00ffcc',sumLbl:'#aa7700',peakCol:'#ffcc00',avgCol:'#00ffcc',pwrCol:'#ff6600',gpuAcc:'#00ffcc',memAcc:'#ffaa00',cardTitle:'#aa7700'};
 const VAR_MAP={bg:'--bg',cardBg:'--card-bg',border:'--border',label:'--label',dividerLine:'--divider-line',dividerLbl:'--divider-lbl',headerTitle:'--header-title',headerSub:'--header-sub',headerAcc:'--header-acc',headerTime:'--header-time',titleGlow:'--title-glow',glowCol:'--glow-col',lineCol1:'--line-col1',lineCol2:'--line-col2',ccdLbl:'--ccd-lbl',coreLbl:'--core-lbl',barBg:'--bar-bg',tempVal:'--temp-val',tempLow:'--temp-low',tempWarn:'--temp-warn',sumLbl:'--sum-lbl',peakCol:'--peak-col',avgCol:'--avg-col',pwrCol:'--pwr-col',gpuAcc:'--gpu-acc',memAcc:'--mem-acc',cardTitle:'--card-title'};
-const PREVIEW_STYLE={bg:c=>`background:${c}`,cardBg:c=>`background:${c}`,border:c=>`border:2px solid ${c};background:transparent`,label:c=>`background:#0a0612;color:${c}`,dividerLine:c=>`background:linear-gradient(90deg,transparent,${c},transparent)`,dividerLbl:c=>`background:#000;color:${c}`,headerTitle:c=>`background:#000;color:${c}`,headerSub:c=>`background:#000;color:${c}`,headerAcc:c=>`background:#000;color:${c}`,headerTime:c=>`background:#000;color:${c}`,titleGlow:c=>`background:#000;box-shadow:0 0 6px ${c};border:1px solid ${c}`,glowCol:c=>`background:#000;box-shadow:0 0 8px ${c};border:1px solid ${c}`,ccdLbl:c=>`background:#000;color:${c}`,coreLbl:c=>`background:#000;color:${c}`,barBg:c=>`background:${c}`,tempVal:c=>`background:#0a0612;color:${c}`,tempLow:c=>`background:#000;color:${c}`,tempWarn:c=>`background:#000;color:${c}`,sumLbl:c=>`background:#0a0612;color:${c}`,peakCol:c=>`background:#0a0612;color:${c};font-weight:bold`,avgCol:c=>`background:#0a0612;color:${c};font-weight:bold`,pwrCol:c=>`background:#0a0612;color:${c};font-weight:bold`,gpuAcc:c=>`background:#0a0612;color:${c}`,memAcc:c=>`background:#0a0612;color:${c}`,cardTitle:c=>`background:#0a0612;color:${c}`};
-const PREVIEW_INNER={label:'Aa',dividerLbl:'──',headerTitle:'CPU',headerSub:'16C',headerAcc:'68W',headerTime:'12:00',titleGlow:'',glowCol:'',ccdLbl:'CCD',coreLbl:'C0',tempVal:'48°',tempLow:'48°',tempWarn:'76°',sumLbl:'PEAK',peakCol:'5720',avgCol:'4800',pwrCol:'68W',gpuAcc:'1722',memAcc:'6000',cardTitle:'GPU'};
-const COLOR_GROUPS={tempdisp:[['tempVal','Temp value'],['tempLow','Cool temp'],['tempWarn','Warm temp'],['tempHot','Hot temp']],glow:[['glowCol','Value glow'],['titleGlow','Title glow'],['barBg','Bar bg'],['cardBg','Card bg']],global:[['bg','Page bg'],['border','Border'],['label','Label'],['dividerLine','Divider line'],['dividerLbl','Divider label']],header:[['headerTitle','Title'],['headerSub','Subtitle'],['headerAcc','Watts'],['headerTime','Time'],['ccdLbl','CCD label'],['coreLbl','Core label']],summary:[['sumLbl','Label'],['peakCol','Peak MHz'],['avgCol','Avg MHz'],['pwrCol','Power']],gpu:[['gpuAcc','GPU accent'],['memAcc','Memory'],['cardTitle','Card title']]};
-const GRAD_KEYS=new Set(['lineCol1','lineCol2','barStart','barLow','barMid','barHigh','barBoost','tempCold','tempMid','tempHot']);
 let COLORS={...COLOR_DEFAULTS};
 const _baseColors={...COLOR_DEFAULTS};
 // Expose color updater to nav.js for cross-tab theme application
@@ -463,67 +344,21 @@ window.__setColors = function(cols) {
   COLORS = {...COLORS, ...cols};
   Object.assign(_baseColors, COLORS);
   applyAllColors();
-  buildColorPickers();
 };
-let _serverProfiles={};
 
-function blendBrightness(hex,amount){if(!hex||hex.length<7)return hex;let r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);if(amount>0){const t=amount/100;r=Math.round(r+(255-r)*t);g=Math.round(g+(255-g)*t);b=Math.round(b+(255-b)*t);}else if(amount<0){const t=-amount/100;r=Math.round(r*(1-t));g=Math.round(g*(1-t));b=Math.round(b*(1-t));}return`#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;}
-function applyAllColors(){const r=document.documentElement.style;for(const[k,v]of Object.entries(VAR_MAP))r.setProperty(v,COLORS[k]);document.body.style.background=COLORS.bg;updateTempBars();redrawCoreBars();updateGradPreviews();}
-function setColor(key,val){COLORS[key]=val;if(VAR_MAP[key])document.documentElement.style.setProperty(VAR_MAP[key],val);if(key==='bg')document.body.style.background=val;if(key.startsWith('temp'))updateTempBars();if(key.startsWith('bar')||key==='barStart')redrawCoreBars();updateGradPreviews();const prev=document.getElementById('prev-'+key);if(prev){const ps=PREVIEW_STYLE[key];if(ps)prev.style.cssText='width:20px;height:16px;border-radius:2px;flex-shrink:0;border:1px solid #2a0a2a;font-size:calc(7px*var(--fs-base,1));display:flex;align-items:center;justify-content:center;overflow:hidden;'+ps(val);prev.textContent=PREVIEW_INNER[key]||'';}persistColors();}
-function onColorPickerChange(key,val){_baseColors[key]=val;const sl=document.getElementById('bright-'+key);if(sl)sl.value=0;setColor(key,val);}
-function onBrightnessSlide(key,amount){const adjusted=blendBrightness(_baseColors[key],parseInt(amount));setColor(key,adjusted);const input=document.querySelector(`input[data-ck="${key}"]`);if(input)input.value=adjusted;}
-function resetGrad(key){_baseColors[key]=COLOR_DEFAULTS[key];const sl=document.getElementById('bright-'+key);if(sl)sl.value=0;const input=document.querySelector(`input[data-ck="${key}"]`);if(input)input.value=COLOR_DEFAULTS[key];setColor(key,COLOR_DEFAULTS[key]);}
-function resetSingleColor(key){_baseColors[key]=COLOR_DEFAULTS[key];const sl=document.getElementById('bright-'+key);if(sl)sl.value=0;const input=document.querySelector(`input[data-ck="${key}"]`);if(input)input.value=COLOR_DEFAULTS[key];setColor(key,COLOR_DEFAULTS[key]);}
-function updateGradPreviews(){const bp=document.getElementById('barGradPreview');if(bp)bp.style.background=`linear-gradient(90deg,${COLORS.barStart},${COLORS.barLow} 25%,${COLORS.barMid} 50%,${COLORS.barHigh} 75%,${COLORS.barBoost})`;const tp=document.getElementById('tempGradPreview');if(tp)tp.style.background=`linear-gradient(90deg,${COLORS.tempCold},${COLORS.tempMid},${COLORS.tempHot})`;}
+function applyAllColors(){const r=document.documentElement.style;for(const[k,v]of Object.entries(VAR_MAP))r.setProperty(v,COLORS[k]);document.body.style.background=COLORS.bg;updateTempBars();redrawCoreBars();}
 function updateTempBars(){const g=`linear-gradient(90deg,${COLORS.tempCold},${COLORS.tempMid},${COLORS.tempHot})`;document.getElementById('tbar0').style.background=g;document.getElementById('tbar1').style.background=g;}
 function redrawCoreBars(){CORES_META.forEach(c=>{const bar=document.getElementById('bar'+c.id);if(bar&&bar._lastClk!==undefined)bar.style.background=barGrad(bar._lastClk);});}
-function buildColorPickers(){for(const key of GRAD_KEYS){const input=document.querySelector(`input[data-ck="${key}"]`);if(input)input.value=COLORS[key];}for(const[group,rows]of Object.entries(COLOR_GROUPS)){const el=document.getElementById('cg-'+group);if(!el)continue;el.innerHTML='';rows.forEach(([key,label])=>{const row=document.createElement('div');row.className='color-row';const ps=PREVIEW_STYLE[key]?PREVIEW_STYLE[key](COLORS[key]):'background:'+COLORS[key];const inner=PREVIEW_INNER[key]||'';row.innerHTML=`<div class="color-row-top"><label>${label}</label><div id="prev-${key}" class="c-preview" style="${ps}">${inner}</div><button class="c-reset" onclick="resetSingleColor('${key}')" title="Reset">↺</button><input type="color" data-ck="${key}" value="${COLORS[key]}" onchange="onColorPickerChange('${key}',this.value)" oninput="onColorPickerChange('${key}',this.value)"></div><div class="bright-wrap"><input type="range" id="bright-${key}" class="bright-slider" min="-100" max="100" value="0" oninput="onBrightnessSlide('${key}',this.value)"></div>`;el.appendChild(row);});}updateGradPreviews();}
-
-// ── Presets ────────────────────────────────────────────────────────────────
-const PRESETS=[{name:'DEFAULT',colors:null},{name:'MATRIX',colors:{bg:'#000000',cardBg:'#010d01',border:'#003300',label:'#005500',dividerLine:'#003300',dividerLbl:'#00aa00',headerTitle:'#00ff44',headerSub:'#007722',headerAcc:'#00dd22',headerTime:'#005511',titleGlow:'#00ff44',glowCol:'#00ff44',lineCol1:'#00ff44',lineCol2:'#006622',ccdLbl:'#00ff44',coreLbl:'#00aa22',barBg:'#010d01',barStart:'#001100',barLow:'#003311',barMid:'#006622',barHigh:'#00aa33',barBoost:'#00ff44',tempCold:'#003322',tempMid:'#00aa44',tempHot:'#00ff22',tempVal:'#00cc33',tempLow:'#00cc33',tempWarn:'#00ff22',sumLbl:'#00aa22',peakCol:'#00ff44',avgCol:'#00cc33',pwrCol:'#00aa22',gpuAcc:'#00ee33',memAcc:'#00cc44',cardTitle:'#007722'}},{name:'CYBERPUNK',colors:{bg:'#0a0808',cardBg:'#120e08',border:'#443300',label:'#aa7700',dividerLine:'#443300',dividerLbl:'#ffcc00',headerTitle:'#ffcc00',headerSub:'#aa8800',headerAcc:'#00ffcc',headerTime:'#776600',titleGlow:'#ffcc00',glowCol:'#ffcc00',lineCol1:'#ffcc00',lineCol2:'#00ffcc',ccdLbl:'#ffcc00',coreLbl:'#aa8800',barBg:'#120a00',barStart:'#221100',barLow:'#443300',barMid:'#886600',barHigh:'#ffaa00',barBoost:'#ffcc00',tempCold:'#007799',tempMid:'#00ccaa',tempHot:'#00ffcc',tempVal:'#00ddaa',tempLow:'#00aacc',tempWarn:'#00ffcc',sumLbl:'#aa7700',peakCol:'#ffcc00',avgCol:'#00ffcc',pwrCol:'#ff6600',gpuAcc:'#00ffcc',memAcc:'#ffaa00',cardTitle:'#aa7700'}},{name:'OCEAN',colors:{bg:'#000810',cardBg:'#000d1a',border:'#003366',label:'#336699',dividerLine:'#003366',dividerLbl:'#4499cc',headerTitle:'#00aaff',headerSub:'#336688',headerAcc:'#00ccff',headerTime:'#224466',titleGlow:'#00aaff',glowCol:'#00ccff',lineCol1:'#00aaff',lineCol2:'#0044cc',ccdLbl:'#00aaff',coreLbl:'#336699',barBg:'#000d1a',barStart:'#001122',barLow:'#003366',barMid:'#0066aa',barHigh:'#0099dd',barBoost:'#00ccff',tempCold:'#003399',tempMid:'#0066cc',tempHot:'#00aaff',tempVal:'#4499bb',tempLow:'#0099dd',tempWarn:'#00aaff',sumLbl:'#4499cc',peakCol:'#00ccff',avgCol:'#0099ff',pwrCol:'#0066cc',gpuAcc:'#00ddff',memAcc:'#0099cc',cardTitle:'#336699'}},{name:'EMBER',colors:{bg:'#080200',cardBg:'#100400',border:'#441100',label:'#883300',dividerLine:'#441100',dividerLbl:'#cc5500',headerTitle:'#ff4400',headerSub:'#882200',headerAcc:'#ff8800',headerTime:'#662200',titleGlow:'#ff4400',glowCol:'#ff6600',lineCol1:'#ff4400',lineCol2:'#ff8800',ccdLbl:'#ff4400',coreLbl:'#cc4400',barBg:'#100400',barStart:'#220800',barLow:'#441100',barMid:'#882200',barHigh:'#cc4400',barBoost:'#ff6600',tempCold:'#441100',tempMid:'#cc4400',tempHot:'#ff8800',tempVal:'#cc6600',tempLow:'#cc4400',tempWarn:'#ff6600',sumLbl:'#cc5500',peakCol:'#ff4400',avgCol:'#ff8800',pwrCol:'#cc3300',gpuAcc:'#ff6600',memAcc:'#ff4400',cardTitle:'#883300'}},{name:'SYNTHWAVE',colors:{bg:'#0d0015',cardBg:'#150020',border:'#6600aa',label:'#9933cc',dividerLine:'#6600aa',dividerLbl:'#cc44ff',headerTitle:'#ff44cc',headerSub:'#9933aa',headerAcc:'#cc44ff',headerTime:'#662288',titleGlow:'#ff44cc',glowCol:'#cc44ff',lineCol1:'#cc44ff',lineCol2:'#ff44cc',ccdLbl:'#ff44cc',coreLbl:'#cc44aa',barBg:'#150020',barStart:'#220033',barLow:'#440088',barMid:'#8800cc',barHigh:'#cc00ff',barBoost:'#ff44cc',tempCold:'#4400aa',tempMid:'#cc00aa',tempHot:'#ff00cc',tempVal:'#cc44ff',tempLow:'#cc44ff',tempWarn:'#ff00cc',sumLbl:'#cc44ff',peakCol:'#ff44cc',avgCol:'#cc44ff',pwrCol:'#aa00ff',gpuAcc:'#ff00cc',memAcc:'#cc44ff',cardTitle:'#9933aa'}},{name:'TACTICAL',colors:{bg:'#040600',cardBg:'#070900',border:'#1a2200',label:'#4a5a22',dividerLine:'#1a2200',dividerLbl:'#6a7a33',headerTitle:'#aacc00',headerSub:'#556611',headerAcc:'#ccaa00',headerTime:'#3a4a11',titleGlow:'#aacc00',glowCol:'#aacc00',lineCol1:'#aacc00',lineCol2:'#ccaa00',ccdLbl:'#aacc00',coreLbl:'#778833',barBg:'#060800',barStart:'#0a0e00',barLow:'#1a2a00',barMid:'#3a5500',barHigh:'#6a9900',barBoost:'#aacc00',tempCold:'#224400',tempMid:'#778800',tempHot:'#ccaa00',tempVal:'#88aa00',tempLow:'#88aa00',tempWarn:'#ccaa00',sumLbl:'#6a7a33',peakCol:'#aacc00',avgCol:'#88aa00',pwrCol:'#ccaa00',gpuAcc:'#ccaa00',memAcc:'#aacc00',cardTitle:'#556622'}},{name:'GHOST',colors:{bg:'#080808',cardBg:'#0f0f0f',border:'#333333',label:'#666666',dividerLine:'#333333',dividerLbl:'#888888',headerTitle:'#ffffff',headerSub:'#888888',headerAcc:'#cccccc',headerTime:'#555555',titleGlow:'#ffffff',glowCol:'#aaaaaa',lineCol1:'#cccccc',lineCol2:'#888888',ccdLbl:'#ffffff',coreLbl:'#888888',barBg:'#111111',barStart:'#1a1a1a',barLow:'#333333',barMid:'#666666',barHigh:'#999999',barBoost:'#ffffff',tempCold:'#333333',tempMid:'#888888',tempHot:'#ffffff',tempVal:'#aaaaaa',tempLow:'#aaaaaa',tempWarn:'#dddddd',sumLbl:'#888888',peakCol:'#ffffff',avgCol:'#cccccc',pwrCol:'#aaaaaa',gpuAcc:'#dddddd',memAcc:'#bbbbbb',cardTitle:'#777777'}}];
-const PRESET_SWATCH_KEYS=['headerTitle','barBoost','lineCol1','lineCol2'];
-function renderPresets(){const grid=document.getElementById('preset-grid');grid.innerHTML='';PRESETS.forEach((p,i)=>{const btn=document.createElement('button');btn.className='preset-btn';btn.onclick=()=>applyPreset(i);const c=p.colors||COLOR_DEFAULTS;const dots=PRESET_SWATCH_KEYS.map(k=>`<div class="preset-dot" style="background:${c[k]||'#333'}"></div>`).join('');btn.innerHTML=`<div class="preset-swatch">${dots}</div><div class="preset-name">${p.name}</div>`;grid.appendChild(btn);});}
-function applyPreset(idx){COLORS={...COLOR_DEFAULTS,...(PRESETS[idx].colors||{})};Object.assign(_baseColors,COLORS);applyAllColors();buildColorPickers();persistColors();}
-
-// ── Profiles (backed by C# config) ────────────────────────────────────────
-const PROFILE_KEYS=['headerTitle','barBoost','avgCol','memAcc','gpuAcc','lineCol1','lineCol2','border'];
-function saveProfile(slot){_serverProfiles[slot]=COLORS;sendToHost({type:'saveProfile',slot,colors:COLORS});renderProfiles();}
-function loadProfile(slot){if(!_serverProfiles[slot])return;COLORS={...COLOR_DEFAULTS,..._serverProfiles[slot]};Object.assign(_baseColors,COLORS);applyAllColors();buildColorPickers();persistColors();}
-function clearProfile(slot){delete _serverProfiles[slot];sendToHost({type:'deleteProfile',slot});renderProfiles();}
-function renderProfiles(){
-  const container=document.getElementById('profiles-list');container.innerHTML='';
-  for(let i=1;i<=3;i++){
-    const pC=_serverProfiles[i]||null;
-    const card=document.createElement('div');card.className='profile-card';
-    const dots=pC?PROFILE_KEYS.map(k=>`<div class="profile-dot" style="background:${pC[k]||'#333'}"></div>`).join(''):'<span class="profile-empty">EMPTY SLOT</span>';
-    card.innerHTML=`<div class="profile-row"><span class="profile-name">PROFILE ${i}</span><div class="profile-dots">${dots}</div></div><div class="profile-btns"><button class="pbtn" onclick="saveProfile(${i})">SAVE</button><button class="pbtn load" onclick="loadProfile(${i})" ${!pC?'disabled':''}>LOAD</button><button class="pbtn danger" onclick="clearProfile(${i})" style="${!pC?'display:none':''}">CLEAR</button></div>`;
-    container.appendChild(card);
-  }
-}
-
-function resetAll(){COLORS={...COLOR_DEFAULTS};SETTINGS={...SETTING_DEFAULTS};Object.assign(_baseColors,COLORS);applyAllColors();buildColorPickers();syncSettingsPickers();persistColors();persistSettings();}
-function openSettings(){const d=document.getElementById('settings-drawer');d.style.top='0';d.classList.add('open');renderProfiles();renderPresets();}
-function closeSettings(){document.getElementById('settings-drawer').classList.remove('open');if(_peeking)togglePeek();}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// TABS + DRAG + PEEK
-// ══════════════════════════════════════════════════════════════════════════════
-function showTab(name){document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));document.getElementById('tab-'+name).classList.add('active');document.querySelectorAll('.tab-btn').forEach(b=>{if(b.textContent.toLowerCase()===name)b.classList.add('active');});if(name==='profiles'){renderProfiles();renderPresets();}}
-function initDrawerDrag(){const handle=document.getElementById('drawer-handle'),drawer=document.getElementById('settings-drawer');let dragging=false,startY=0,startTop=0;const getTop=()=>parseInt(drawer.style.top||'0')||0;const clamp=v=>Math.max(0,Math.min(window.innerHeight-120,v));const setTop=t=>{drawer.style.top=clamp(t)+'px';};handle.addEventListener('mousedown',e=>{dragging=true;startY=e.clientY;startTop=getTop();e.preventDefault();});document.addEventListener('mousemove',e=>{if(!dragging)return;setTop(startTop+e.clientY-startY);});document.addEventListener('mouseup',()=>{dragging=false;});handle.addEventListener('touchstart',e=>{dragging=true;startY=e.touches[0].clientY;startTop=getTop();},{passive:true});document.addEventListener('touchmove',e=>{if(!dragging)return;setTop(startTop+e.touches[0].clientY-startY);},{passive:true});document.addEventListener('touchend',()=>{dragging=false;});}
-let _peeking=false;
-function togglePeek(){_peeking=!_peeking;const d=document.getElementById('settings-drawer'),btn=document.getElementById('peek-btn');if(_peeking){d.style.background='rgba(0,0,0,0.15)';d.style.backdropFilter='blur(1px)';btn.classList.add('active');btn.textContent='PEEKING';}else{d.style.background='rgba(0,0,0,0.94)';d.style.backdropFilter='blur(10px)';btn.classList.remove('active');btn.textContent='PEEK';}}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // SETTINGS
 // ══════════════════════════════════════════════════════════════════════════════
-const SETTING_DEFAULTS={gearBlinkDuration:10,updateInterval:250,avgWindow:'sync',thermalDecimals:1};
+const SETTING_DEFAULTS={updateInterval:250,avgWindow:'sync'};
 let SETTINGS={...SETTING_DEFAULTS};
 // Called by the shared nav panel (System tab) when a Performance setting changes
 window.onPerfSettingChanged=function(key,val){setSetting(key,key==='updateInterval'?parseInt(val):val);};
 function setSetting(key,val){SETTINGS[key]=val;if(key==='updateInterval')startApplyTimer();if(key==='avgWindow')updateAvgLabel();persistSettings();}
-function syncSettingsPickers(){const g=document.getElementById('s-gearBlink'),u=document.getElementById('s-updateInterval'),a=document.getElementById('s-avgWindow'),d=document.getElementById('s-thermalDecimals');if(g)g.value=String(SETTINGS.gearBlinkDuration);if(u)u.value=String(SETTINGS.updateInterval);if(a)a.value=String(SETTINGS.avgWindow);if(d)d.value=String(SETTINGS.thermalDecimals||1);updateAvgLabel();}
 function updateAvgLabel(){const lbl=document.getElementById('avg-label');if(!lbl)return;const w=SETTINGS.avgWindow;if(w==='sync'){lbl.textContent='AVG';return;}const ms=parseInt(w);lbl.textContent=ms<60000?`AVG ${ms/1000}s`:'AVG 1m';}
-function startGearBlink(){const dur=SETTINGS.gearBlinkDuration;if(!dur)return;const btn=document.getElementById('settings-btn');if(!btn)return;btn.classList.add('blinking');setTimeout(()=>btn.classList.remove('blinking'),dur*1000);}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // CORE BARS + DATA
@@ -622,16 +457,19 @@ function applySideLayout() {
   if (bc) bc.style.display = on ? 'none' : 'grid';
   if (gc) gc.style.display = on ? 'none' : 'block';
   if (sw) sw.style.display = on ? 'none' : 'flex';
-  // Toggle button
-  const btn = document.getElementById('spark-toggle');
-  if (btn) { btn.textContent = on ? '▾ SPARK' : '▸ SPARK'; btn.style.opacity = on ? '1' : '0.45'; }
+  // Switch
+  const toggle = document.getElementById('spark-toggle');
+  if (toggle) toggle.checked = on;
+  if (on) CORES_META.forEach(c => drawSparkline(c.id));
 }
 
-function toggleSparklines() {
-  SPARKLINES_VISIBLE = !SPARKLINES_VISIBLE;
-  localStorage.setItem('pcm-sparklines', SPARKLINES_VISIBLE ? '1' : '0');
+// Also called from the nav panel's System tab switch
+window.setSparklines = function(on) {
+  SPARKLINES_VISIBLE = !!on;
+  try { localStorage.setItem('pcm-sparklines', on ? '1' : '0'); } catch {}
   applySideLayout();
-}
+};
+function toggleSparklines() { setSparklines(!SPARKLINES_VISIBLE); }
 
 function pushSparkline(id, val) {
   if (!SPARKLINE_HISTORY[id]) SPARKLINE_HISTORY[id] = [];
@@ -640,20 +478,26 @@ function pushSparkline(id, val) {
   if (h.length > SPARKLINE_MAX_PTS) h.shift();
 }
 
+// All cores share one scale (half base clock .. max seen), so lines are calm and
+// comparable. Newest sample sits at the right edge; filled area in the bar colour.
 function drawSparkline(id) {
   const svg = document.getElementById('spark'+id);
   if (!svg) return;
   const h = SPARKLINE_HISTORY[id] || [];
   if (h.length < 2) return;
-  const W=300, H=14;
-  const mn = Math.min(...h), mx = Math.max(...h);
-  const range = mx - mn || 1;
-  const pts = h.map((v,i) => {
-    const x = (i / (SPARKLINE_MAX_PTS-1)) * W;
-    const y = H - ((v - mn) / range) * (H-2) - 1;
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(' ');
-  svg.innerHTML = `<polyline points="${pts}" fill="none" stroke="var(--avg-col,#00ffcc)" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" opacity="0.55"/>`;
+  const W = 300, H = 16;
+  const lo = Math.min(STOCK * 0.5, ...h), hi = Math.max(MAX, ...h), r = hi - lo || 1;
+  const step = W / (SPARKLINE_MAX_PTS - 1), off = (SPARKLINE_MAX_PTS - h.length) * step;
+  const pts = h.map((v, i) => [(off + i * step).toFixed(1), (H - 1 - ((v - lo) / r) * (H - 3)).toFixed(1)]);
+  const line = pts.map(p => p.join(',')).join(' ');
+  const area = `M${pts[0][0]},${H} L` + pts.map(p => p.join(',')).join(' L') + ` L${pts[pts.length-1][0]},${H} Z`;
+  const col = clkEnd(h[h.length - 1]);
+  svg.innerHTML =
+    `<defs><linearGradient id="sg${id}" x1="0" y1="0" x2="0" y2="1">` +
+    `<stop offset="0" stop-color="${col}" stop-opacity=".35"/><stop offset="1" stop-color="${col}" stop-opacity="0"/>` +
+    `</linearGradient></defs>` +
+    `<path d="${area}" fill="url(#sg${id})"/>` +
+    `<polyline points="${line}" fill="none" stroke="${col}" stroke-width="1.3" vector-effect="non-scaling-stroke" stroke-linejoin="round" opacity=".9"/>`;
 }
 
 function buildBars(){
@@ -669,7 +513,7 @@ function buildBars(){
             <div id="bar${c.id}" style="position:absolute;inset:0;transition:background .4s,clip-path .4s,opacity .4s;opacity:0.15"></div>
           </div>
           <div class="spark-row" style="display:${SPARKLINES_VISIBLE?'block':'none'}">
-            <svg id="spark${c.id}" width="100%" height="14" viewBox="0 0 300 14" preserveAspectRatio="none"
+            <svg id="spark${c.id}" width="100%" height="16" viewBox="0 0 300 16" preserveAspectRatio="none"
               style="display:block"></svg>
           </div>
         </div>
@@ -764,12 +608,8 @@ function applyData(data){
 // ── Boot ───────────────────────────────────────────────────────────────────
 function fitDisplay(){document.documentElement.style.setProperty('--scale',Math.min(window.innerWidth/400,window.innerHeight/800));}
 window.addEventListener('resize',fitDisplay);fitDisplay();
-buildColorPickers();applyAllColors();updateTempBars();updateAvgLabel();
+applyAllColors();updateTempBars();updateAvgLabel();
 buildBars();startApplyTimer();setInterval(updateClock,1000);updateClock();
-initDrawerDrag();
-// Gear blink fires after config received from C# (in onConfigReceived)
-// If not in WebView2, start it now
-if (!IS_WEBVIEW) startGearBlink();
 </script>
 </body>
 </html>

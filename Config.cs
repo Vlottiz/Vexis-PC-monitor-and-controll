@@ -18,6 +18,16 @@ public class FanCurve
     public int              MinSpeed   { get; set; } = 0;        // % floor — fan never drops below this
 }
 
+// ─── Main window placement (restored on next launch) ──────────────────────────
+public class WindowPlacement
+{
+    public int  X         { get; set; }
+    public int  Y         { get; set; }
+    public int  Width     { get; set; }
+    public int  Height    { get; set; }
+    public bool Maximized { get; set; }
+}
+
 // ─── Main config ───────────────────────────────────────────────────────────────
 public class AppConfig
 {
@@ -32,6 +42,9 @@ public class AppConfig
 
     // Saved fan curves
     public List<FanCurve> FanCurves { get; set; } = new();
+
+    // Main window size/position from the last session
+    public WindowPlacement? Window { get; set; }
 
     // Saved color profiles (slot 1-3)
     public Dictionary<int, Dictionary<string, string>> ColorProfiles { get; set; } = new();

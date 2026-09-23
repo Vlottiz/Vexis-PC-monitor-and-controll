@@ -219,10 +219,12 @@ function updateProfileUI() {
 let NAV_SETTINGS = {};
 
 window.navOnConfig = function(cfg) {
+  if (typeof cfg.startWithWindows === 'boolean') navSetStartupState(cfg.startWithWindows);
   if (cfg.appVersion) {
     window.NAV_APP_VERSION = cfg.appVersion;
     const v = document.getElementById('nv-version');
     if (v) v.textContent = 'v' + cfg.appVersion;
+    document.querySelectorAll('.nv-ver-num').forEach(el => el.textContent = 'v' + cfg.appVersion);
   }
   // Restore settings
   if (cfg.settings) {
@@ -465,7 +467,7 @@ function buildPanelHTML() {
     <div class="nv-header">
       <div>
         <div class="nv-title">VEXIS</div>
-        <div class="nv-ver">Hardware Monitoring · v2.0 · Open Source</div>
+        <div class="nv-ver">Hardware Monitoring · <span class="nv-ver-num">v${window.NAV_APP_VERSION||'?'}</span> · Open Source</div>
       </div>
       <button class="nv-x" onclick="closeNav()">✕</button>
     </div>
@@ -553,7 +555,49 @@ function buildPanelHTML() {
       </div>
 
       <div style="padding:8px 0;border-bottom:1px solid rgba(68,51,0,.2)">
+        <div style="font-size:10px;color:var(--label);margin-bottom:6px">Windows</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
+          <span style="font-size:9px;color:var(--label);opacity:.8">Start with Windows (minimized to tray)</span>
+          <label class="nv-switch">
+            <input type="checkbox" id="nv-startup" onchange="navSetStartup(this.checked)">
+            <span class="nv-switch-track"><span class="nv-switch-knob"></span></span>
+          </label>
+        </div>
+      </div>
+
+      <div style="padding:8px 0;border-bottom:1px solid rgba(68,51,0,.2)">
+        <div style="font-size:10px;color:var(--label);margin-bottom:6px">Temperature Alerts</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
+          <span style="font-size:9px;color:var(--label);opacity:.8">Tray notification when too hot</span>
+          <label class="nv-switch">
+            <input type="checkbox" id="nv-alertsEnabled" onchange="navSaveSetting('alertsEnabled', this.checked ? 'true' : 'false')">
+            <span class="nv-switch-track"><span class="nv-switch-knob"></span></span>
+          </label>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
+          <span style="font-size:9px;color:var(--label);opacity:.8">CPU limit</span>
+          <span><input type="number" id="nv-alertCpu" class="nv-select nv-num" min="40" max="115" step="1" value="90"
+            onchange="navSaveSetting('alertCpu', this.value)"> <span style="font-size:9px;color:var(--label);opacity:.8">°C</span></span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
+          <span style="font-size:9px;color:var(--label);opacity:.8">GPU limit</span>
+          <span><input type="number" id="nv-alertGpu" class="nv-select nv-num" min="40" max="115" step="1" value="85"
+            onchange="navSaveSetting('alertGpu', this.value)"> <span style="font-size:9px;color:var(--label);opacity:.8">°C</span></span>
+        </div>
+        <button onclick="sendToHost({type:'testAlert'})" class="nvc-reset-all" style="width:100%;justify-content:center;margin-top:2px">
+          🔔 Send test notification
+        </button>
+      </div>
+
+      <div style="padding:8px 0;border-bottom:1px solid rgba(68,51,0,.2)">
         <div style="font-size:10px;color:var(--label);margin-bottom:6px">Performance Page</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
+          <span style="font-size:9px;color:var(--label);opacity:.8">Sparklines &amp; side panels</span>
+          <label class="nv-switch">
+            <input type="checkbox" id="nv-sparklines" ${navStoredSparklines() ? 'checked' : ''} onchange="navSetSparklines(this.checked)">
+            <span class="nv-switch-track"><span class="nv-switch-knob"></span></span>
+          </label>
+        </div>
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
           <span style="font-size:9px;color:var(--label);opacity:.8">Update speed</span>
           <select id="nv-updateInterval" class="nv-select" onchange="navSetPerfSetting('updateInterval',this.value)">
@@ -641,6 +685,28 @@ function navApplyStoredFontScale() {
   navSetNavScale(navStored);
 }
 
+// Generic setting saved to the shared config (config.json via the host)
+window.navSaveSetting = function(key, val) {
+  NAV_SETTINGS[key] = String(val);
+  sendToHost({ type:'saveSettings', settings: { [key]: String(val) } });
+};
+
+// Start with Windows — the host owns the real state (a scheduled task)
+window.navSetStartup = function(on) { sendToHost({ type:'setStartup', enabled: !!on }); };
+window.navSetStartupState = function(on) {
+  const el = document.getElementById('nv-startup');
+  if (el) el.checked = !!on;
+};
+
+// Sparklines (Performance page) — per-viewer display preference
+function navStoredSparklines() {
+  try { return localStorage.getItem('pcm-sparklines') !== '0'; } catch { return true; }
+}
+window.navSetSparklines = function(on) {
+  try { localStorage.setItem('pcm-sparklines', on ? '1' : '0'); } catch {}
+  if (typeof window.setSparklines === 'function') window.setSparklines(on);
+};
+
 // Performance page settings live in the shared config so any page can change them
 window.navSetPerfSetting = function(key, val) {
   NAV_SETTINGS[key] = String(val);
@@ -648,10 +714,12 @@ window.navSetPerfSetting = function(key, val) {
   if (typeof window.onPerfSettingChanged === 'function') window.onPerfSettingChanged(key, val);
 };
 function navSyncPerfSettings() {
-  for (const key of ['updateInterval', 'avgWindow']) {
+  for (const key of ['updateInterval', 'avgWindow', 'alertCpu', 'alertGpu']) {
     const el = document.getElementById('nv-' + key);
     if (el && NAV_SETTINGS[key]) el.value = NAV_SETTINGS[key];
   }
+  const alerts = document.getElementById('nv-alertsEnabled');
+  if (alerts) alerts.checked = NAV_SETTINGS.alertsEnabled === 'true';
 }
 
 function navToggleSecurityBypass(enabled) {
@@ -914,12 +982,18 @@ function injectNavStyles() {
     body.nav-light-mode { filter:invert(1) hue-rotate(180deg); }
 
     /* ── Collapsible sections ─────────────────────────────────────────────── */
-    .pcm-collapsible { cursor:pointer; user-select:none; }
-    .pcm-collapsible::after {
-      content:'▾'; display:inline-block; margin-left:6px; font-size:.85em;
-      opacity:.45; transition:transform .15s, opacity .15s;
+    .pcm-collapsible {
+      cursor:pointer; user-select:none;
+      color:var(--header-title) !important; font-weight:700 !important; letter-spacing:.2em;
+      text-shadow:0 0 10px color-mix(in srgb, var(--title-glow, transparent) 45%, transparent);
+      transition:filter .15s;
     }
-    .pcm-collapsible:hover::after { opacity:.9; }
+    .pcm-collapsible:hover { filter:brightness(1.25); }
+    .pcm-collapsible::after {
+      content:'▾'; display:inline-block; margin-left:6px; font-size:.9em;
+      opacity:.6; transition:transform .15s, opacity .15s;
+    }
+    .pcm-collapsible:hover::after { opacity:1; }
     .pcm-collapsible.pcm-is-collapsed::after { transform:rotate(-90deg); }
     .pcm-collapsed > :not(.pcm-collapse-head) { display:none !important; }
     .pcm-collapsed .pcm-collapse-head, .pcm-collapsed .pcm-collapse-head .card-title { margin-bottom:0 !important; }
@@ -929,6 +1003,31 @@ function injectNavStyles() {
     /* Pages size text as calc(Npx * var(--fs-base)) — "Page UI Font" slider — and
        live readings additionally * var(--data-scale) — "Data Text" slider. */
     :root { --fs-base:1; --data-scale:1; --nv-scale:1; }
+    /* On/off switch — shared by all pages */
+    .nv-switch { display:inline-flex; align-items:center; gap:6px; cursor:pointer; user-select:none; }
+    .nv-switch input { position:absolute; opacity:0; width:0; height:0; }
+    .nv-switch-track {
+      position:relative; width:28px; height:14px; border-radius:7px; flex-shrink:0;
+      background:var(--bar-bg,#120a00); border:1px solid var(--border,#443300); transition:background .15s, border-color .15s;
+    }
+    .nv-switch-knob {
+      position:absolute; top:1px; left:1px; width:10px; height:10px; border-radius:50%;
+      background:var(--label,#aa7700); transition:transform .15s, background .15s;
+    }
+    .nv-switch input:checked + .nv-switch-track {
+      background:color-mix(in srgb, var(--header-title,#ffcc00) 22%, transparent); border-color:var(--header-title,#ffcc00);
+    }
+    .nv-switch input:checked + .nv-switch-track .nv-switch-knob {
+      transform:translateX(14px); background:var(--header-title,#ffcc00);
+      box-shadow:0 0 6px var(--title-glow,transparent);
+    }
+    .nv-switch-text {
+      font-size:calc(9px * var(--fs-base,1)); font-family:monospace; letter-spacing:.14em;
+      color:var(--label,#aa7700); transition:color .15s;
+    }
+    .nv-switch input:checked ~ .nv-switch-text { color:var(--header-title,#ffcc00); }
+
+    .nv-num { width:52px; text-align:right; }
     .nv-select {
       background:var(--surface2,#1e1608); border:1px solid var(--border,#443300); color:var(--text,#e8d080);
       font-size:calc(9px * var(--nv-scale,1)); padding:3px 6px; border-radius:3px; font-family:monospace; cursor:pointer;
@@ -996,9 +1095,13 @@ function navWireCollapsibles() {
   });
 }
 
-document.addEventListener('click', e => {
+// Toggle on press, not "click": pages re-render every poll, and a click is lost
+// when the element under the mouse is replaced between press and release.
+document.addEventListener('pointerdown', e => {
+  if (e.button !== 0) return;
   const h = e.target.closest('.pcm-collapsible');
   if (!h || e.target.closest('button, input, select, a, label')) return;
+  e.preventDefault(); // no text selection on rapid toggling
   navApplyCollapse(h, navToggleCollapsed(navCollapseKey(h)));
 });
 

@@ -5,12 +5,21 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PC Monitor — Temperatures</title>
-<link rel="stylesheet" href="/ui.css?v=9">
+<link rel="stylesheet" href="/ui.css?v=10">
 <style>
   .controls { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
   .sample-count { font-size:calc(10px*var(--fs-base,1)); color:var(--label-dim); }
   .temp-toggle { cursor:pointer; user-select:none; }
-  .temp-toggle:hover th, .temp-toggle:hover td { color:var(--header-title); }
+  .temp-toggle:hover th, .temp-toggle:hover td { filter:brightness(1.3); }
+  /* Group headers stand out from sensor rows */
+  .data-table .group-row.temp-toggle td {
+    color:var(--header-title); font-weight:700; font-size:calc(11px*var(--fs-base,1)); letter-spacing:.24em;
+    background:color-mix(in srgb, var(--header-title) 10%, transparent);
+    border-top:1px solid color-mix(in srgb, var(--header-title) 35%, transparent);
+    text-shadow:0 0 10px color-mix(in srgb, var(--title-glow, transparent) 45%, transparent);
+    padding:8px 10px;
+  }
+  .data-table tr.temp-toggle th { color:var(--card-title); font-weight:700; }
   .temp-toggle .chev { display:inline-block; margin-right:6px; opacity:.5; transition:transform .15s; }
   .temp-toggle.shut .chev { transform:rotate(-90deg); }
 </style>
@@ -39,7 +48,7 @@
     </table>
   </div>
 </div>
-<script src="/nav.js?v=9" data-page="temps"></script>
+<script src="/nav.js?v=10" data-page="temps"></script>
 <script>
 let DEC=1; const stats={};  let _all={};
 function setDec(n){DEC=n;render();}
@@ -78,8 +87,11 @@ function render(){
   }
   document.getElementById('temp-body').innerHTML=html;
 }
-document.getElementById('temp-body').addEventListener('click',e=>{
+// pointerdown, not click: the table is rebuilt every poll, which can swallow a click
+document.getElementById('temp-body').addEventListener('pointerdown',e=>{
+  if(e.button!==0)return;
   const row=e.target.closest('.temp-toggle'); if(!row)return;
+  e.preventDefault();
   navToggleCollapsed('group:'+row.dataset.group); render();
 });
 let cnt=0;
