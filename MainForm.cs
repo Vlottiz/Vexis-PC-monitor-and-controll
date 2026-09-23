@@ -33,8 +33,21 @@ public class MainForm : Form
         typeof(MainForm).Assembly.GetName().Version ?? new Version(0, 0, 0);
     public static string AppVersionText => $"{AppVersion.Major}.{AppVersion.Minor}.{AppVersion.Build}";
 
-    public MainForm()
+    private readonly bool _startMinimized;
+
+    // Cached "Start with Windows" state (schtasks query is slow — refreshed on change)
+    public static bool StartWithWindowsEnabled { get; private set; }
+
+    public MainForm(bool startMinimized = false)
     {
+        _startMinimized = startMinimized;
+        if (startMinimized)
+        {
+            // WinForms only runs Load when the form is first shown — show it invisibly,
+            // then hide to the tray once Load starts.
+            Opacity       = 0;
+            ShowInTaskbar = false;
+        }
         SuspendLayout();
         Text            = "Vexis";
         Size            = new System.Drawing.Size(420, 900);
@@ -48,6 +61,7 @@ public class MainForm : Form
         Load        += OnLoad;
         FormClosing += OnClosing;
         Resize      += OnResize;
+        ResizeEnd   += (_, _) => SavePlacement();
     }
 
     private async void OnLoad(object? sender, EventArgs e)
@@ -72,6 +86,15 @@ public class MainForm : Form
         }
 
         _config = AppConfig.Load();
+        RestorePlacement();
+        if (_startMinimized)
+            BeginInvoke(() =>
+            {
+                Hide();
+                Opacity = 1; ShowInTaskbar = true;
+                Console.WriteLine("[startup] Started minimized to the tray.");
+            });
+        _ = Task.Run(() => StartWithWindowsEnabled = StartupManager.IsEnabled());
         _sensor = new SensorService(_config);
         _fans   = new FanController();
         _fans.Discover(_sensor.AllHardware);
@@ -179,8 +202,13 @@ public class MainForm : Form
     // Sends driver / Windows protection status to the Security page (main window + popouts)
     private void PushSecurityStatus()
     {
-        string json   = JsonSerializer.Serialize(DriverSetup.GetSecurityStatus(), _json);
-        string script = $"typeof onSecurityStatus==='function'&&onSecurityStatus({json})";
+        string json = JsonSerializer.Serialize(DriverSetup.GetSecurityStatus(), _json);
+        RunScriptEverywhere($"typeof onSecurityStatus==='function'&&onSecurityStatus({json})");
+    }
+
+    // Runs a script in the main window and every popout (safe from any thread)
+    private void RunScriptEverywhere(string script)
+    {
         BeginInvoke(() =>
         {
             _webView.CoreWebView2?.ExecuteScriptAsync(script);
@@ -208,7 +236,8 @@ public class MainForm : Form
             {
                 type = "config", colors = _config.Colors, settings = _config.Settings,
                 colorProfiles = _config.ColorProfiles, fanCurves = _config.FanCurves,
-                lastPresetIdx = _config.LastPresetIdx, appVersion = AppVersionText
+                lastPresetIdx = _config.LastPresetIdx, appVersion = AppVersionText,
+                startWithWindows = StartWithWindowsEnabled
             };
             string json = JsonSerializer.Serialize(payload, _json);
             await _webView.CoreWebView2.ExecuteScriptAsync(
@@ -225,6 +254,7 @@ public class MainForm : Form
             if (_webView.CoreWebView2 == null) return;
             var data = _sensor.GetLatestData();
             _fans.Update(data, _config);
+            CheckTempAlerts(data);
 
             data.fans = _fans.GetSnapshot();
 
@@ -299,6 +329,24 @@ public class MainForm : Form
                         Invoke(() => _webView.CoreWebView2?.ExecuteScriptAsync(
                             $"typeof updateLogs==='function'&&updateLogs({logJson})"));
                     }
+                    break;
+
+                case "setStartup":
+                {
+                    bool want = msg.enabled == true;
+                    _ = Task.Run(() =>
+                    {
+                        StartWithWindowsEnabled = StartupManager.SetEnabled(want);
+                        RunScriptEverywhere(
+                            $"typeof navSetStartupState==='function'&&navSetStartupState({(StartWithWindowsEnabled ? "true" : "false")})");
+                    });
+                    break;
+                }
+
+                case "testAlert":
+                    Invoke(() => _tray.ShowBalloonTip(6000, "Vexis — test alert",
+                        "Temperature alerts are working. You'll see this when a limit is passed.",
+                        ToolTipIcon.Info));
                     break;
 
                 case "getSecurityStatus":
@@ -649,7 +697,75 @@ public class MainForm : Form
     }
 
     private void ShowDashboard() { Show(); WindowState = FormWindowState.Normal; Activate(); }
-    private void OnClosing(object? s, FormClosingEventArgs e) { if (e.CloseReason==CloseReason.UserClosing){e.Cancel=true;Hide();} }
+    private void OnClosing(object? s, FormClosingEventArgs e)
+    {
+        SavePlacement();
+        if (e.CloseReason == CloseReason.UserClosing) { e.Cancel = true; Hide(); }
+    }
+
+    // ── Window size/position, remembered between launches ──────────────────────
+    private void RestorePlacement()
+    {
+        var w = _config.Window;
+        if (w == null || w.Width < MinimumSize.Width || w.Height < MinimumSize.Height) return;
+        var rect = new Rectangle(w.X, w.Y, w.Width, w.Height);
+        // Only restore if a decent part of the window lands on a connected screen
+        bool visible = Screen.AllScreens.Any(sc =>
+        {
+            var overlap = Rectangle.Intersect(sc.WorkingArea, rect);
+            return overlap.Width >= 150 && overlap.Height >= 80;
+        });
+        if (!visible) { Console.WriteLine("[window] Saved position is off-screen — using default."); return; }
+        Bounds = rect;
+        if (w.Maximized) WindowState = FormWindowState.Maximized;
+    }
+
+    private void SavePlacement()
+    {
+        if (_config == null || _isFullscreen || !IsHandleCreated) return;
+        var b = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
+        if (b.Width < MinimumSize.Width || b.Height < MinimumSize.Height) return;
+        _config.Window = new WindowPlacement
+        {
+            X = b.X, Y = b.Y, Width = b.Width, Height = b.Height,
+            Maximized = WindowState == FormWindowState.Maximized
+        };
+        _config.Save();
+    }
+
+    // ── Temperature alerts (tray notification) ─────────────────────────────────
+    // Settings (shared config): alertsEnabled, alertCpu, alertGpu (°C).
+    // Fires once when a limit is crossed, re-arms after dropping 5 °C below it,
+    // and repeats at most every 5 minutes per sensor.
+    private readonly HashSet<string>             _alertActive = new();
+    private readonly Dictionary<string, DateTime> _alertLast  = new();
+
+    private void CheckTempAlerts(SensorData d)
+    {
+        var s = _config.Settings;
+        if (s == null || !s.TryGetValue("alertsEnabled", out var on) || on != "true") return;
+        float Limit(string key, float def) =>
+            s.TryGetValue(key, out var v) && float.TryParse(v, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var f) && f > 0 ? f : def;
+        CheckAlert("CPU", d.cpu_temp, Limit("alertCpu", 90));
+        CheckAlert("GPU", d.gpu_temp, Limit("alertGpu", 85));
+    }
+
+    private void CheckAlert(string name, float? temp, float limit)
+    {
+        if (temp is not float t) return;
+        if (t >= limit)
+        {
+            if (_alertActive.Contains(name)) return;
+            if (_alertLast.TryGetValue(name, out var last) && DateTime.Now - last < TimeSpan.FromMinutes(5)) return;
+            _alertActive.Add(name);
+            _alertLast[name] = DateTime.Now;
+            _tray.ShowBalloonTip(8000, $"Vexis — {name} temperature high",
+                $"{name} is at {t:F0} °C (your limit is {limit:F0} °C).", ToolTipIcon.Warning);
+            Console.WriteLine($"[alert] {name} {t:F1}°C ≥ limit {limit:F0}°C — notification shown");
+        }
+        else if (t < limit - 5) _alertActive.Remove(name);
+    }
     private void OnResize(object? s, EventArgs e) { if (WindowState==FormWindowState.Minimized) Hide(); }
 
     protected override void Dispose(bool disposing)

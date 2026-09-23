@@ -36,6 +36,9 @@ Unlike traditional monitoring tools, Vexis offers:
 | **AMD Full Support** | Per-core clocks, CCD0/CCD1 temps, Ryzen SMU sensors |
 | **Intel Support** | All-core clock via Windows Performance Counters |
 | **Auto-updater** | Checks GitHub releases on startup |
+| **Start with Windows** | Optional — launches minimized to the tray at sign-in (no UAC prompt) |
+| **Temperature Alerts** | Tray notification when CPU or GPU passes a limit you set |
+| **Collapsible Sections** | Click any section header to fold it away — remembered per page |
 
 ---
 
