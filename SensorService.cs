@@ -45,6 +45,7 @@ public class SensorData
     public List<FanInfo>?             fans      { get; set; }
     public HwInfo?                    info      { get; set; }
     public GpuDetail?                 gpu       { get; set; }  // full metrics for the GPU page
+    public RecordStatus?              recording { get; set; }  // CSV recorder state (set by MainForm)
     public string?                    alert_status { get; set; } // set by MainForm for the settings panel
 }
 
@@ -141,8 +142,7 @@ public class SensorService : IDisposable
         // LHM 0.9.6 reads per-core temps/clocks, SMU, SuperIO fans and DIMM temps
         // through PawnIO. It works with Memory Integrity / VBS / the driver blocklist
         // left ON, so Vexis no longer changes any Windows security settings.
-        DriverSetup.CleanupLegacyWinRing0();
-        DriverSetup.EnsurePawnIo();
+        // StartupCheck.Run() installs/repairs PawnIO before this constructor runs.
 
         try
         {

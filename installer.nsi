@@ -8,6 +8,7 @@
 
 !include "MUI2.nsh"
 !include "LogicLib.nsh"
+!include "FileFunc.nsh"
 
 ; ── Metadata ──────────────────────────────────────────────────────────────────
 Name              "Vexis Hardware Monitoring"
@@ -35,7 +36,7 @@ VIAddVersionKey   "LegalCopyright"   "MIT License"
 !define MUI_FINISHPAGE_RUN          "$INSTDIR\Vexis.exe"
 !define MUI_FINISHPAGE_RUN_TEXT     "Launch Vexis"
 !define MUI_FINISHPAGE_LINK         "View on GitHub"
-!define MUI_FINISHPAGE_LINK_LOCATION "https://github.com/Vlottiz/vexis"
+!define MUI_FINISHPAGE_LINK_LOCATION "https://github.com/Vlottiz/pc-monitor"
 
 ; ── Pages ─────────────────────────────────────────────────────────────────────
 !insertmacro MUI_PAGE_WELCOME
@@ -145,6 +146,17 @@ Section "Vexis Hardware Monitoring" SecMain
     "$INSTDIR\Vexis.exe" "" "$INSTDIR\Vexis.exe" 0
 
 SectionEnd
+
+; In-app updates run this installer with /S /UPDATE (silent, so there is no
+; finish page) — start the new version once the files are in place.
+Function .onInstSuccess
+  ${GetParameters} $R0
+  ClearErrors
+  ${GetOptions} $R0 "/UPDATE" $R1
+  ${IfNot} ${Errors}
+    Exec '"$INSTDIR\Vexis.exe"'
+  ${EndIf}
+FunctionEnd
 
 ; ── Uninstall ─────────────────────────────────────────────────────────────────
 Section "Uninstall"

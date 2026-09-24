@@ -153,6 +153,23 @@
       back on here (a Windows restart is required).
     </div>
 
+    <!-- ═══ DRIVER CHECK (runs at every launch) ═════════════════════════════════ -->
+    <div class="sec-card">
+      <div class="sec-header">
+        <span class="sec-icon">🩺</span>
+        <span class="sec-title">DRIVER CHECK</span>
+        <span class="sec-badge off" id="badge-check">…</span>
+      </div>
+      <div class="sec-divider"></div>
+      <div class="sec-body open">
+        <div id="check-list" class="sec-row-text" style="line-height:1.7">Waiting for results…</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
+          <button class="sec-apply-btn" onclick="runCheck()">↻ RUN CHECK AGAIN</button>
+          <span id="check-time" style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim)"></span>
+        </div>
+      </div>
+    </div>
+
     <!-- ═══ SENSOR DRIVER ═══════════════════════════════════════════════════════ -->
     <div class="sec-card">
       <div class="sec-header">
@@ -210,7 +227,7 @@
   </div>
   </div>
 </div>
-<script src="/nav.js?v=15" data-page="security"></script>
+<script src="/nav.js?v=16" data-page="security"></script>
 <script>
 // ── State ─────────────────────────────────────────────────────────────────────
 // ── Driver + Windows protection status (from C#) ─────────────────────────────
@@ -247,6 +264,25 @@ function restoreSecurity() {
 }
 
 sendToHost({ type: 'getSecurityStatus' });
+
+// Driver check results (StartupCheck) — {ranAt, results:[{name, level, detail}]}
+window.onStartupChecks = function(c) {
+  const list = document.getElementById('check-list'), badge = document.getElementById('badge-check');
+  if (!c || !c.results || !c.results.length) { list.textContent = 'Not run yet.'; return; }
+  const col = { ok:'#22c55e', warn:'#f59e0b', error:'#ff5555' }, mark = { ok:'✓', warn:'!', error:'✗' };
+  const esc = t => String(t).replace(/[&<>]/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[ch]));
+  list.innerHTML = c.results.map(r =>
+    `<div><span style="color:${col[r.level] || col.ok};font-weight:700;display:inline-block;width:14px">${mark[r.level] || '✓'}</span>` +
+    `<b style="color:var(--label)">${esc(r.name)}</b> — ${esc(r.detail)}</div>`).join('');
+  const bad = c.results.filter(r => r.level !== 'ok').length;
+  badge.textContent = bad ? bad + ' ISSUE' + (bad > 1 ? 'S' : '') : 'ALL OK';
+  badge.className = 'sec-badge ' + (bad ? 'inactive' : 'active');
+  document.getElementById('check-time').textContent = c.ranAt ? 'Last checked ' + c.ranAt : '';
+};
+function runCheck() {
+  document.getElementById('check-list').textContent = 'Checking…';
+  sendToHost({ type: 'runStartupCheck' });
+}
 
 // ── Live console ─────────────────────────────────────────────────────────────
 let _logSeq    = 0;

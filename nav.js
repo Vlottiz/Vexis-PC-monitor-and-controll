@@ -25,6 +25,20 @@ window.navSetUpdateAvailable = function(version) {
   badge.style.display = 'block';
 };
 
+// Update check result from the host: {current, latest, available, canInstall, notes, url} or {offline:true}
+window.NAV_UPDATE = null;
+window.navUpdateInfo = function(info) {
+  window.NAV_UPDATE = info;
+  if (info && info.available) navSetUpdateAvailable(info.latest + (info.canInstall ? ' \u00b7 INSTALL' : ''));
+  if (typeof window.onUpdateInfo === 'function') window.onUpdateInfo(info);
+};
+// Download/install progress: pct 0-100, or -1 on failure
+window.navUpdateProgress = function(pct, text) {
+  const badge = document.getElementById('nav-update-badge');
+  if (badge) badge.textContent = pct < 0 ? 'UPDATE FAILED' : pct >= 100 ? 'INSTALLING\u2026' : 'UPDATING ' + pct + '%';
+  if (typeof window.onUpdateProgress === 'function') window.onUpdateProgress(pct, text);
+};
+
 // Show/hide the driver warning caution icon in the nav bar
 window.navSetDriverWarning = function(msg) {
   let icon = document.getElementById('nav-caution');
@@ -583,9 +597,30 @@ function buildPanelHTML() {
           <span><input type="number" id="nv-alertGpu" class="nv-select nv-num" min="40" max="115" step="1" value="85"
             oninput="navSetAlertLimit('alertGpu', this.value)"> <span style="font-size:9px;color:var(--label);opacity:.8">°C</span></span>
         </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
+          <span style="font-size:9px;color:var(--label);opacity:.8">GPU hot spot limit</span>
+          <span><input type="number" id="nv-alertGpuHotspot" class="nv-select nv-num" min="40" max="125" step="1" value="100"
+            oninput="navSetAlertLimit('alertGpuHotspot', this.value)"> <span style="font-size:9px;color:var(--label);opacity:.8">°C</span></span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
+          <span style="font-size:9px;color:var(--label);opacity:.8">GPU memory (VRAM) limit</span>
+          <span><input type="number" id="nv-alertGpuMem" class="nv-select nv-num" min="40" max="125" step="1" value="100"
+            oninput="navSetAlertLimit('alertGpuMem', this.value)"> <span style="font-size:9px;color:var(--label);opacity:.8">°C</span></span>
+        </div>
         <div id="nv-alert-status" style="font-size:9px;font-family:monospace;color:var(--label);opacity:.75;margin:2px 0 6px;min-height:12px"></div>
         <button onclick="sendToHost({type:'testAlert'})" class="nvc-reset-all" style="width:100%;justify-content:center;margin-top:2px">
           🔔 Send test notification
+        </button>
+      </div>
+
+      <div style="padding:8px 0;border-bottom:1px solid rgba(68,51,0,.2)">
+        <div style="font-size:10px;color:var(--label);margin-bottom:4px">Recording (CSV)</div>
+        <div style="font-size:9px;color:var(--label);opacity:.75;line-height:1.5;margin-bottom:6px">
+          The <b>REC</b> button (top right) saves every reading to a spreadsheet file in Documents\\Vexis Logs.
+          Rows are written as they happen, so a log survives a crash.
+        </div>
+        <button onclick="sendToHost({type:'openLogFolder'})" class="nvc-reset-all" style="width:100%;justify-content:center">
+          📂 Open recordings folder
         </button>
       </div>
 
@@ -692,11 +727,11 @@ window.navSaveSetting = function(key, val) {
 };
 
 // Alert limits save as you type (debounced) and switch alerts on
-let _navAlertTimer = null;
+let _navAlertTimer = {};   // per limit, so editing two quickly keeps both
 window.navSetAlertLimit = function(key, val) {
   if (!(parseFloat(val) > 0)) return;
-  clearTimeout(_navAlertTimer);
-  _navAlertTimer = setTimeout(() => {
+  clearTimeout(_navAlertTimer[key]);
+  _navAlertTimer[key] = setTimeout(() => {
     const sw = document.getElementById('nv-alertsEnabled');
     if (sw && !sw.checked) { sw.checked = true; navSaveSetting('alertsEnabled', 'true'); }
     navSaveSetting(key, val);
@@ -731,7 +766,7 @@ window.navSetPerfSetting = function(key, val) {
   if (typeof window.onPerfSettingChanged === 'function') window.onPerfSettingChanged(key, val);
 };
 function navSyncPerfSettings() {
-  for (const key of ['updateInterval', 'avgWindow', 'alertCpu', 'alertGpu']) {
+  for (const key of ['updateInterval', 'avgWindow', 'alertCpu', 'alertGpu', 'alertGpuHotspot', 'alertGpuMem']) {
     const el = document.getElementById('nv-' + key);
     if (el && NAV_SETTINGS[key]) el.value = NAV_SETTINGS[key];
   }
@@ -804,15 +839,33 @@ function navInitZoom() {
   z.id = 'nav-zoom';
   if (NAV_IS_POPOUT) z.style.right = '8px'; // popouts have no ⛶ / ⚙ buttons
   z.innerHTML =
+    `<button type="button" id="nav-rec" title="Record every reading to a CSV file (Documents\\Vexis Logs)" data-rec="1"><span class="rec-dot"></span><span id="nav-rec-txt">REC</span></button>` +
+    `<span class="nav-zoom-sep"></span>` +
     `<button type="button" title="Zoom out (Ctrl −)" aria-label="Zoom out" data-d="-1">${NAV_ZOOM_SVG('-')}</button>` +
     `<button type="button" id="nav-zoom-pct" title="Reset zoom (Ctrl 0)" aria-label="Reset zoom" data-d="0">100%</button>` +
     `<button type="button" title="Zoom in (Ctrl +)" aria-label="Zoom in" data-d="1">${NAV_ZOOM_SVG('+')}</button>`;
   z.addEventListener('click', e => {
     const b = e.target.closest('button');
-    if (b) sendToHost({ type: 'zoom', delta: parseInt(b.dataset.d) });
+    if (!b) return;
+    if (b.dataset.rec) sendToHost({ type: 'recordToggle' });
+    else sendToHost({ type: 'zoom', delta: parseInt(b.dataset.d) });
   });
   document.body.appendChild(z);
 }
+// CSV recorder state from the host (data.recording)
+window.navRecordState = function(r) {
+  const b = document.getElementById('nav-rec'), t = document.getElementById('nav-rec-txt');
+  if (!b || !r) return;
+  b.classList.toggle('on', !!r.active);
+  if (r.active) {
+    const m = Math.floor(r.seconds / 60), sec = String(r.seconds % 60).padStart(2, '0');
+    t.textContent = m + ':' + sec;
+    b.title = 'Recording to ' + r.file + ' (' + r.rows + ' rows) — click to stop and show the file';
+  } else {
+    t.textContent = 'REC';
+    b.title = 'Record every reading to a CSV file (Documents\\Vexis Logs)';
+  }
+};
 window.navZoomState = function(pct) {
   const el = document.getElementById('nav-zoom-pct');
   if (el && pct) el.textContent = Math.round(pct) + '%';
@@ -938,6 +991,12 @@ function injectSharedStyles() {
       color:var(--header-title,#ffcc00); font-family:monospace; font-size:10px;
     }
     #nav-zoom button:hover { background:color-mix(in srgb, var(--header-title,#ffcc00) 18%, transparent); }
+    #nav-rec { gap:4px; color:var(--label,#aa7700) !important; letter-spacing:.06em; min-width:44px !important; }
+    #nav-rec .rec-dot { width:7px; height:7px; border-radius:50%; background:#aa3333; display:inline-block; }
+    #nav-rec.on { color:#ff5555 !important; }
+    #nav-rec.on .rec-dot { background:#ff3333; box-shadow:0 0 6px #ff3333; animation:navRecBlink 1s steps(2) infinite; }
+    @keyframes navRecBlink { 50% { opacity:.25; } }
+    .nav-zoom-sep { width:1px; height:14px; background:color-mix(in srgb, var(--border,#443300) 90%, transparent); margin:0 2px; }
     #nav-zoom-pct { min-width:36px !important; color:var(--label,#aa7700) !important; }
     .nv-select {
       background:var(--surface2,#1e1608); border:1px solid var(--border,#443300); color:var(--text,#e8d080);
@@ -1255,11 +1314,17 @@ function boot() {
   // Every page defines receiveData(); tap it for nav-level info (alert status)
   const pageReceive = window.receiveData;
   if (typeof pageReceive === 'function')
-    window.receiveData = function(d) { if (d && d.alert_status) navAlertStatus(d.alert_status); return pageReceive.apply(this, arguments); };
+    window.receiveData = function(d) {
+      if (d && d.alert_status) navAlertStatus(d.alert_status);
+      if (d && d.recording) navRecordState(d.recording);
+      return pageReceive.apply(this, arguments);
+    };
   if (NAV_IS_POPOUT) initPopoutBadge();
   else               initNav();
   navApplyStoredFontScale();
   navWireCollapsibles();
+  // Update state (the host caches it, so this only reaches GitHub once per launch)
+  if (IS_WEBVIEW) setTimeout(() => sendToHost({ type: 'checkUpdate' }), 1200);
 }
 
 if (document.readyState === 'loading')

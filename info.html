@@ -20,7 +20,7 @@
 <div class="page">
   <div class="page-header">
     <div class="page-title">◌ Info & Support</div>
-    <div class="page-subtitle">v2.0 · Open Source · MIT License</div>
+    <div class="page-subtitle"><span id="ver-sub">v--</span> · Open Source · MIT License</div>
   </div>
   <div class="page-body">
 
@@ -50,19 +50,29 @@
           <span id="update-status" style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);letter-spacing:.06em">CHECKING...</span>
         </div>
       </div>
-      <div class="info-row"><span class="info-key">Installed</span><span class="info-val" id="ver-current">v2.0.0</span></div>
+      <div class="info-row"><span class="info-key">Installed</span><span class="info-val" id="ver-current">v--</span></div>
       <div class="info-row"><span class="info-key">Latest on GitHub</span><span class="info-val" id="ver-latest">—</span></div>
+      <div id="update-notes" style="display:none;margin-top:10px;max-height:160px;overflow:auto;white-space:pre-wrap;font-size:calc(10px*var(--fs-base,1));line-height:1.5;color:var(--label);background:var(--bar-bg);border:1px solid var(--border);border-radius:4px;padding:8px 10px"></div>
       <div id="update-btn-wrap" style="display:none;margin-top:10px">
-        <button class="btn btn-primary" style="width:100%;justify-content:center"
-          onclick="sendToHost({type:'openUrl',url:'https://github.com/Vlottiz/pc-monitor/releases/latest'})">
-          ↓ Download Latest Release
+        <button class="btn btn-primary" id="update-install" style="width:100%;justify-content:center" onclick="installUpdate()">
+          ⤓ Update now
         </button>
+        <div id="update-prog" style="display:none;margin-top:8px">
+          <div class="bar-wrap" style="height:8px"><div class="bar-fill bar-gpu" id="update-bar" style="width:0%"></div></div>
+          <div id="update-prog-txt" style="margin-top:4px;font-size:calc(9px*var(--fs-base,1));color:var(--label-dim)"></div>
+        </div>
+        <div style="margin-top:6px;font-size:calc(9px*var(--fs-base,1));color:var(--label-dim)">Downloads the installer from GitHub, installs it and restarts Vexis. Your settings are kept.</div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn btn-ghost" style="flex:1;justify-content:center" onclick="checkUpdate(true)">↻ Check again</button>
+        <button class="btn btn-ghost" style="flex:1;justify-content:center"
+          onclick="sendToHost({type:'openUrl',url:'https://github.com/Vlottiz/pc-monitor/releases/latest'})">Release page</button>
       </div>
     </div>
 
     <!-- About -->
     <div class="card">
-      <div class="card-header"><span class="card-title">ABOUT</span><span class="badge badge-ok">v2.0.0</span></div>
+      <div class="card-header"><span class="card-title">ABOUT</span><span class="badge badge-ok" id="ver-badge">v--</span></div>
       <div class="info-row"><span class="info-key">Author</span><span class="info-val">Vlottiz</span></div>
       <div class="info-row"><span class="info-key">License</span><span class="info-val">MIT</span></div>
       <div class="info-row"><span class="info-key">Platform</span><span class="info-val">Windows 10/11 · .NET 8</span></div>
@@ -153,45 +163,66 @@
   </div>
 </div>
 
-<script src="/nav.js?v=15" data-page="info"></script>
+<script src="/nav.js?v=16" data-page="info"></script>
 <script>
-const CURRENT_VERSION = 'v2.0.0';
-const GITHUB_RELEASES = 'https://api.github.com/repos/Vlottiz/pc-monitor/releases/latest';
-
-async function checkUpdate() {
-  const dot = document.getElementById('update-dot');
+// Update state comes from the host (UpdateManager), which also does the install
+function setStatus(text, col, dotCls) {
   const txt = document.getElementById('update-status');
-  const lv  = document.getElementById('ver-latest');
-  try {
-    const res  = await fetch(GITHUB_RELEASES, {signal: AbortSignal.timeout(8000)});
-    if (!res.ok) throw new Error('No releases');
-    const data = await res.json();
-    const latest = data.tag_name || '';
-    lv.textContent = latest || '—';
-    if (latest && latest !== CURRENT_VERSION) {
-      dot.className = 'update-dot new';
-      txt.textContent = 'UPDATE AVAILABLE'; txt.style.color = '#ffaa00';
-      document.getElementById('update-btn-wrap').style.display = 'block';
-    } else if (latest) {
-      dot.className = 'update-dot ok';
-      txt.textContent = 'UP TO DATE'; txt.style.color = '#44aa66';
-    } else {
-      txt.textContent = 'NO RELEASES YET';
-    }
-  } catch {
-    txt.textContent = 'OFFLINE'; lv.textContent = '—';
+  txt.textContent = text; txt.style.color = col || '';
+  document.getElementById('update-dot').className = 'update-dot' + (dotCls ? ' ' + dotCls : '');
+}
+window.onUpdateInfo = function(info) {
+  if (!info) return;
+  if (info.current) {
+    document.getElementById('ver-current').textContent = 'v' + info.current;
+    document.getElementById('ver-badge').textContent = 'v' + info.current;
   }
+  if (info.offline) { setStatus('OFFLINE'); return; }
+  document.getElementById('ver-latest').textContent = info.latest || '—';
+  const notes = document.getElementById('update-notes');
+  if (info.available) {
+    setStatus('UPDATE AVAILABLE', '#ffaa00', 'new');
+    document.getElementById('update-btn-wrap').style.display = 'block';
+    const btn = document.getElementById('update-install');
+    if (!info.canInstall) { btn.disabled = true; btn.textContent = 'No installer attached to this release'; }
+    if (info.notes) { notes.textContent = info.notes; notes.style.display = 'block'; }
+  } else if (info.latest) {
+    setStatus('UP TO DATE', '#44aa66', 'ok');
+    document.getElementById('update-btn-wrap').style.display = 'none';
+    notes.style.display = 'none';
+  } else {
+    setStatus('NO RELEASES YET');
+  }
+};
+window.onUpdateProgress = function(pct, text) {
+  document.getElementById('update-prog').style.display = 'block';
+  document.getElementById('update-bar').style.width = Math.max(0, pct) + '%';
+  document.getElementById('update-prog-txt').textContent = text || '';
+  const btn = document.getElementById('update-install');
+  if (pct < 0) { btn.disabled = false; btn.textContent = '⤓ Try again'; setStatus('UPDATE FAILED', '#ff5555'); }
+};
+function installUpdate() {
+  const btn = document.getElementById('update-install');
+  btn.disabled = true; btn.textContent = 'Updating…';
+  sendToHost({ type: 'installUpdate' });
+}
+function checkUpdate(force) {
+  setStatus('CHECKING...');
+  sendToHost({ type: 'checkUpdate', enabled: !!force });
 }
 
 function receiveData(d) {}
-function onConfigReceived(cfg) { navOnConfig(cfg); }
+function onConfigReceived(cfg) {
+  navOnConfig(cfg);
+  if (cfg.appVersion) ['ver-current', 'ver-badge', 'ver-sub'].forEach(id => document.getElementById(id).textContent = 'v' + cfg.appVersion);
+}
 if (IS_WEBVIEW) {
   window.chrome.webview.addEventListener('message', e => {
     try { const m=JSON.parse(e.data); if(m.type==='config')onConfigReceived(m); } catch {}
   });
   sendToHost({type:'requestConfig'});
 }
-setTimeout(checkUpdate, 600);
+if (window.NAV_UPDATE) onUpdateInfo(window.NAV_UPDATE);
 </script>
 </body>
 </html>
