@@ -11,6 +11,8 @@ public class FanInfo
     public bool    curveActive{ get; set; }
     public string  mode       { get; set; } = "auto";  // auto | manual | curve
     public string? healthStatus { get; set; }
+    public bool    isGpu      { get; set; }     // graphics-card fan (driver control)
+    public bool    failsafe   { get; set; }     // forced to 100% by the GPU over-temperature guard
 }
 
 // ─── Internal fan state ────────────────────────────────────────────────────────
@@ -25,6 +27,8 @@ internal class FanEntry
 
     // For health check
     public List<(float SetPct, float MeasuredRpm)> HealthReadings { get; set; } = new();
+
+    public bool IsGpu => RpmSensor.Hardware.HardwareType is HardwareType.GpuAmd or HardwareType.GpuNvidia or HardwareType.GpuIntel;
 }
 
 // ─── FanController ─────────────────────────────────────────────────────────────
@@ -152,13 +156,33 @@ public class FanController
     /// <summary>
     /// Call every poll cycle. Applies curve speeds if a curve is active.
     /// </summary>
+    // GPU over-temperature guard: a GPU fan under manual or curve control is forced
+    // to 100% when the core or hot spot gets this hot, and released 8 °C below.
+    public const float GpuCoreLimit = 90f, GpuHotspotLimit = 100f, GpuGuardRelease = 8f;
+    private bool _gpuGuard;
+
     public void Update(SensorData sensorData, AppConfig config)
     {
         if (!_discovered) return;
         RescanIfNewFans();
 
+        float gCore = sensorData.gpu?.temp_core ?? sensorData.gpu_temp ?? 0f;
+        float gHot  = sensorData.gpu?.temp_hotspot ?? 0f;
+        bool wasGuard = _gpuGuard;
+        if (!_gpuGuard && (gCore >= GpuCoreLimit || gHot >= GpuHotspotLimit)) _gpuGuard = true;
+        else if (_gpuGuard && gCore < GpuCoreLimit - GpuGuardRelease && gHot < GpuHotspotLimit - GpuGuardRelease) _gpuGuard = false;
+        if (_gpuGuard != wasGuard)
+            Console.WriteLine(_gpuGuard
+                ? $"[fans] GPU over-temperature guard ON (core {gCore:F0}°C, hot spot {gHot:F0}°C) — GPU fans at 100%."
+                : "[fans] GPU over-temperature guard off — GPU fans back to their setting.");
+
         foreach (var fan in _fans)
         {
+            if (fan.IsGpu && fan.Mode != "auto")
+            {
+                if (_gpuGuard) { fan.CtrlSensor?.Control?.SetSoftware(100); continue; }
+                if (wasGuard && fan.Mode == "manual") fan.CtrlSensor?.Control?.SetSoftware(fan.ManualPct);
+            }
             if (fan.Mode != "curve") continue;
 
             var curve = config.GetCurve(fan.Name);
@@ -169,6 +193,8 @@ public class FanController
                 "ccd0" => sensorData.ccd0_temp ?? sensorData.cpu_temp ?? 50f,
                 "ccd1" => sensorData.ccd1_temp ?? sensorData.cpu_temp ?? 50f,
                 "gpu"  => sensorData.gpu_temp  ?? 50f,
+                "gpu_hotspot" => sensorData.gpu?.temp_hotspot ?? sensorData.gpu_temp ?? 50f,
+                "gpu_mem"     => sensorData.gpu?.temp_mem     ?? sensorData.gpu_temp ?? 50f,
                 _      => sensorData.cpu_temp  ?? 50f
             };
 
@@ -312,13 +338,12 @@ public class FanController
             name        = f.Name,
             rpm         = f.RpmSensor.Value ?? 0f,
             pct         = f.CtrlSensor?.Value ?? 0f,
-            // hasControl = true only if LHM has a control sensor AND the fan
-            // is not on a GPU — AMD/Nvidia drivers block LHM from overriding
-            // GPU fans, so showing controls for them is misleading.
+            // GPU fans are set through the graphics driver (NVAPI / ADL). Intel Arc
+            // exposes no fan control, so it only gets a control sensor on NVIDIA/AMD.
             hasControl  = f.CtrlSensor?.Control != null &&
-                          f.RpmSensor.Hardware.HardwareType != HardwareType.GpuAmd &&
-                          f.RpmSensor.Hardware.HardwareType != HardwareType.GpuNvidia &&
                           f.RpmSensor.Hardware.HardwareType != HardwareType.GpuIntel,
+            isGpu       = f.IsGpu,
+            failsafe    = f.IsGpu && _gpuGuard && f.Mode != "auto",
             curveActive = f.Mode == "curve",
             mode        = f.Mode,
             healthStatus= f.HealthStatus
@@ -352,6 +377,19 @@ public class FanController
         }
 
         return result;
+    }
+
+    /// <summary>Hands every fan Vexis controls back to the BIOS / graphics driver.
+    /// Called on exit so a GPU fan is never left at a fixed speed.</summary>
+    public void RestoreAll()
+    {
+        foreach (var f in _fans)
+        {
+            if (f.Mode == "auto") continue;
+            try { f.CtrlSensor?.Control?.SetDefault(); } catch { }
+            f.Mode = "auto";
+        }
+        Console.WriteLine("[fans] Fan control handed back to BIOS / driver.");
     }
 
     public bool IsDiscovered => _discovered;

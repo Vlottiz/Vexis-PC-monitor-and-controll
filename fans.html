@@ -69,7 +69,7 @@
     <div id="fans-list"></div>
   </div>
 </div>
-<script src="/nav.js?v=15" data-page="fans"></script>
+<script src="/nav.js?v=16" data-page="fans"></script>
 <script>
 // ── State ─────────────────────────────────────────────────────────────────────
 const fanStates = {};
@@ -187,7 +187,10 @@ function renderCurve(name) {
   // Current temp indicator
   if (_latestData) {
     const src  = state.tempSrc;
+    const g = _latestData.gpu || {};
     const temp = src==='gpu'  ? _latestData.gpu_temp  :
+                 src==='gpu_hotspot' ? (g.temp_hotspot ?? _latestData.gpu_temp) :
+                 src==='gpu_mem'     ? (g.temp_mem     ?? _latestData.gpu_temp) :
                  src==='ccd0' ? _latestData.ccd0_temp :
                  src==='ccd1' ? _latestData.ccd1_temp :
                                 _latestData.cpu_temp;
@@ -281,6 +284,8 @@ function saveCurve(name) {
 
 // ── Card HTML ─────────────────────────────────────────────────────────────────
 function buildCard(fan) {
+  // GPU fans follow the GPU temperature unless a saved curve says otherwise
+  if (fan.isGpu && !fanStates[fan.name]) gs(fan.name).tempSrc = 'gpu';
   const id  = sid(fan.name);
   const s   = gs(fan.name);
   const pct = Math.min(100,(fan.rpm/3000)*100);
@@ -289,8 +294,11 @@ function buildCard(fan) {
   <div class="card" id="fc-${id}" style="margin-bottom:10px">
     <div class="row-between" style="margin-bottom:8px">
       <div>
-        <div class="card-title">${fan.name}</div>
-        <div class="stat-sub" style="margin-top:3px">${fan.hasControl?'Software controllable':'BIOS controlled only'}</div>
+        <div class="card-title">${fan.name}${fan.isGpu?' <span class="badge badge-dim" style="margin-left:6px">GPU</span>':''}</div>
+        <div class="stat-sub" style="margin-top:3px">${fan.isGpu
+          ? (fan.hasControl?'Controlled through the graphics driver · AUTO hands it back to the driver':'Graphics driver controlled only')
+          : (fan.hasControl?'Software controllable':'BIOS controlled only')}</div>
+        <div class="stat-sub" id="fs-${id}" style="margin-top:3px;color:var(--temp-hot);display:${fan.failsafe?'block':'none'}">&#x26A0; GPU too hot &#x2014; forced to 100% until it cools down</div>
       </div>
       <div style="text-align:right">
         <span class="fan-rpm-big" id="rpm-${id}">${Math.round(fan.rpm)}</span>
@@ -326,7 +334,9 @@ function buildCard(fan) {
         <select class="select" id="tsrc-${id}"
           onchange="gs('${fan.name}').tempSrc=this.value;renderCurve('${fan.name}')">
           <option value="cpu"  ${s.tempSrc==='cpu' ?'selected':''}>CPU Package</option>
-          <option value="gpu"  ${s.tempSrc==='gpu' ?'selected':''}>GPU</option>
+          <option value="gpu"  ${s.tempSrc==='gpu' ?'selected':''}>GPU Core</option>
+          <option value="gpu_hotspot" ${s.tempSrc==='gpu_hotspot'?'selected':''}>GPU Hot Spot</option>
+          <option value="gpu_mem"     ${s.tempSrc==='gpu_mem'?'selected':''}>GPU Memory (VRAM)</option>
           <option value="ccd0" ${s.tempSrc==='ccd0'?'selected':''}>CCD0 (AMD)</option>
           <option value="ccd1" ${s.tempSrc==='ccd1'?'selected':''}>CCD1 (AMD)</option>
         </select>
@@ -396,6 +406,8 @@ function receiveData(data) {
       if (rpm) rpm.textContent = Math.round(f.rpm);
       if (g)   g.style.width   = Math.min(100,(f.rpm/3000)*100)+'%';
       if (fp)  fp.textContent  = f.pct>0?Math.round(f.pct)+'%':'';
+      const fsw = document.getElementById(`fs-${id}`);
+      if (fsw) fsw.style.display = f.failsafe ? 'block' : 'none';
       if (gs(f.name).mode === 'curve') renderCurve(f.name);
     });
   }

@@ -126,6 +126,8 @@ internal static class Program
         Application.SetHighDpiMode(HighDpiMode.SystemAware);
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
+        // Loading screen (not when starting quietly to the tray with Windows)
+        if (!startMinimized) SplashForm.ShowSplash(MainForm.AppVersionText);
         Application.Run(new MainForm(startMinimized));
     }
 

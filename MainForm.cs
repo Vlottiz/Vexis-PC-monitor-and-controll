@@ -15,6 +15,8 @@ public class MainForm : Form
 
     private System.Windows.Forms.Timer _pollTimer = new() { Interval = 250 };
     private int   _pollCount      = 0;
+    private readonly CsvRecorder _recorder = new();
+    private SensorData? _lastData;   // last reading sent to the pages (includes fans)
     private float _lastLoggedTemp = 0;
 
     private readonly Dictionary<string, PopoutForm> _popouts = new();
@@ -41,13 +43,11 @@ public class MainForm : Form
     public MainForm(bool startMinimized = false)
     {
         _startMinimized = startMinimized;
-        if (startMinimized)
-        {
-            // WinForms only runs Load when the form is first shown — show it invisibly,
-            // then hide to the tray once Load starts.
-            Opacity       = 0;
-            ShowInTaskbar = false;
-        }
+        // WinForms only runs Load when the form is first shown — show it invisibly.
+        // Minimized starts then hide to the tray; normal starts stay invisible behind
+        // the loading screen until the page is ready (RevealWindow).
+        Opacity       = 0;
+        ShowInTaskbar = false;
         SuspendLayout();
         Text            = "Vexis";
         Size            = new System.Drawing.Size(420, 900);
@@ -71,6 +71,7 @@ public class MainForm : Form
         if (!IsWebView2Installed())
         {
             Console.WriteLine("[startup] WebView2 runtime not found.");
+            SplashForm.CloseSplash();
             var answer = MessageBox.Show(
                 "Vexis needs the Microsoft Edge WebView2 Runtime, which isn't installed on this PC.\n\n" +
                 "Open the download page now? (Choose \"Evergreen Bootstrapper\", install it, then start Vexis again.)",
@@ -85,6 +86,13 @@ public class MainForm : Form
             return;
         }
 
+        // Safety net: never leave the window invisible if a startup step hangs
+        _ = Task.Delay(TimeSpan.FromSeconds(60)).ContinueWith(_ =>
+        {
+            try { BeginInvoke(async () => { if (!_revealed) { Console.WriteLine("[startup] slow start — showing window"); await RevealWindow(); } }); }
+            catch { }
+        });
+
         _config = AppConfig.Load();
         RestorePlacement();
         if (_startMinimized)
@@ -95,10 +103,19 @@ public class MainForm : Form
                 Console.WriteLine("[startup] Started minimized to the tray.");
             });
         _ = Task.Run(() => StartWithWindowsEnabled = StartupManager.IsEnabled());
-        _sensor = new SensorService(_config);
+
+        // Driver check on every launch (repairs PawnIO, reports broken/missing drivers)
+        await Task.Run(() => StartupCheck.Run(SplashForm.SetStatus,
+            r => SplashForm.AddCheck(r.level, $"{r.name}: {r.detail}")));
+
+        SplashForm.SetStatus("Opening hardware sensors…");
+        _sensor = await Task.Run(() => new SensorService(_config));
+        SplashForm.SetStatus("Finding fans…");
         _fans   = new FanController();
-        _fans.Discover(_sensor.AllHardware);
+        await Task.Run(() => _fans.Discover(_sensor.AllHardware));
+        Application.ApplicationExit += (_, _) => { try { _fans.RestoreAll(); } catch { } };
         SetupTray();
+        SplashForm.SetStatus("Loading interface…");
 
         var webViewOpts = new Microsoft.Web.WebView2.Core.CoreWebView2EnvironmentOptions(
             additionalBrowserArguments: "--disable-web-security --allow-running-insecure-content --allow-file-access-from-files");
@@ -153,36 +170,7 @@ public class MainForm : Form
 
         _sensor.Start();
 
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await Task.Delay(5000);
-                using var http = new System.Net.Http.HttpClient();
-                http.DefaultRequestHeaders.Add("User-Agent", $"Vexis/{AppVersionText}");
-                http.Timeout = TimeSpan.FromSeconds(8);
-                using var resp = await http.GetAsync(
-                    "https://api.github.com/repos/Vlottiz/pc-monitor/releases/latest");
-                if (resp.StatusCode == System.Net.HttpStatusCode.NotFound)
-                {
-                    Console.WriteLine("[update] No GitHub releases published yet.");
-                    return;
-                }
-                resp.EnsureSuccessStatusCode();
-                var json = await resp.Content.ReadAsStringAsync();
-                var doc  = System.Text.Json.JsonDocument.Parse(json);
-                var tag  = doc.RootElement.GetProperty("tag_name").GetString() ?? "";
-                if (Version.TryParse(tag.TrimStart('v', 'V'), out var latest) &&
-                    latest > new Version(AppVersionText))
-                {
-                    Console.WriteLine($"[update] New version available: {tag}");
-                    Invoke(() => _webView.CoreWebView2?.ExecuteScriptAsync(
-                        $"typeof navSetUpdateAvailable==='function'&&navSetUpdateAvailable('{tag}')"));
-                }
-                else Console.WriteLine($"[update] Up to date (running v{AppVersionText}, latest {tag})");
-            }
-            catch (Exception ex) { Console.WriteLine($"[update] Check failed: {ex.Message}"); }
-        });
+        // Update check: requested by nav.js when a page loads (cached after the first check)
 
         _webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
             "vexis.local", AppDir, CoreWebView2HostResourceAccessKind.Allow);
@@ -202,11 +190,33 @@ public class MainForm : Form
                     await SendConfigViaScript();
                     _pollTimer.Tick += OnPollTick;
                     _pollTimer.Start();
+                    await RevealWindow();
                     return;
                 }
             }
             catch (Exception ex) { Console.WriteLine($"[startup] {ex.Message}"); }
         }
+        await RevealWindow(); // page never reported ready — show the window anyway
+    }
+
+    // Swap the loading screen for the main window, and report driver problems
+    private bool _revealed;
+    private async Task RevealWindow()
+    {
+        if (_revealed) return;
+        _revealed = true;
+        await Task.Delay(400); // let the first reading render
+        SplashForm.CloseSplash();
+        if (!_startMinimized)
+        {
+            Opacity = 1; ShowInTaskbar = true;
+            Activate();
+        }
+        int problems = StartupCheck.Problems;
+        if (problems > 0)
+            QueueNotification("Driver check",
+                $"{problems} driver problem{(problems == 1 ? "" : "s")} found. Open Vexis → Security for details.",
+                ToolTipIcon.Warning);
     }
 
     // Sends driver / Windows protection status to the Security page (main window + popouts)
@@ -214,9 +224,72 @@ public class MainForm : Form
     {
         string json = JsonSerializer.Serialize(DriverSetup.GetSecurityStatus(), _json);
         RunScriptEverywhere($"typeof onSecurityStatus==='function'&&onSecurityStatus({json})");
+        string checks = JsonSerializer.Serialize(new
+        {
+            ranAt   = StartupCheck.RanAt == default ? null : StartupCheck.RanAt.ToString("HH:mm:ss"),
+            results = StartupCheck.Results
+        }, _json);
+        RunScriptEverywhere($"typeof onStartupChecks==='function'&&onStartupChecks({checks})");
     }
 
     // Runs a script in the main window and every popout (safe from any thread)
+    // ── Updates (GitHub Releases) ──────────────────────────────────────────────
+    private string? _updateJson;       // last check result, re-sent to pages that load later
+    private int     _updateChecking;
+
+    private void PushUpdateInfo(bool force)
+    {
+        if (!force && _updateJson != null)
+        {
+            RunScriptEverywhere($"typeof navUpdateInfo==='function'&&navUpdateInfo({_updateJson})");
+            return;
+        }
+        if (Interlocked.Exchange(ref _updateChecking, 1) == 1) return; // one check at a time
+        _ = Task.Run(async () => { try { await CheckForUpdateAsync(); } finally { _updateChecking = 0; } });
+    }
+
+    private async Task CheckForUpdateAsync()
+    {
+        try
+        {
+            var r = await UpdateManager.CheckAsync(AppVersionText);
+            bool newer = r != null && UpdateManager.IsNewer(r, AppVersionText);
+            if (r != null)
+                Console.WriteLine(newer ? $"[update] New version available: {r.Tag}"
+                                        : $"[update] Up to date (running v{AppVersionText}, latest {r.Tag})");
+            var info = new
+            {
+                current  = AppVersionText,
+                latest   = r?.Tag,
+                available = newer,
+                canInstall = newer && r!.InstallerUrl != null,
+                notes    = r?.Notes is { Length: > 1200 } n ? n[..1200] + "…" : r?.Notes,
+                url      = UpdateManager.ReleasesUrl
+            };
+            _updateJson = JsonSerializer.Serialize(info, _json);
+            RunScriptEverywhere($"typeof navUpdateInfo==='function'&&navUpdateInfo({_updateJson})");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[update] Check failed: {ex.Message}");
+            RunScriptEverywhere("typeof navUpdateInfo==='function'&&navUpdateInfo({offline:true})");
+        }
+    }
+
+    private async Task InstallUpdateAsync()
+    {
+        var r = UpdateManager.Latest;
+        if (r == null || !UpdateManager.IsNewer(r, AppVersionText) || r.InstallerUrl == null) return;
+        void Report(int pct, string text) => RunScriptEverywhere(
+            $"typeof navUpdateProgress==='function'&&navUpdateProgress({pct},{JsonSerializer.Serialize(text)})");
+        if (await UpdateManager.DownloadAndRunAsync(r, AppVersionText, Report))
+        {
+            // The installer closes Vexis anyway — exit cleanly first (fans back to BIOS/driver, CSV closed)
+            await Task.Delay(800);
+            Invoke(() => { _tray.Visible = false; Application.Exit(); });
+        }
+    }
+
     private void RunScriptEverywhere(string script)
     {
         BeginInvoke(() =>
@@ -267,6 +340,9 @@ public class MainForm : Form
             CheckTempAlerts(data);
 
             data.fans = _fans.GetSnapshot();
+            _lastData = data;
+            _recorder.Append(data);
+            data.recording = _recorder.Status;
 
             string json = JsonSerializer.Serialize(data, _json);
 
@@ -366,6 +442,21 @@ public class MainForm : Form
                     Invoke(() => ZoomHelper.Change(_webView, msg.delta ?? 0)); // ZoomFactorChanged saves + updates the label
                     break;
 
+                case "recordToggle":
+                    if (_recorder.IsRecording)
+                    {
+                        string file = _recorder.Stop();
+                        if (File.Exists(file))
+                            System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{file}\"");
+                    }
+                    else _recorder.Start(_lastData ?? _sensor.GetLatestData());
+                    break;
+
+                case "openLogFolder":
+                    Directory.CreateDirectory(CsvRecorder.Folder);
+                    System.Diagnostics.Process.Start("explorer.exe", $"\"{CsvRecorder.Folder}\"");
+                    break;
+
                 case "testAlert":
                     Invoke(() => QueueNotification("test alert",
                         "Temperature alerts are working. You'll see this when a limit is passed.",
@@ -374,6 +465,10 @@ public class MainForm : Form
 
                 case "getSecurityStatus":
                     PushSecurityStatus();
+                    break;
+
+                case "runStartupCheck":
+                    _ = Task.Run(() => { StartupCheck.Run(); PushSecurityStatus(); });
                     break;
 
                 case "installPawnIO":
@@ -447,6 +542,14 @@ public class MainForm : Form
 
                 case "popOut":
                     if (msg.page != null) Invoke(() => OpenPopout(msg.page));
+                    break;
+
+                case "checkUpdate":                 // enabled:true = "check again" button
+                    PushUpdateInfo(force: msg.enabled == true);
+                    break;
+
+                case "installUpdate":
+                    _ = Task.Run(InstallUpdateAsync);
                     break;
 
                 case "openUrl":
@@ -816,8 +919,15 @@ public class MainForm : Form
         float Limit(string key, float def) =>
             s.TryGetValue(key, out var v) && float.TryParse(v, System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out var f) && f > 0 ? f : def;
-        d.alert_status = CheckAlert("CPU", d.cpu_temp, Limit("alertCpu", 90)) + " · " +
-                         CheckAlert("GPU", d.gpu_temp, Limit("alertGpu", 85));
+        var parts = new List<string>
+        {
+            CheckAlert("CPU", d.cpu_temp, Limit("alertCpu", 90)),
+            CheckAlert("GPU", d.gpu_temp, Limit("alertGpu", 85))
+        };
+        // Hot spot and VRAM usually overheat before the core; only on GPUs that report them
+        if (d.gpu?.temp_hotspot != null) parts.Add(CheckAlert("GPU hot spot", d.gpu.temp_hotspot, Limit("alertGpuHotspot", 100)));
+        if (d.gpu?.temp_mem     != null) parts.Add(CheckAlert("GPU memory",   d.gpu.temp_mem,     Limit("alertGpuMem", 100)));
+        d.alert_status = string.Join(" · ", parts);
     }
 
     // Returns a short status for the settings panel, e.g. "CPU 55°/40° sent 14:02"
@@ -849,6 +959,8 @@ public class MainForm : Form
     {
         if (disposing)
         {
+            try { _fans?.RestoreAll(); } catch { }
+            _recorder.Dispose();
             _pollTimer.Dispose(); _sensor?.Dispose(); _tray.Dispose(); _webView.Dispose();
             foreach (var p in _popouts.Values) if (!p.IsDisposed) p.Dispose();
         }

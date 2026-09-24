@@ -26,7 +26,7 @@ Unlike traditional monitoring tools, Vexis offers:
 |---|---|
 | **CPU Monitoring** | Per-core clock speeds, temperatures, CCD temps (AMD), package power |
 | **GPU Monitoring** | Dedicated GPU tab: load (core, memory controller, video, bus), core / hot-spot / memory temps, clocks, power, VRAM, fans, PCIe traffic, FPS, history charts and every raw sensor |
-| **Fan Control** | Auto / Manual / Custom curve editor with hysteresis and minimum speed |
+| **Fan Control** | Auto / Manual / Custom curve editor for motherboard **and GPU fans** (NVIDIA / AMD), with a GPU over-temperature guard |
 | **Temperature History** | Min / Max / Avg for every thermal sensor on the system |
 | **RGB Control** | OpenRGB integration — auto-launch, master + per-device brightness, hardware modes, GUI toggle |
 | **Multi-window** | Pop out any page to a separate window |
@@ -35,9 +35,11 @@ Unlike traditional monitoring tools, Vexis offers:
 | **Hardware Auto-detect** | CPU, GPU, RAM, socket type all detected and displayed automatically |
 | **AMD Full Support** | Per-core clocks, CCD0/CCD1 temps, Ryzen SMU sensors |
 | **Intel Support** | All-core clock via Windows Performance Counters |
-| **Auto-updater** | Checks GitHub releases on startup |
+| **One-click updates** | Checks GitHub Releases; *Update now* downloads the installer, installs silently and restarts Vexis |
+| **Driver check** | Every launch: repairs the PawnIO sensor driver and reports missing / broken drivers (graphics driver, Device Manager problems) |
+| **CSV Recording** | REC button saves every reading to `Documents\Vexis Logs` — written row by row, so logs survive crashes |
 | **Start with Windows** | Optional — launches minimized to the tray at sign-in (no UAC prompt) |
-| **Temperature Alerts** | Tray notification when CPU or GPU passes a limit you set |
+| **Temperature Alerts** | Tray notification when CPU, GPU, GPU hot spot or GPU memory passes a limit you set |
 | **Collapsible Sections** | Click any section header to fold it away — remembered per page |
 
 ---
@@ -207,6 +209,27 @@ dotnet run
 
 Running the new installer over an existing install updates it in place (settings in
 `%AppData%\Vexis` are kept).
+
+The in-app **Update now** button downloads the `.exe` attached to the latest release and runs it
+with `/S /UPDATE` (silent; the installer restarts Vexis when done). So each release needs the tag
+`v<version>` and `VexisHM-Setup.exe` attached, and the repository must be public for the update
+check to see it.
+
+### Changing the loading-screen animation
+
+The loading screen shows **`splash.gif`** (or `splash.png` if there is no GIF) from the folder
+Vexis.exe runs in. Animated GIFs play automatically.
+
+- **Quick test, no rebuild:** replace `C:\Program Files\Vexis\splash.gif` with your own file
+  (same name) and start Vexis.
+- **Ship it in the installer:** replace `splash.gif` in the project folder, then run
+  `build-installer.bat`.
+- **Size:** 440 × 220 px looks best; other sizes are scaled to fit.
+- **Edit the default animation:** change the settings at the top of `assets/make_splash.py`
+  (text, colours, speed, frame count) and run `python assets/make_splash.py` (needs
+  `pip install pillow`). It rewrites `splash.gif`.
+- **Window colours, size and the status text style** are constants at the top of `SplashForm.cs`.
+- Delete both files to get the built-in spinning-ring animation instead.
 
 ---
 
