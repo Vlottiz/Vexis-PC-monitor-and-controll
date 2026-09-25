@@ -34,8 +34,22 @@
   .grad { width:90px; height:8px; border-radius:4px; border:1px solid var(--border);
           background:linear-gradient(90deg, var(--surface), color-mix(in srgb, var(--avg-col) 50%, var(--surface)), var(--avg-col)); }
 
-  #timeline { width:100%; display:block; border:1px solid var(--border); border-radius:4px; background:var(--bar-bg); image-rendering:pixelated; }
-  .tl-cap { display:flex; justify-content:space-between; font-family:monospace; font-size:calc(8px*var(--fs-base,1)); color:var(--label-dim); margin-top:4px; }
+  /* Thread activity: core labels | heat strip, time axis underneath */
+  .tl { display:grid; grid-template-columns:calc(44px*var(--fs-base,1)) 1fr; }
+  .tl-labels { position:relative; }
+  .tl-labels span { position:absolute; right:6px; transform:translateY(-50%); font-family:monospace; font-weight:700;
+                    font-size:calc(9px*var(--fs-base,1)); color:var(--header-title); white-space:nowrap; }
+  .tl-labels span.grp { color:var(--label-dim); font-weight:400; font-size:calc(8px*var(--fs-base,1)); letter-spacing:.08em; transform:none; }
+  .tl-plot { position:relative; }
+  #timeline { width:100%; display:block; border:1px solid var(--border); border-radius:4px; background:var(--bar-bg); cursor:crosshair; }
+  .tl-axis { position:relative; height:calc(16px*var(--fs-base,1)); margin-top:3px; }
+  .tl-axis span { position:absolute; transform:translateX(-50%); font-family:monospace; font-size:calc(8px*var(--fs-base,1)); color:var(--label-dim); white-space:nowrap; }
+  .tl-axis span::before { content:''; position:absolute; left:50%; top:-4px; width:1px; height:4px; background:var(--border-bright); }
+  .tl-axis span:last-child { transform:translateX(-100%); }
+  .tl-axis span:last-child::before { left:100%; }
+  #tl-tip { position:absolute; pointer-events:none; display:none; background:var(--surface2); border:1px solid var(--border-bright); border-radius:4px;
+            padding:3px 7px; font-family:monospace; font-size:calc(9px*var(--fs-base,1)); color:var(--text); white-space:nowrap; z-index:5; }
+  .tl-cap { text-align:center; font-size:calc(8px*var(--fs-base,1)); color:var(--label-dim); margin-top:2px; }
 
   .dt { width:100%; border-collapse:collapse; font-family:monospace; font-size:calc(10px*var(--fs-base,1)*var(--data-scale,1)); }
   .dt th { color:var(--label-dim); font-weight:400; font-size:calc(9px*var(--fs-base,1)); letter-spacing:.1em; text-align:right; padding:5px 8px;
@@ -87,8 +101,13 @@
 
       <div class="card">
         <div class="card-header"><span class="card-title">THREAD ACTIVITY</span><span class="muted" style="font-size:calc(9px*var(--fs-base,1))" id="tl-span"></span></div>
-        <canvas id="timeline" height="160"></canvas>
-        <div class="tl-cap"><span id="tl-old">older</span><span>one row per thread · brighter = busier</span><span>now</span></div>
+        <div class="tl">
+          <div class="tl-labels" id="tl-labels"></div>
+          <div class="tl-plot"><canvas id="timeline"></canvas><div id="tl-tip"></div></div>
+          <div></div>
+          <div class="tl-axis" id="tl-axis"></div>
+        </div>
+        <div class="tl-cap">each core is a block with one row per thread (T1, T2…) · brighter = busier · <span style="color:var(--avg-col)">cyan</span> = at or above BUSY · hover for details</div>
       </div>
 
       <div class="card">
@@ -100,7 +119,7 @@
   </div>
 </div>
 
-<script src="/nav.js?v=18" data-page="threads"></script>
+<script src="/nav.js?v=19" data-page="threads"></script>
 <script>
 function $(id) { return document.getElementById(id); }
 function setText(id, v) { const e = $(id); if (e) e.textContent = v; }
@@ -137,6 +156,8 @@ function buildMeta(cores, info) {
 const STAT = {};        // id -> {peakClk, loadSum, n, peakTemp}
 const HIST_LEN = 150;
 const HIST = [];        // array of snapshots: [thread loads in META order]
+const HIST_T = [];      // time of each snapshot (ms)
+let ROWS = [];          // [{core label, group, thread #}] for the current layout
 let _last = null, _lastT = 0, _dt = 0;
 let SORT = { key:'id', dir:1 };
 
@@ -155,7 +176,9 @@ function receiveData(d) {
     if (c.temp != null) s.peakTemp = Math.max(s.peakTemp ?? 0, c.temp);
   });
   HIST.push(META.flatMap(m => d.cores[m.id]?.threads || [d.cores[m.id]?.load ?? 0]));
-  if (HIST.length > HIST_LEN) HIST.shift();
+  HIST_T.push(now);
+  if (HIST.length > HIST_LEN) { HIST.shift(); HIST_T.shift(); }
+  ROWS = META.flatMap(m => (d.cores[m.id]?.threads || [0]).map((_, t) => ({ label:m.label, group:m.group, t:t + 1 })));
   _last = d;
   render(d);
 }
@@ -224,27 +247,85 @@ function renderMap(d) {
 }
 
 // ── Activity timeline (rows = threads, columns = time) ───────────────────────
+// Drawn at the canvas' real pixel size so the core labels and time ticks line up.
+let _tlGeom = null;
 function renderTimeline() {
-  const cv = $('timeline'); if (!HIST.length) return;
-  const rows = HIST[HIST.length - 1].length;
-  const rowH = Math.max(3, Math.min(8, Math.floor(320 / rows)));
-  cv.width = HIST_LEN; cv.height = rows * rowH;
-  cv.style.height = Math.min(320, rows * rowH * 1.6) + 'px';
+  const cv = $('timeline'); if (!HIST.length || !ROWS.length) return;
+  const rows = ROWS.length;
+  const rowH = Math.max(4, Math.min(10, Math.floor(360 / rows)));      // CSS px per thread row
+  const cssW = cv.clientWidth || 600, cssH = rows * rowH;
+  const dpr = window.devicePixelRatio || 1;
+  if (cv.width !== Math.round(cssW * dpr) || cv.height !== Math.round(cssH * dpr)) {
+    cv.width = Math.round(cssW * dpr); cv.height = Math.round(cssH * dpr); cv.style.height = cssH + 'px';
+  }
   const ctx = cv.getContext('2d');
-  const acc = getComputedStyle(document.documentElement).getPropertyValue('--avg-col').trim() || '#00ffcc';
-  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bar-bg').trim() || '#0a0600';
-  ctx.fillRect(0, 0, cv.width, cv.height);
-  const off = HIST_LEN - HIST.length;
-  HIST.forEach((snap, x) => snap.forEach((l, r) => {
-    if (l < 1) return;
-    ctx.globalAlpha = Math.min(1, 0.12 + l / 100 * 0.88);
-    ctx.fillStyle = l >= BUSY ? acc : '#665500';
-    ctx.fillRect(off + x, r * rowH, 1, rowH - (rowH > 4 ? 1 : 0));
-  }));
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const css = getComputedStyle(document.documentElement);
+  const acc = css.getPropertyValue('--avg-col').trim() || '#00ffcc';
+  const dim = css.getPropertyValue('--label').trim() || '#aa7700';
+  const line = css.getPropertyValue('--border').trim() || '#443300';
+  const lineHi = css.getPropertyValue('--border-bright').trim() || '#886600';
+  ctx.fillStyle = css.getPropertyValue('--bar-bg').trim() || '#0a0600';
+  ctx.fillRect(0, 0, cssW, cssH);
+
+  // Time runs right (now) to left; columns placed by their real timestamps
+  const now = HIST_T[HIST_T.length - 1];
+  const span = Math.max(1000, (_dt || 250) * HIST_LEN);                 // ms shown across the width
+  const colW = Math.max(1, cssW / HIST_LEN);
+  const xOf = t => cssW - (now - t) / span * cssW;
+  HIST.forEach((snap, i) => {
+    const x = xOf(HIST_T[i]) - colW;
+    if (x + colW < 0) return;
+    snap.forEach((l, r) => {
+      if (r >= rows || l < 1) return;
+      ctx.globalAlpha = Math.min(1, 0.15 + l / 100 * 0.85);
+      ctx.fillStyle = l >= BUSY ? acc : dim;
+      ctx.fillRect(x, r * rowH + 0.5, colW + 0.5, rowH - 1);
+    });
+  });
   ctx.globalAlpha = 1;
-  if (_dt) setText('tl-span', 'last ' + Math.round(_dt * HIST.length / 1000) + ' s');
-  setText('tl-old', _dt ? Math.round(_dt * HIST_LEN / 1000) + ' s ago' : 'older');
+
+  // Core and group separators + core labels
+  const labels = [];
+  ctx.lineWidth = 1;
+  ROWS.forEach((r, i) => {
+    const prev = ROWS[i - 1];
+    if (!prev || prev.label !== r.label) {
+      const y = i * rowH;
+      if (prev) { ctx.strokeStyle = prev.group !== r.group ? lineHi : line; ctx.beginPath(); ctx.moveTo(0, y + 0.5); ctx.lineTo(cssW, y + 0.5); ctx.stroke(); }
+      const n = ROWS.slice(i).findIndex(x => x.label !== r.label);
+      const size = n < 0 ? rows - i : n;
+      labels.push(`<span style="top:${(i + size / 2) * rowH}px" title="${r.label}: ${size} thread${size > 1 ? 's' : ''}">${r.label}</span>`);
+    }
+  });
+  const lab = $('tl-labels'); lab.style.height = cssH + 'px'; lab.innerHTML = labels.join('');
+
+  // Time axis: a tick every "nice" step
+  const secs = span / 1000, steps = [1, 2, 5, 10, 15, 30, 60, 120, 300];
+  const step = steps.find(s => secs / s <= 6) || 600;
+  let ticks = '';
+  for (let s = step; s < secs; s += step) ticks += `<span style="left:${(1 - s / secs) * 100}%">-${s >= 60 && s % 60 === 0 ? s / 60 + 'm' : s + 's'}</span>`;
+  $('tl-axis').innerHTML = ticks + '<span style="left:100%">now</span>';
+  setText('tl-span', `last ${Math.round(secs)} s · ${rows} threads`);
+  _tlGeom = { rowH, cssW, span, now };
 }
+// Hover: which core / thread / load / how long ago
+$('timeline').addEventListener('mousemove', e => {
+  const g = _tlGeom, tip = $('tl-tip'); if (!g) return;
+  const rect = e.target.getBoundingClientRect(), x = e.clientX - rect.left, y = e.clientY - rect.top;
+  const r = Math.floor(y / g.rowH), row = ROWS[r];
+  const t = g.now - (g.cssW - x) / g.cssW * g.span;
+  let best = -1, bd = Infinity;
+  HIST_T.forEach((ht, i) => { const dd = Math.abs(ht - t); if (dd < bd) { bd = dd; best = i; } });
+  if (!row || best < 0 || bd > (_dt || 250) * 2) { tip.style.display = 'none'; return; }
+  const l = HIST[best][r] ?? 0, ago = (g.now - HIST_T[best]) / 1000;
+  tip.textContent = `${row.label} · T${row.t} · ${Math.round(l)}% · ${ago < 0.5 ? 'now' : ago.toFixed(1) + ' s ago'}`;
+  tip.style.display = 'block';
+  tip.style.left = Math.min(x + 12, g.cssW - tip.offsetWidth - 4) + 'px';
+  tip.style.top = (y + 12) + 'px';
+});
+$('timeline').addEventListener('mouseleave', () => { $('tl-tip').style.display = 'none'; });
+window.addEventListener('resize', () => { if (_last) renderTimeline(); });
 
 // ── Core details table ───────────────────────────────────────────────────────
 const COLS = [
