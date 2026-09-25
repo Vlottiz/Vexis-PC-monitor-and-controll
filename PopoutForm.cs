@@ -30,6 +30,7 @@ public class PopoutForm : Form
         ["fans"]        = ("fans.html",     "FAN CONTROL",   new(500, 700)),
         ["rgb"]         = ("rgb.html",      "RGB CONTROL",   new(500, 600)),
         ["info"]        = ("info.html",     "INFO",          new(480, 600)),
+        ["record"]      = ("record.html",   "CSV RECORDING", new(640, 800)),
         ["security"]    = ("security.html", "SECURITY",      new(480, 700)),
     };
 

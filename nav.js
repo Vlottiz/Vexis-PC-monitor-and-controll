@@ -74,7 +74,7 @@ const NAV_CURRENT_PAGE = document.currentScript?.getAttribute('data-page') || 'h
 const NAV_IS_POPOUT    = new URLSearchParams(window.location.search).get('popout') === '1';
 const NAV_PAGE_FILES   = {
   home:'home.html', performance:'index.html', gpu:'gpu.html', memory:'memory.html', temps:'temps.html',
-  fans:'fans.html', rgb:'rgb.html', info:'info.html', security:'security.html'
+  fans:'fans.html', rgb:'rgb.html', info:'info.html', record:'record.html', security:'security.html'
 };
 
 // ── Pages list ─────────────────────────────────────────────────────────────────
@@ -87,6 +87,7 @@ const NAV_PAGES = [
   { id:'fans',        icon:'◎', label:'FAN CONTROL'  },
   { id:'rgb',         icon:'◐', label:'RGB CONTROL'  },
   { id:'info',        icon:'◌', label:'INFO'         },
+  { id:'record',      icon:'⏺', label:'CSV RECORDING' },
   { id:'security',    icon:'🛡', label:'SECURITY'     },
 ];
 
@@ -609,18 +610,18 @@ function buildPanelHTML() {
         </div>
         <div id="nv-alert-status" style="font-size:9px;font-family:monospace;color:var(--label);opacity:.75;margin:2px 0 6px;min-height:12px"></div>
         <button onclick="sendToHost({type:'testAlert'})" class="nvc-reset-all" style="width:100%;justify-content:center;margin-top:2px">
-          🔔 Send test notification
+          🔔 Send test notification (in 5 s)
         </button>
       </div>
 
       <div style="padding:8px 0;border-bottom:1px solid rgba(68,51,0,.2)">
         <div style="font-size:10px;color:var(--label);margin-bottom:4px">Recording (CSV)</div>
         <div style="font-size:9px;color:var(--label);opacity:.75;line-height:1.5;margin-bottom:6px">
-          The <b>REC</b> button (top right) saves every reading to a spreadsheet file in Documents\\Vexis Logs.
-          Rows are written as they happen, so a log survives a crash.
+          Start and stop recordings, pick what to record and view saved ones on the
+          <b>CSV Recording</b> page. Files go to Documents\\Vexis Logs.
         </div>
-        <button onclick="sendToHost({type:'openLogFolder'})" class="nvc-reset-all" style="width:100%;justify-content:center">
-          📂 Open recordings folder
+        <button onclick="sendToHost({type:'navigate', file:'record.html'})" class="nvc-reset-all" style="width:100%;justify-content:center">
+          ⏺ Open CSV Recording
         </button>
       </div>
 
@@ -839,31 +840,59 @@ function navInitZoom() {
   z.id = 'nav-zoom';
   if (NAV_IS_POPOUT) z.style.right = '8px'; // popouts have no ⛶ / ⚙ buttons
   z.innerHTML =
-    `<button type="button" id="nav-rec" title="Record every reading to a CSV file (Documents\\Vexis Logs)" data-rec="1"><span class="rec-dot"></span><span id="nav-rec-txt">REC</span></button>` +
-    `<span class="nav-zoom-sep"></span>` +
+    `<button type="button" id="nav-rec" title="Recording — open the CSV Recording page" data-rec="1"><span class="rec-dot"></span><span id="nav-rec-txt">REC</span></button>` +
+    `<span class="nav-zoom-sep" id="nav-rec-sep"></span>` +
     `<button type="button" title="Zoom out (Ctrl −)" aria-label="Zoom out" data-d="-1">${NAV_ZOOM_SVG('-')}</button>` +
     `<button type="button" id="nav-zoom-pct" title="Reset zoom (Ctrl 0)" aria-label="Reset zoom" data-d="0">100%</button>` +
     `<button type="button" title="Zoom in (Ctrl +)" aria-label="Zoom in" data-d="1">${NAV_ZOOM_SVG('+')}</button>`;
   z.addEventListener('click', e => {
     const b = e.target.closest('button');
     if (!b) return;
-    if (b.dataset.rec) sendToHost({ type: 'recordToggle' });
+    if (b.dataset.rec) sendToHost({ type: 'navigate', file: 'record.html' });
     else sendToHost({ type: 'zoom', delta: parseInt(b.dataset.d) });
   });
   document.body.appendChild(z);
 }
+// ── Alert inbox: notifications sent while you were away, until cleared ──────────
+let _navInboxSig = '', _navInboxOpen = true;
+window.navAlertInbox = function(list) {
+  const sig = list.map(a => a.id).join(',');
+  if (sig === _navInboxSig) return;
+  const grew = list.length > (_navInboxSig ? _navInboxSig.split(',').length : 0);
+  _navInboxSig = sig;
+  let box = document.getElementById('nav-inbox');
+  if (!list.length) { if (box) box.remove(); return; }
+  if (!box) {
+    box = document.createElement('div'); box.id = 'nav-inbox';
+    document.body.appendChild(box);
+  }
+  if (grew) _navInboxOpen = true;           // a new alert always opens the list
+  const esc = t => String(t).replace(/[&<>]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[c]));
+  box.className = _navInboxOpen ? 'open' : '';
+  box.innerHTML =
+    `<div class="nib-head" onclick="navInboxToggle()"><span class="nib-bell">&#x26A0;</span>` +
+    `<span class="nib-title">${list.length} ALERT${list.length > 1 ? 'S' : ''}</span>` +
+    `<span class="nib-chev">${_navInboxOpen ? '&#x25B4;' : '&#x25BE;'}</span></div>` +
+    `<div class="nib-list">${list.slice().reverse().map(a =>
+      `<div class="nib-item"><span class="nib-time">${esc(a.time)}</span><b>${esc(a.title)}</b><div>${esc(a.text)}</div></div>`).join('')}</div>` +
+    `<button class="nib-clear" onclick="sendToHost({type:'clearAlerts'});navAlertInbox([])">CLEAR ALERTS</button>`;
+};
+window.navInboxToggle = function() {
+  _navInboxOpen = !_navInboxOpen;
+  const box = document.getElementById('nav-inbox');
+  if (box) { box.classList.toggle('open', _navInboxOpen); box.querySelector('.nib-chev').innerHTML = _navInboxOpen ? '&#x25B4;' : '&#x25BE;'; }
+};
+
 // CSV recorder state from the host (data.recording)
 window.navRecordState = function(r) {
   const b = document.getElementById('nav-rec'), t = document.getElementById('nav-rec-txt');
   if (!b || !r) return;
   b.classList.toggle('on', !!r.active);
+  // Only shown while recording — started and stopped on the CSV Recording page
   if (r.active) {
     const m = Math.floor(r.seconds / 60), sec = String(r.seconds % 60).padStart(2, '0');
     t.textContent = m + ':' + sec;
-    b.title = 'Recording to ' + r.file + ' (' + r.rows + ' rows) — click to stop and show the file';
-  } else {
-    t.textContent = 'REC';
-    b.title = 'Record every reading to a CSV file (Documents\\Vexis Logs)';
+    b.title = 'Recording to ' + r.file + ' (' + r.rows + ' rows) — open the CSV Recording page';
   }
 };
 window.navZoomState = function(pct) {
@@ -991,6 +1020,29 @@ function injectSharedStyles() {
       color:var(--header-title,#ffcc00); font-family:monospace; font-size:10px;
     }
     #nav-zoom button:hover { background:color-mix(in srgb, var(--header-title,#ffcc00) 18%, transparent); }
+    #nav-inbox {
+      position:fixed; top:62px; right:12px; z-index:9500; width:min(340px, calc(100vw - 24px));
+      background:var(--surface,#140f08); border:1px solid #cc3333; border-radius:6px;
+      box-shadow:0 6px 24px rgba(0,0,0,.6), 0 0 12px rgba(255,60,60,.25); font-family:monospace; overflow:hidden;
+    }
+    #nav-inbox .nib-head { display:flex; align-items:center; gap:8px; padding:7px 10px; cursor:pointer; background:rgba(200,40,40,.15); }
+    #nav-inbox .nib-bell { color:#ff5555; animation:navRecBlink 1s steps(2) infinite; }
+    #nav-inbox .nib-title { flex:1; color:#ff7777; font-size:10px; letter-spacing:.14em; font-weight:700; }
+    #nav-inbox .nib-chev { color:#ff7777; font-size:10px; }
+    #nav-inbox .nib-list, #nav-inbox .nib-clear { display:none; }
+    #nav-inbox.open .nib-list { display:block; max-height:40vh; overflow:auto; padding:4px 10px; }
+    #nav-inbox.open .nib-clear { display:block; }
+    #nav-inbox .nib-item { padding:6px 0; border-bottom:1px solid rgba(68,51,0,.3); font-size:10px; color:var(--text,#e8d080); line-height:1.45; }
+    #nav-inbox .nib-item b { color:var(--header-title,#ffcc00); letter-spacing:.04em; text-transform:uppercase; font-size:9px; }
+    #nav-inbox .nib-time { float:right; color:var(--label-dim,#665500); font-size:9px; }
+    #nav-inbox .nib-clear {
+      width:calc(100% - 20px); margin:6px 10px 10px; padding:6px; cursor:pointer; font-family:monospace; font-size:9px;
+      letter-spacing:.14em; color:#ff7777; background:transparent; border:1px solid rgba(204,51,51,.6); border-radius:3px;
+    }
+    #nav-inbox .nib-clear:hover { background:rgba(200,40,40,.15); }
+    #nav-rec, #nav-rec-sep { display:none !important; }
+    #nav-rec.on { display:flex !important; }
+    #nav-rec.on + #nav-rec-sep { display:block !important; }
     #nav-rec { gap:4px; color:var(--label,#aa7700) !important; letter-spacing:.06em; min-width:44px !important; }
     #nav-rec .rec-dot { width:7px; height:7px; border-radius:50%; background:#aa3333; display:inline-block; }
     #nav-rec.on { color:#ff5555 !important; }
@@ -1317,6 +1369,7 @@ function boot() {
     window.receiveData = function(d) {
       if (d && d.alert_status) navAlertStatus(d.alert_status);
       if (d && d.recording) navRecordState(d.recording);
+      if (d) navAlertInbox(d.alerts || []);
       return pageReceive.apply(this, arguments);
     };
   if (NAV_IS_POPOUT) initPopoutBadge();

@@ -290,6 +290,12 @@ public class MainForm : Form
         }
     }
 
+    private void PushRecordings()
+    {
+        string json = JsonSerializer.Serialize(CsvRecorder.ListFiles(), _json);
+        RunScriptEverywhere($"typeof onRecordings==='function'&&onRecordings({json})");
+    }
+
     private void RunScriptEverywhere(string script)
     {
         BeginInvoke(() =>
@@ -343,6 +349,7 @@ public class MainForm : Form
             _lastData = data;
             _recorder.Append(data);
             data.recording = _recorder.Status;
+            lock (_inbox) data.alerts = _inbox.Count > 0 ? _inbox.ToList() : null;
 
             string json = JsonSerializer.Serialize(data, _json);
 
@@ -442,25 +449,69 @@ public class MainForm : Form
                     Invoke(() => ZoomHelper.Change(_webView, msg.delta ?? 0)); // ZoomFactorChanged saves + updates the label
                     break;
 
-                case "recordToggle":
-                    if (_recorder.IsRecording)
-                    {
-                        string file = _recorder.Stop();
-                        if (File.Exists(file))
-                            System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{file}\"");
-                    }
-                    else _recorder.Start(_lastData ?? _sensor.GetLatestData());
+                case "recordStart":
+                    _recorder.Start(_lastData ?? _sensor.GetLatestData(), msg.record);
+                    PushRecordings();
                     break;
+
+                case "recordStop":
+                    _recorder.Stop();
+                    PushRecordings();
+                    break;
+
+                case "listRecordings":
+                    PushRecordings();
+                    break;
+
+                case "readRecording":
+                {
+                    var path = CsvRecorder.ResolveFile(msg.file);
+                    if (path == null) break;
+                    // Shared read: the file may still be being recorded
+                    using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                    const int Max = 25 * 1024 * 1024;
+                    var buf = new byte[Math.Min(fs.Length, Max)];
+                    int read = 0, n;
+                    while (read < buf.Length && (n = fs.Read(buf, read, buf.Length - read)) > 0) read += n;
+                    string text = System.Text.Encoding.UTF8.GetString(buf, 0, read).TrimStart('\uFEFF');
+                    string json = JsonSerializer.Serialize(new { name = Path.GetFileName(path), text, truncated = fs.Length > Max }, _json);
+                    RunScriptEverywhere($"typeof onRecordingData==='function'&&onRecordingData({json})");
+                    break;
+                }
+
+                case "showRecording":
+                {
+                    var path = CsvRecorder.ResolveFile(msg.file);
+                    if (path != null) System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{path}\"");
+                    break;
+                }
+
+                case "deleteRecording":
+                {
+                    var path = CsvRecorder.ResolveFile(msg.file);
+                    if (path != null && !(_recorder.IsRecording && _recorder.Status.file == msg.file))
+                    {
+                        try { File.Delete(path); Console.WriteLine($"[record] Deleted {msg.file}"); }
+                        catch (Exception ex) { Console.WriteLine($"[record] Delete failed: {ex.Message}"); }
+                    }
+                    PushRecordings();
+                    break;
+                }
 
                 case "openLogFolder":
                     Directory.CreateDirectory(CsvRecorder.Folder);
                     System.Diagnostics.Process.Start("explorer.exe", $"\"{CsvRecorder.Folder}\"");
                     break;
 
+                case "clearAlerts":
+                    Invoke(ClearInbox);
+                    break;
+
                 case "testAlert":
-                    Invoke(() => QueueNotification("test alert",
+                    // 5 s delay so there is time to minimize Vexis and see the tray icon blink
+                    _ = Task.Delay(5000).ContinueWith(_ => BeginInvoke(() => QueueNotification("test alert",
                         "Temperature alerts are working. You'll see this when a limit is passed.",
-                        ToolTipIcon.Info));
+                        ToolTipIcon.Info)));
                     break;
 
                 case "getSecurityStatus":
@@ -824,13 +875,78 @@ public class MainForm : Form
             if (File.Exists(icoPath)) appIcon = new Icon(icoPath);
         } catch { }
         _tray.Text = "Vexis Hardware Monitoring";
-        _tray.Icon = appIcon ?? SystemIcons.Application;
+        _trayIcon      = appIcon ?? SystemIcons.Application;
+        _trayAlertIcon = MakeAlertIcon(_trayIcon);
+        _tray.Icon = _trayIcon;
         if (appIcon != null) this.Icon = appIcon;
         _tray.ContextMenuStrip = _trayMenu; _tray.Visible = true;
         _tray.DoubleClick += (_, _) => ShowDashboard();
+        _tray.BalloonTipClicked += (_, _) => ShowDashboard();
+        _blinkTimer.Tick += (_, _) =>
+        {
+            _blinkOn = !_blinkOn;
+            _tray.Icon = _blinkOn ? _trayAlertIcon : _trayIcon;
+        };
+        // Seeing the window counts as "seen": stop blinking (the alert list stays until cleared)
+        Activated += (_, _) => { if (Visible && Opacity > 0) StopBlink(); };
     }
 
-    private void ShowDashboard() { Show(); WindowState = FormWindowState.Normal; Activate(); }
+    private void ShowDashboard() { Show(); WindowState = FormWindowState.Normal; Activate(); StopBlink(); }
+
+    // ── Alert inbox: what triggered a notification, shown in the app until cleared ──
+    private readonly List<AlertEntry> _inbox = new();
+    private readonly System.Windows.Forms.Timer _blinkTimer = new() { Interval = 600 };
+    private Icon _trayIcon = SystemIcons.Application, _trayAlertIcon = SystemIcons.Warning;
+    private bool _blinkOn;
+
+    private void AddToInbox(string title, string text)
+    {
+        lock (_inbox)
+        {
+            _inbox.Add(new AlertEntry(Guid.NewGuid().ToString("N")[..8], DateTime.Now.ToString("HH:mm:ss"), title, text));
+            if (_inbox.Count > 30) _inbox.RemoveAt(0);
+        }
+        // Blink the tray icon until the window is looked at
+        if (!(Visible && Opacity > 0 && ContainsFocus))
+        {
+            _blinkTimer.Start();
+            _tray.Text = $"Vexis — {_inbox.Count} alert{(_inbox.Count == 1 ? "" : "s")}";
+        }
+    }
+
+    private void StopBlink()
+    {
+        if (!_blinkTimer.Enabled) return;
+        _blinkTimer.Stop(); _blinkOn = false;
+        _tray.Icon = _trayIcon;
+        _tray.Text = "Vexis Hardware Monitoring";
+    }
+
+    private void ClearInbox()
+    {
+        lock (_inbox) _inbox.Clear();
+        StopBlink();
+        Console.WriteLine("[alert] Alert list cleared");
+    }
+
+    // App icon with a red dot in the corner, alternated with the normal icon while blinking
+    private static Icon MakeAlertIcon(Icon baseIcon)
+    {
+        try
+        {
+            using var bmp = new Bitmap(32, 32);
+            using (var g = Graphics.FromImage(bmp))
+            {
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                g.DrawIcon(new Icon(baseIcon, 32, 32), new Rectangle(0, 0, 32, 32));
+                g.FillEllipse(Brushes.White, 15, 15, 17, 17);
+                using var red = new SolidBrush(Color.FromArgb(235, 40, 40));
+                g.FillEllipse(red, 17, 17, 13, 13);
+            }
+            return Icon.FromHandle(bmp.GetHicon());
+        }
+        catch { return SystemIcons.Warning; }
+    }
     private void OnClosing(object? s, FormClosingEventArgs e)
     {
         SavePlacement();
@@ -889,6 +1005,7 @@ public class MainForm : Form
 
     private void QueueNotification(string title, string text, ToolTipIcon icon)
     {
+        if (icon == ToolTipIcon.Warning || title == "test alert") AddToInbox(title, text);
         _pendingBalloons.Add((title, text, icon));
         FlushNotifications();
     }
@@ -961,6 +1078,7 @@ public class MainForm : Form
         {
             try { _fans?.RestoreAll(); } catch { }
             _recorder.Dispose();
+            _blinkTimer.Dispose();
             _pollTimer.Dispose(); _sensor?.Dispose(); _tray.Dispose(); _webView.Dispose();
             foreach (var p in _popouts.Values) if (!p.IsDisposed) p.Dispose();
         }
@@ -988,4 +1106,5 @@ public class IncomingMessage
     public FanCurve?                   fanCurve { get; set; }
     public int?  seq      { get; set; }
     public int?  delta    { get; set; } // zoom: +1 / -1 / 0 (reset)
+    public RecordOptions? record { get; set; } // recordStart: what to record
 }

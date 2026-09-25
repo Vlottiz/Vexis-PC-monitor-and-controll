@@ -46,6 +46,7 @@ public class SensorData
     public HwInfo?                    info      { get; set; }
     public GpuDetail?                 gpu       { get; set; }  // full metrics for the GPU page
     public RecordStatus?              recording { get; set; }  // CSV recorder state (set by MainForm)
+    public List<AlertEntry>?          alerts    { get; set; }  // notifications not yet cleared (set by MainForm)
     public string?                    alert_status { get; set; } // set by MainForm for the settings panel
 }
 
@@ -89,12 +90,16 @@ public class GpuSensor
     public float  value { get; set; }
 }
 
+/// <summary>A notification that was shown, kept until the user clears it in the app.</summary>
+public record AlertEntry(string id, string time, string title, string text);
+
 public class CoreInfo
 {
     public float  clk  { get; set; }
     public int    rank { get; set; }  // 0 = no rank info (Intel/generic)
     public float? temp { get; set; }  // per-core temp (Intel; AMD Zen only exposes CCD temps)
     public float? load { get; set; }  // per-core load % (busiest thread of the core)
+    public List<float>? threads { get; set; } // load % of each hardware thread (2 with SMT/Hyper-Threading)
     public string? kind { get; set; } // "P" / "E" on Intel hybrid CPUs, null otherwise
 }
 
@@ -665,21 +670,29 @@ public class SensorService : IDisposable
     {
         var coreTemps = new Dictionary<int, float>();
         var coreLoads = new Dictionary<int, float>();
+        var threadLoads = new Dictionary<int, SortedDictionary<string, float>>();
 
         foreach (var s in hw.Sensors)
         {
-            if (s.Value is null || s.Value.Value == 0f) continue;
+            if (s.Value is null) continue;
             float v = s.Value.Value;
+
+            // Per-thread load (an idle thread reads 0, so this comes before the zero filter)
+            if (s.SensorType == SensorType.Load)
+            {
+                int key = CoreKey(ThreadSuffixRe.Replace(s.Name, ""));
+                if (key >= 0 && _coreMap.TryGetValue(key, out var li))
+                {
+                    coreLoads[li.displayId] = Math.Max(v, coreLoads.GetValueOrDefault(li.displayId));
+                    if (!threadLoads.TryGetValue(li.displayId, out var tl)) threadLoads[li.displayId] = tl = new();
+                    tl[s.Name] = v;
+                }
+                continue;
+            }
+            if (v == 0f) continue;
 
             switch (s.SensorType)
             {
-                case SensorType.Load:
-                {
-                    int key = CoreKey(ThreadSuffixRe.Replace(s.Name, ""));
-                    if (key >= 0 && _coreMap.TryGetValue(key, out var li))
-                        coreLoads[li.displayId] = Math.Max(v, coreLoads.GetValueOrDefault(li.displayId));
-                    break;
-                }
 
                 case SensorType.Temperature:
                     string n = s.Name;
@@ -731,6 +744,7 @@ public class SensorService : IDisposable
         {
             if (coreTemps.TryGetValue(id, out float t)) core.temp = t;
             if (coreLoads.TryGetValue(id, out float l)) core.load = l;
+            if (threadLoads.TryGetValue(id, out var tl)) core.threads = tl.Values.Select(x => (float)Math.Round(x, 1)).ToList();
         }
     }
 
