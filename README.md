@@ -22,11 +22,12 @@
 
 Most PCs end up with three or four vendor apps just to see temperatures, set fan curves and change the RGB. Vexis puts it all in one lightweight app:
 
-- **Everything live** — per-core clocks and threads, temperatures, GPU, memory, fans and processes
-- **Real control** — fan curves for motherboard *and* GPU fans, RGB for 500+ devices through OpenRGB
+- **Everything live** — per-core clocks and threads, temperatures, GPU, memory, drives, fans and processes
+- **Real control** — fan profiles and curves for motherboard *and* GPU fans, RGB for 500+ devices through OpenRGB
+- **Handy tools** — CSV recording, a duplicate file finder, temperature alerts and a driver check on every launch
 - **Works with Windows security on** — uses the signed PawnIO driver; Memory Integrity and VBS stay enabled
-- **Yours to style** — 8 themes, full colour editing, text scaling, pop-out windows for a second monitor
-- **Keeps itself current** — one-click updates from inside the app
+- **Yours to style** — 8 themes, full colour editing, text scaling, your own menu order, pop-out windows for a second monitor
+- **Keeps itself current** — one-click (or automatic) updates, with a log of what changed
 
 ---
 
@@ -44,20 +45,29 @@ Most PCs end up with three or four vendor apps just to see temperatures, set fan
 | ![GPU](docs/screenshots/gpu.png) | ![Processes](docs/screenshots/processes.png) |
 | **Load, clocks, hot spot and VRAM temps, power, FPS, history** | **Task-Manager-style list with CPU, memory and GPU per app** |
 
-| Fan Control | Temperatures |
+| Storage | Duplicate Finder |
 |---|---|
-| ![Fan control](docs/screenshots/fans.png) | ![Temperatures](docs/screenshots/temps.png) |
-| **Auto / manual / curve for motherboard and GPU fans** | **Every sensor with current, min, max and average** |
+| ![Storage](docs/screenshots/storage.png) | ![Duplicate finder](docs/screenshots/duplicate-finder.png) |
+| **Temperature, health, space and speed for every drive** | **Find identical files and send the extras to the Recycle Bin** |
 
-| RGB Control | CSV Recording |
+| Fan Control | RGB Control |
 |---|---|
-| ![RGB](docs/screenshots/rgb.png) | ![CSV recording](docs/screenshots/csv-recording.png) |
-| **OpenRGB devices, brightness, hardware modes** | **Record what you choose; built-in viewer with charts** |
+| ![Fan control](docs/screenshots/fans.png) | ![RGB](docs/screenshots/rgb.png) |
+| **Fan profiles, plus auto / manual / curve for every fan** | **OpenRGB devices, brightness, hardware modes** |
 
-| Settings | Memory |
+| Temperatures | Memory |
 |---|---|
-| ![Settings](docs/screenshots/settings.png) | ![Memory](docs/screenshots/memory.png) |
-| **Text scaling, alerts, start with Windows, themes** | **Usage, DIMM temperatures, history** |
+| ![Temperatures](docs/screenshots/temps.png) | ![Memory](docs/screenshots/memory.png) |
+| **Every sensor with current, min, max and average** | **Usage, DIMM temperatures, history** |
+
+| CSV Recording | Info & Updates |
+|---|---|
+| ![CSV recording](docs/screenshots/csv-recording.png) | ![Update log](docs/screenshots/update-log.png) |
+| **Record what you choose; built-in viewer with charts** | **Update check and what changed in your version** |
+
+| Settings | |
+|---|---|
+| ![Settings](docs/screenshots/settings.png) | **Text scaling, start with Windows, automatic updates, temperature alerts** |
 
 ---
 
