@@ -31,6 +31,38 @@
   .fact b { font-family:monospace; font-size:calc(12px*var(--fs-base,1)*var(--data-scale,1)); color:var(--text); }
   .spark { width:100%; height:34px; display:block; margin-top:6px; }
   .note { font-size:calc(9px*var(--fs-base,1)); color:var(--label-dim); line-height:1.5; }
+
+  /* Duplicate finder */
+  .dup-where { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .chip { padding:4px 10px; border:1px solid var(--border); border-radius:12px; font-size:calc(10px*var(--fs-base,1)); color:var(--label);
+          cursor:pointer; background:transparent; font-family:monospace; }
+  .chip.on { color:var(--header-title); border-color:var(--border-bright); background:rgba(255,204,0,.08); }
+  .chip .x { margin-left:6px; color:var(--label-dim); }
+  .dup-opts { display:flex; flex-wrap:wrap; gap:14px; align-items:center; margin:10px 0; font-size:calc(10px*var(--fs-base,1)); color:var(--label); }
+  .dup-opts select { background:var(--bar-bg); color:var(--text); border:1px solid var(--border); border-radius:3px; font-family:monospace; padding:2px 4px; }
+  .dup-prog { font-family:monospace; font-size:calc(10px*var(--fs-base,1)); color:var(--label); margin-top:8px; min-height:14px;
+              white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .dup-bar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:12px 0 8px; }
+  .dup-sum { font-family:monospace; font-size:calc(11px*var(--fs-base,1)*var(--data-scale,1)); color:var(--text); flex:1; min-width:200px; }
+  .dup-sum b { color:var(--mem-acc); }
+  .dgroup { border:1px solid var(--border); border-radius:4px; margin-bottom:8px; background:var(--bar-bg); }
+  .dgroup-h { display:flex; justify-content:space-between; gap:8px; padding:6px 10px; border-bottom:1px solid var(--border);
+              font-family:monospace; font-size:calc(10px*var(--fs-base,1)); color:var(--label); }
+  .dgroup-h b { color:var(--mem-acc); }
+  .dfile { display:grid; grid-template-columns:20px 1fr auto auto; gap:8px; align-items:center; padding:4px 10px; font-size:calc(10px*var(--fs-base,1)); }
+  .dfile:hover { background:rgba(255,204,0,.04); }
+  .dfile .p { font-family:monospace; color:var(--text); line-height:1.6; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; direction:rtl; text-align:left; }
+  .dfile.sel .p { color:#ff8888; text-decoration:line-through; text-decoration-color:rgba(255,120,120,.5); }
+  .dfile .m { font-family:monospace; color:var(--label-dim); white-space:nowrap; }
+  .dfile input { accent-color:#ff6666; }
+  .mini { padding:3px 9px !important; font-size:calc(9px*var(--fs-base,1)) !important; }
+  .danger { color:#ff7777 !important; border-color:rgba(255,80,80,.55) !important; }
+  #dup-confirm { position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; z-index:9600; }
+  #dup-confirm .box { background:var(--surface); border:1px solid var(--border-bright); border-radius:8px; padding:18px 20px; width:min(420px, calc(100vw - 32px)); }
+  #dup-confirm h3 { margin:0 0 8px; font-size:calc(12px*var(--fs-base,1)); color:var(--header-title); letter-spacing:.1em; }
+  #dup-confirm p { margin:0 0 14px; font-size:calc(10px*var(--fs-base,1)); color:var(--label); line-height:1.6; }
+  #dup-toast { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:var(--surface2); border:1px solid var(--border-bright);
+               color:var(--text); padding:8px 16px; border-radius:6px; font-size:calc(10px*var(--fs-base,1)); z-index:9700; display:none; max-width:80vw; }
 </style>
 </head>
 <body>
@@ -56,12 +88,47 @@
         <div class="card tile"><div class="stat-label">READ / WRITE</div><div class="stat-value" id="t-io" style="color:var(--avg-col)">--</div><div class="stat-sub">all drives</div></div>
       </div>
       <div id="drives" style="display:flex;flex-direction:column;gap:12px"></div>
+      <!-- ── Duplicate files ──────────────────────────────────────────────── -->
+      <div class="card" id="dup-card">
+        <div class="card-header"><span class="card-title">DUPLICATE FILES</span><span style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim)">find identical copies and free up space</span></div>
+        <div class="note" style="margin-bottom:10px">Only files with exactly the same contents count as duplicates (checked byte for byte, not by name).
+          Removed files go to the <b>Recycle Bin</b>, so you can restore them — and Vexis always keeps at least one copy.</div>
+        <div class="dup-where"><span style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);letter-spacing:.14em">SEARCH IN</span>
+          <span id="dup-drives"></span><span id="dup-folders"></span>
+          <button class="chip" onclick="sendToHost({type:'dupPickFolder'})">+ CHOOSE FOLDER…</button></div>
+        <div class="dup-opts">
+          <label>Ignore files smaller than
+            <select id="dup-min"><option value="0.1">100 KB</option><option value="1" selected>1 MB</option><option value="10">10 MB</option><option value="100">100 MB</option></select></label>
+          <label title="Windows, Program Files, ProgramData and AppData hold app files that often exist twice on purpose. Removing those can break programs."><input type="checkbox" id="dup-sys"> Include Windows, program and AppData folders (not recommended)</label>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary" id="dup-start" onclick="dupStart()" style="flex:1;justify-content:center">&#x1F50D; FIND DUPLICATES</button>
+          <button class="btn btn-ghost" id="dup-cancel" onclick="sendToHost({type:'dupCancel'})" style="display:none">CANCEL</button>
+        </div>
+        <div class="dup-prog" id="dup-prog"></div>
+        <div id="dup-results" style="display:none">
+          <div class="dup-bar">
+            <div class="dup-sum" id="dup-sum"></div>
+            <button class="btn btn-ghost mini" onclick="dupAuto('newest')" title="In every group, keep the most recently changed copy and select the rest">KEEP NEWEST</button>
+            <button class="btn btn-ghost mini" onclick="dupAuto('oldest')" title="In every group, keep the oldest copy (usually the original) and select the rest">KEEP OLDEST</button>
+            <button class="btn btn-ghost mini" onclick="dupAuto('none')">CLEAR</button>
+            <button class="btn btn-ghost mini danger" id="dup-go" onclick="dupAsk()" disabled>&#x1F5D1; MOVE SELECTED TO RECYCLE BIN</button>
+          </div>
+          <div id="dup-list"></div>
+          <button class="btn btn-ghost mini" id="dup-more" onclick="dupMore()" style="display:none;width:100%;justify-content:center">SHOW MORE</button>
+        </div>
+      </div>
+
       <div class="note">Health is the drive's own wear estimate (SSDs report it; most hard drives don't). Temperatures come from the drive's SMART data. USB drives and RAID arrays may report less.</div>
     </div>
   </div>
 </div>
 
-<script src="/nav.js?v=21" data-page="storage"></script>
+<div id="dup-confirm"><div class="box"><h3 id="dc-title"></h3><p id="dc-text"></p>
+  <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn btn-ghost" onclick="document.getElementById('dup-confirm').style.display='none'">CANCEL</button>
+  <button class="btn btn-ghost danger" onclick="dupRecycle()">MOVE TO RECYCLE BIN</button></div></div></div>
+<div id="dup-toast"></div>
+<script src="/nav.js?v=22" data-page="storage"></script>
 <script>
 function $(id) { return document.getElementById(id); }
 function esc(t) { return String(t ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c])); }
@@ -81,6 +148,7 @@ function receiveData(data) {
   $('st-empty').style.display = list.length ? 'none' : 'block';
   if (!list.length) { $('st-empty').textContent = 'No drives reported yet.'; return; }
   $('st-main').style.display = 'flex';
+  dupDrives(list);
   setText('st-time', new Date().toLocaleTimeString());
 
   // Summary tiles
@@ -148,6 +216,106 @@ function receiveData(data) {
   });
 }
 function setText(id, v) { const e = $(id); if (e) e.textContent = v; }
+
+// ── Duplicate finder ─────────────────────────────────────────────────────────
+const DUP = { drives:new Set(), folders:[], groups:[], sel:new Set(), shown:40, running:false };
+function fmtBytes(b) { return b >= 1073741824 ? (b / 1073741824).toFixed(2) + ' GB' : b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.round(b / 1024) + ' KB'; }
+let _dupDriveSig = '';
+function dupDrives(list) {
+  const letters = [...new Set(list.flatMap(d => (d.letters || '').split(/\s+/)).filter(Boolean))].sort();
+  const sig = letters.join(',');
+  if (sig === _dupDriveSig) return;
+  _dupDriveSig = sig;
+  $('dup-drives').innerHTML = letters.map(l => `<button class="chip${DUP.drives.has(l) ? ' on' : ''}" onclick="dupToggleDrive('${l}',this)">${l}\\</button>`).join(' ');
+}
+function dupToggleDrive(l, el) { DUP.drives.has(l) ? DUP.drives.delete(l) : DUP.drives.add(l); el.classList.toggle('on'); }
+window.onDupFolder = function(path) { if (!DUP.folders.includes(path)) DUP.folders.push(path); dupRenderFolders(); };
+function dupRenderFolders() {
+  $('dup-folders').innerHTML = DUP.folders.map((f, i) => `<button class="chip on" title="Remove" onclick="DUP.folders.splice(${i},1);dupRenderFolders()">${esc(f)}<span class="x">✕</span></button>`).join(' ');
+}
+function dupStart() {
+  const paths = [...[...DUP.drives].map(l => l + '\\'), ...DUP.folders];
+  if (!paths.length) { dupToast('Pick a drive or choose a folder first.'); return; }
+  DUP.running = true; DUP.sel.clear();
+  $('dup-start').disabled = true; $('dup-cancel').style.display = ''; $('dup-results').style.display = 'none';
+  setText('dup-prog', 'Starting…');
+  sendToHost({ type:'dupStart', dup:{ paths, minMb: parseFloat($('dup-min').value), includeSystem: $('dup-sys').checked } });
+}
+window.onDupProgress = function(p) {
+  const txt = p.error ? 'Scan failed: ' + p.error : p.cancelled ? 'Cancelled.'
+    : p.done ? `Scanned ${p.files.toLocaleString()} files.`
+    : `${p.stage}… ${p.files.toLocaleString()} files${p.candidates ? ` · ${p.candidates.toLocaleString()} same-size candidates` : ''}${p.hashedBytes ? ` · ${fmtBytes(p.hashedBytes)} read` : ''}${p.current ? ' · ' + p.current : ''}`;
+  setText('dup-prog', txt);
+  if (p.done) { DUP.running = false; $('dup-start').disabled = false; $('dup-cancel').style.display = 'none'; }
+};
+window.onDupResults = function(r) {
+  DUP.groups = r.groups; DUP.sel.clear(); DUP.shown = 40; DUP.total = r;
+  $('dup-results').style.display = 'block';
+  dupRender();
+};
+function dupRender() {
+  const r = DUP.total, groups = DUP.groups;
+  const selBytes = groups.reduce((a, g) => a + g.files.filter(f => DUP.sel.has(f.path)).length * g.size, 0);
+  $('dup-sum').innerHTML = groups.length
+    ? `<b>${fmtBytes(r.wasted)}</b> in duplicates · ${r.groupsTotal.toLocaleString()} group${r.groupsTotal > 1 ? 's' : ''}${r.groupsTotal > groups.length ? ` (largest ${groups.length} shown)` : ''} · ${r.files.toLocaleString()} files scanned in ${Math.round(r.seconds)} s` +
+      (DUP.sel.size ? ` · <span style="color:#ff8888">${DUP.sel.size} selected (${fmtBytes(selBytes)})</span>` : '')
+    : `No duplicates found in ${r.files.toLocaleString()} files. 🎉`;
+  $('dup-go').disabled = DUP.sel.size === 0;
+  $('dup-list').innerHTML = groups.slice(0, DUP.shown).map(g => `<div class="dgroup">
+      <div class="dgroup-h"><span>${g.files.length} copies × ${fmtBytes(g.size)}</span><span>could free <b>${fmtBytes(g.size * (g.files.length - 1))}</b></span></div>
+      ${g.files.map(f => `<div class="dfile${DUP.sel.has(f.path) ? ' sel' : ''}">
+        <input type="checkbox" ${DUP.sel.has(f.path) ? 'checked' : ''} data-g="${g.id}" data-p="${esc(f.path)}" onchange="dupPick(this)">
+        <span class="p" title="${esc(f.path)}">&lrm;${esc(f.path)}&lrm;</span><span class="m">${esc(f.modified)}</span>
+        <button class="btn btn-ghost mini" data-p="${esc(f.path)}" onclick="sendToHost({type:'dupReveal',file:this.dataset.p})">SHOW</button></div>`).join('')}
+    </div>`).join('');
+  $('dup-more').style.display = groups.length > DUP.shown ? '' : 'none';
+}
+function dupMore() { DUP.shown += 40; dupRender(); }
+function dupPick(el) {
+  const g = DUP.groups.find(x => x.id == el.dataset.g), p = el.dataset.p;
+  if (el.checked) {
+    // Never select every copy: one always stays
+    if (g.files.filter(f => DUP.sel.has(f.path)).length >= g.files.length - 1) { el.checked = false; dupToast('At least one copy has to stay.'); return; }
+    DUP.sel.add(p);
+  } else DUP.sel.delete(p);
+  dupRender();
+}
+function dupAuto(mode) {
+  DUP.sel.clear();
+  if (mode !== 'none') DUP.groups.forEach(g => {
+    const sorted = [...g.files].sort((a, b) => a.modified.localeCompare(b.modified));   // oldest first
+    const keep = mode === 'oldest' ? sorted[0] : sorted[sorted.length - 1];
+    g.files.forEach(f => { if (f !== keep) DUP.sel.add(f.path); });
+  });
+  dupRender();
+}
+function dupAsk() {
+  const bytes = DUP.groups.reduce((a, g) => a + g.files.filter(f => DUP.sel.has(f.path)).length * g.size, 0);
+  $('dc-title').textContent = `MOVE ${DUP.sel.size} FILE${DUP.sel.size > 1 ? 'S' : ''} TO THE RECYCLE BIN?`;
+  $('dc-text').textContent = `This frees about ${fmtBytes(bytes)} once the Recycle Bin is emptied. You can restore them from the Recycle Bin until then. ` +
+    'Each file is checked again first, and at least one copy of everything is kept.';
+  $('dup-confirm').style.display = 'flex';
+}
+function dupRecycle() {
+  $('dup-confirm').style.display = 'none';
+  $('dup-go').disabled = true; setText('dup-prog', 'Moving files to the Recycle Bin…');
+  sendToHost({ type:'dupRecycle', dup:{ files:[...DUP.sel] } });
+}
+window.onDupRecycled = function(r) {
+  const skipped = new Set((r.skipped || []).map(s => s.replace(/ \(.*\)$/, '')));
+  const gone = [...DUP.sel].filter(p => !skipped.has(p));
+  // Drop removed files; drop groups that no longer have duplicates
+  DUP.groups = DUP.groups.map(g => ({ ...g, files: g.files.filter(f => !gone.includes(f.path)) })).filter(g => g.files.length > 1);
+  DUP.total.wasted = DUP.groups.reduce((a, g) => a + g.size * (g.files.length - 1), 0);
+  DUP.total.groupsTotal = DUP.groups.length;
+  DUP.sel.clear();
+  setText('dup-prog', `Moved ${r.removed} file${r.removed === 1 ? '' : 's'} to the Recycle Bin (${fmtBytes(r.freed)}).` + (r.skipped?.length ? ` ${r.skipped.length} skipped — hover here for why.` : ''));
+  $('dup-prog').title = (r.skipped || []).join('\n');
+  dupToast(`Moved ${r.removed} file${r.removed === 1 ? '' : 's'} to the Recycle Bin.`);
+  dupRender();
+};
+let _dupT = null;
+function dupToast(t) { const e = $('dup-toast'); e.textContent = t; e.style.display = 'block'; clearTimeout(_dupT); _dupT = setTimeout(() => e.style.display = 'none', 3500); }
 function onConfigReceived(cfg) { navOnConfig(cfg); }
 if (IS_WEBVIEW) {
   window.chrome.webview.addEventListener('message', e => {

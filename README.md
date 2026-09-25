@@ -71,6 +71,7 @@ Most PCs end up with three or four vendor apps just to see temperatures, set fan
 | **GPU** | Load (core, memory controller, video engine, bus, power limit), core / hot-spot / memory temperatures, clocks, power, VRAM, fans, PCIe traffic, FPS, history charts and every raw sensor |
 | **Memory** | RAM and virtual memory usage, DDR5 DIMM temperatures, load history |
 | **Storage** | Every drive: temperature, health (SSD life left), space used, read / write speed, lifetime data written, power-on time, drive letters and type |
+| **Duplicate Finder** | On the Storage page: finds files with identical contents on the drives or folders you pick, sorted by space wasted. Keep-oldest / keep-newest selection, and removal goes to the Recycle Bin — at least one copy is always kept |
 | **Temperatures** | Every thermal sensor grouped by component, with min / max / average |
 | **Processes** | Grouped by app with icons; CPU, memory and GPU per process; search, sort, pause, End task (Windows-critical processes are protected) |
 
