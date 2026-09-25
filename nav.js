@@ -73,7 +73,7 @@ window.navSetDriverWarning = function(msg) {
 const NAV_CURRENT_PAGE = document.currentScript?.getAttribute('data-page') || 'home';
 const NAV_IS_POPOUT    = new URLSearchParams(window.location.search).get('popout') === '1';
 const NAV_PAGE_FILES   = {
-  home:'home.html', performance:'index.html', threads:'threads.html', processes:'processes.html', gpu:'gpu.html', memory:'memory.html', temps:'temps.html',
+  home:'home.html', performance:'index.html', threads:'threads.html', processes:'processes.html', gpu:'gpu.html', memory:'memory.html', storage:'storage.html', temps:'temps.html',
   fans:'fans.html', rgb:'rgb.html', info:'info.html', record:'record.html', security:'security.html'
 };
 
@@ -85,6 +85,7 @@ const NAV_PAGES = [
   { id:'processes',   icon:'☰', label:'PROCESSES'    },
   { id:'gpu',         icon:'▩', label:'GPU'          },
   { id:'memory',      icon:'▦', label:'MEMORY'        },
+  { id:'storage',     icon:'▥', label:'STORAGE'       },
   { id:'temps',       icon:'◈', label:'TEMPERATURES' },
   { id:'fans',        icon:'◎', label:'FAN CONTROL'  },
   { id:'rgb',         icon:'◐', label:'RGB CONTROL'  },
@@ -579,6 +580,13 @@ function buildPanelHTML() {
             <span class="nv-switch-track"><span class="nv-switch-knob"></span></span>
           </label>
         </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
+          <span style="font-size:9px;color:var(--label);opacity:.8" title="When a new release is out, Vexis downloads and installs it at launch and restarts itself. Otherwise you get an UPDATE badge and choose when.">Install updates automatically</span>
+          <label class="nv-switch">
+            <input type="checkbox" id="nv-autoUpdate" onchange="navSaveSetting('autoUpdate', this.checked ? 'true' : 'false')">
+            <span class="nv-switch-track"><span class="nv-switch-knob"></span></span>
+          </label>
+        </div>
       </div>
 
       <div style="padding:8px 0;border-bottom:1px solid rgba(68,51,0,.2)">
@@ -775,6 +783,8 @@ function navSyncPerfSettings() {
   }
   const alerts = document.getElementById('nv-alertsEnabled');
   if (alerts) alerts.checked = NAV_SETTINGS.alertsEnabled === 'true';
+  const au = document.getElementById('nv-autoUpdate');
+  if (au) au.checked = NAV_SETTINGS.autoUpdate === 'true';
 }
 
 function navToggleSecurityBypass(enabled) {
@@ -855,6 +865,25 @@ function navInitZoom() {
   });
   document.body.appendChild(z);
 }
+// ── Crash helper: last session didn't close properly ──────────────────────────
+let _navCrashShown = false;
+window.navCrashBanner = function(c) {
+  let box = document.getElementById('nav-crash');
+  if (!c) { if (box) box.remove(); _navCrashShown = false; return; }
+  if (_navCrashShown && box) return;
+  _navCrashShown = true;
+  const esc = t => String(t).replace(/[&<>]/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[ch]));
+  if (!box) { box = document.createElement('div'); box.id = 'nav-crash'; document.body.appendChild(box); }
+  box.innerHTML =
+    `<div class="ncr-title">&#x26A0; ${c.hasError ? 'Vexis ran into an error last time' : 'Vexis didn\'t close properly last time'}${c.when ? ' <span>(' + esc(c.when) + ')</span>' : ''}</div>` +
+    `<div class="ncr-text">${c.hasError ? 'The error and the log from that session were saved.' : esc(c.summary)} ` +
+    `Reporting it helps get it fixed — the report opens on GitHub with your version and system details filled in.</div>` +
+    (c.hasError ? `<details class="ncr-details"><summary>Error details</summary><pre>${esc(c.summary)}</pre></details>` : '') +
+    `<div class="ncr-btns"><button onclick="sendToHost({type:'crashOpenLog'})">OPEN LOG</button>` +
+    `<button class="pri" onclick="sendToHost({type:'crashReport'})">REPORT ON GITHUB</button>` +
+    `<button onclick="sendToHost({type:'crashDismiss'});navCrashBanner(null)">DISMISS</button></div>`;
+};
+
 // ── Alert inbox: notifications sent while you were away, until cleared ──────────
 let _navInboxSig = '', _navInboxOpen = true;
 window.navAlertInbox = function(list) {
@@ -1022,6 +1051,21 @@ function injectSharedStyles() {
       color:var(--header-title,#ffcc00); font-family:monospace; font-size:10px;
     }
     #nav-zoom button:hover { background:color-mix(in srgb, var(--header-title,#ffcc00) 18%, transparent); }
+    #nav-crash {
+      position:fixed; top:62px; left:50%; transform:translateX(-50%); z-index:9550; width:min(520px, calc(100vw - 24px));
+      background:var(--surface,#140f08); border:1px solid #d9901a; border-radius:6px; padding:12px 14px;
+      box-shadow:0 8px 28px rgba(0,0,0,.65); font-family:monospace;
+    }
+    #nav-crash .ncr-title { color:#ffb347; font-size:11px; letter-spacing:.08em; font-weight:700; margin-bottom:6px; }
+    #nav-crash .ncr-title span { color:var(--label-dim,#665500); font-weight:400; }
+    #nav-crash .ncr-text { color:var(--label,#aa7700); font-size:10px; line-height:1.55; }
+    #nav-crash .ncr-details { margin-top:6px; color:var(--label-dim,#665500); font-size:9px; }
+    #nav-crash .ncr-details pre { max-height:120px; overflow:auto; white-space:pre-wrap; background:var(--bar-bg,#0a0600); padding:6px; border-radius:3px; }
+    #nav-crash .ncr-btns { display:flex; gap:6px; justify-content:flex-end; margin-top:10px; flex-wrap:wrap; }
+    #nav-crash button { font-family:monospace; font-size:9px; letter-spacing:.12em; padding:5px 10px; cursor:pointer; border-radius:3px;
+      background:transparent; color:var(--label,#aa7700); border:1px solid var(--border,#443300); }
+    #nav-crash button.pri { color:#ffb347; border-color:#d9901a; }
+    #nav-crash button:hover { background:rgba(255,170,0,.1); }
     #nav-inbox {
       position:fixed; top:62px; right:12px; z-index:9500; width:min(340px, calc(100vw - 24px));
       background:var(--surface,#140f08); border:1px solid #cc3333; border-radius:6px;
@@ -1372,6 +1416,7 @@ function boot() {
       if (d && d.alert_status) navAlertStatus(d.alert_status);
       if (d && d.recording) navRecordState(d.recording);
       if (d) navAlertInbox(d.alerts || []);
+      if (d) navCrashBanner(d.crash || null);
       return pageReceive.apply(this, arguments);
     };
   if (NAV_IS_POPOUT) initPopoutBadge();

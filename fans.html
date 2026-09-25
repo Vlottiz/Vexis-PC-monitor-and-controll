@@ -28,7 +28,7 @@
     font-size:calc(8px*var(--fs-base,1));color:var(--label-dim);text-align:right;padding-right:4px;
   }
   .curve-graph {
-    width:100%;aspect-ratio:2.2/1;background:var(--bar-bg);
+    width:100%;height:calc(210px*var(--fs-base,1));background:var(--bar-bg);
     border:1px solid var(--border);border-radius:4px;
     cursor:crosshair;user-select:none;display:block;
   }
@@ -52,6 +52,24 @@
   .curve-btns { display:flex;gap:6px;margin-top:6px; }
   .health-row { display:flex;align-items:center;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border); }
   .health-status { flex:1;font-size:calc(10px*var(--fs-base,1));line-height:1.5; }
+  .curve-opts { display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin:4px 0 6px; }
+  .curve-opts label { font-size:calc(10px*var(--fs-base,1));color:var(--label);letter-spacing:.06em;display:flex;align-items:center;gap:6px;cursor:help; }
+  .curve-opts input { width:calc(52px*var(--fs-base,1));background:var(--bar-bg);border:1px solid var(--border);border-radius:3px;color:var(--text);
+                      font-family:monospace;font-size:calc(11px*var(--fs-base,1));padding:3px 5px;text-align:right; }
+  .curve-opts small { font-size:calc(9px*var(--fs-base,1));color:var(--label-dim); }
+  /* Fan profile picker */
+  .prof-row { display:grid;grid-template-columns:repeat(4,1fr);gap:8px; }
+  .prof { border:1px solid var(--border);border-radius:5px;padding:9px 10px;cursor:pointer;background:var(--bar-bg);text-align:left;font-family:inherit; }
+  .prof:hover { border-color:var(--border-bright); }
+  .prof.on { border-color:var(--header-title);box-shadow:0 0 0 1px var(--header-title) inset;background:rgba(255,204,0,.06); }
+  .prof b { display:block;font-size:calc(10px*var(--fs-base,1));letter-spacing:.14em;color:var(--header-title);margin-bottom:3px; }
+  .prof span { font-size:calc(9px*var(--fs-base,1));color:var(--label);line-height:1.45; }
+  @media (max-width:560px) { .prof-row { grid-template-columns:1fr 1fr; } }
+  .preset-note { display:none;margin:8px 0 2px;padding:7px 10px;border:1px dashed var(--border-bright);border-radius:4px;
+                 font-size:calc(10px*var(--fs-base,1));color:var(--label); }
+  .preset .preset-note { display:block; }
+  .preset .mode-tab { opacity:.55; }
+  .preset .manual-wrap, .preset .curve-wrap { display:none !important; }
   .no-ctrl { font-size:calc(10px*var(--fs-base,1));color:var(--label-dim);padding:6px 0; }
 </style>
 </head>
@@ -64,21 +82,40 @@
     </div>
   </div>
   <div class="page-body">
+    <div class="card" id="prof-card" style="display:none;margin-bottom:10px">
+      <div class="card-header"><span class="card-title">FAN PROFILE</span><span style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim)">also in the tray icon menu</span></div>
+      <div class="prof-row">
+        <button class="prof" data-p="custom" onclick="pickProfile('custom')"><b>CUSTOM</b><span>Each fan uses its own mode or saved curve below.</span></button>
+        <button class="prof" data-p="silent" onclick="pickProfile('silent')"><b>SILENT</b><span>Quiet until things get warm. Slower ramps, low idle speed.</span></button>
+        <button class="prof" data-p="balanced" onclick="pickProfile('balanced')"><b>BALANCED</b><span>A sensible middle ground for everyday use and gaming.</span></button>
+        <button class="prof" data-p="performance" onclick="pickProfile('performance')"><b>PERFORMANCE</b><span>Cooling first. Fans ramp early and stay higher.</span></button>
+      </div>
+      <div style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);margin-top:8px;line-height:1.5">Presets drive every controllable fan: case and CPU fans follow the CPU, GPU fans the GPU, pumps keep a safe minimum. Changing a single fan below switches back to Custom.</div>
+    </div>
     <div id="no-fans" class="empty-state">Waiting for sensor data...</div>
     <div id="fan-notice" style="display:none;margin:10px 0;padding:10px 14px;background:rgba(80,60,0,.15);border:1px solid rgba(180,120,0,.3);border-radius:5px;font-size:calc(10px*var(--fs-base,1));line-height:1.7;color:#aa8833;">⚠ <strong>Fan control unavailable on this system.</strong><br>Your fans are visible but cannot be controlled — either the hardware driver blocks software control, or your motherboard's fan controller isn't yet supported by the sensor library (LibreHardwareMonitor).<br><span style="color:#665500">Try your motherboard's own software (e.g. MSI Center, ASUS Armoury Crate, Gigabyte EasyTune) for full fan control. Support for more boards is added regularly.</span></div>
     <div id="fans-list"></div>
   </div>
 </div>
-<script src="/nav.js?v=20" data-page="fans"></script>
+<script src="/nav.js?v=21" data-page="fans"></script>
 <script>
 // ── State ─────────────────────────────────────────────────────────────────────
 const fanStates = {};
 let _built = false;
 let _latestData = null;
+let PROFILE = 'custom';
+const PROFILE_NAMES = { custom:'Custom', silent:'Silent', balanced:'Balanced', performance:'Performance' };
+function pickProfile(p) { sendToHost({ type:'setFanProfile', profile:p }); onFanProfile(p); }
+window.onFanProfile = function(p) {
+  PROFILE = PROFILE_NAMES[p] ? p : 'custom';
+  document.querySelectorAll('.prof').forEach(b => b.classList.toggle('on', b.dataset.p === PROFILE));
+  document.getElementById('fans-list')?.classList.toggle('preset', PROFILE !== 'custom');
+  document.querySelectorAll('.preset-note b').forEach(b => b.textContent = PROFILE_NAMES[PROFILE].toUpperCase());
+};
 
 function gs(name) {
   if (!fanStates[name]) fanStates[name] = {
-    mode:'auto', pct:50, tempSrc:'cpu',
+    mode:'auto', pct:50, tempSrc:'cpu', hyst:5, min:0,
     pts:[{t:30,s:20},{t:50,s:40},{t:70,s:70},{t:85,s:100}]
   };
   return fanStates[name];
@@ -89,6 +126,7 @@ function sid(name) { return name.replace(/[\s#\-]/g,'_'); }
 // ── Mode ──────────────────────────────────────────────────────────────────────
 function setMode(name, mode) {
   const s = gs(name), id = sid(name);
+  if (PROFILE !== 'custom') onFanProfile('custom');   // the host switches back to Custom too
   s.mode = mode;
   document.querySelectorAll(`#fc-${id} .mode-tab`)
     .forEach(t => t.classList.toggle('active', t.dataset.mode === mode));
@@ -161,7 +199,9 @@ function renderCurve(name) {
   if (!svg) return;
   const state = gs(name);
   const pts   = [...state.pts].sort((a,b)=>a.t-b.t);
-  const W=300, H=110;
+  // Draw in real pixels so labels and handles keep their size at any window width
+  const W = Math.max(120, Math.round(svg.clientWidth || 300)), H = Math.max(60, Math.round(svg.clientHeight || 110));
+  const fs = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--fs-base')) || 1;
   svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
 
   // Grid
@@ -184,6 +224,13 @@ function renderCurve(name) {
   out += `<polyline points="${coords}" fill="none" stroke="var(--header-title,#ffcc00)"
     stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>`;
 
+  // Minimum speed floor
+  if (state.min > 0) {
+    const {y} = ptToPx(W,H,TMIN,state.min);
+    out += `<line x1="${PAD.l}" y1="${y}" x2="${W-PAD.r}" y2="${y}" stroke="var(--avg-col,#00ffcc)" stroke-width="1" stroke-dasharray="4,3" opacity=".55"/>`;
+    out += `<text x="${W-PAD.r-4}" y="${y-4}" text-anchor="end" font-size="${9*fs}" fill="var(--avg-col,#00ffcc)" opacity=".8">min ${state.min}%</text>`;
+  }
+
   // Current temp indicator
   if (_latestData) {
     const src  = state.tempSrc;
@@ -200,7 +247,7 @@ function renderCurve(name) {
       const {x:tx}  = ptToPx(W,H,temp,0);
       out += `<line x1="${tx}" y1="${PAD.t}" x2="${tx}" y2="${H-PAD.b}"
         stroke="var(--temp-warn,#ffaa00)" stroke-width="1" stroke-dasharray="2,2" opacity=".7"/>`;
-      out += `<circle cx="${x}" cy="${y}" r="3.5" fill="var(--temp-warn,#ffaa00)"
+      out += `<circle cx="${x}" cy="${y}" r="${4*fs}" fill="var(--temp-warn,#ffaa00)"
         stroke="var(--bg,#000)" stroke-width="1.5"/>`;
     }
   }
@@ -208,13 +255,14 @@ function renderCurve(name) {
   // Drag handles
   pts.forEach((p,i) => {
     const {x,y} = ptToPx(W,H,p.t,p.s);
-    out += `<circle cx="${x}" cy="${y}" r="5" fill="var(--header-title,#ffcc00)"
+    out += `<circle cx="${x}" cy="${y}" r="${6*fs}" fill="var(--header-title,#ffcc00)"
       stroke="var(--bg,#000)" stroke-width="1.5" style="cursor:grab"
       class="cpt" data-n="${name}" data-i="${i}"
       onmousedown="startDrag(event,'${name}',${i})"
       oncontextmenu="delPt(event,'${name}',${i})"/>`;
-    out += `<text x="${x}" y="${y-8}" text-anchor="middle"
-      font-size="7" fill="var(--label-dim,#886600)">${p.t}°/${p.s}%</text>`;
+    const ly = y - 10*fs < 12*fs ? y + 18*fs : y - 10*fs;   // keep the label inside the graph
+    out += `<text x="${Math.min(W - 30*fs, Math.max(30*fs, x))}" y="${ly}" text-anchor="middle"
+      font-size="${10*fs}" fill="var(--label,#aa7700)">${p.t}°/${p.s}%</text>`;
   });
 
   svg.innerHTML = out;
@@ -234,9 +282,9 @@ function onMove(e) {
   const svg = document.getElementById(`csvg-${sid(name)}`);
   if (!svg) return;
   const r  = svg.getBoundingClientRect();
-  const W=300, H=110;
-  const px = (e.clientX-r.left)*(W/r.width);
-  const py = (e.clientY-r.top) *(H/r.height);
+  const W = r.width, H = r.height;          // viewBox is drawn at the real pixel size
+  const px = e.clientX-r.left;
+  const py = e.clientY-r.top;
   gs(name).pts[i] = pxToPt(W,H,px,py);
   renderCurve(name);
 }
@@ -259,12 +307,18 @@ function svgClick(e, name) {
   const svg = document.getElementById(`csvg-${sid(name)}`);
   if (!svg) return;
   const r  = svg.getBoundingClientRect();
-  const W=300, H=110;
-  const px = (e.clientX-r.left)*(W/r.width);
-  const py = (e.clientY-r.top) *(H/r.height);
+  const W = r.width, H = r.height;
+  const px = e.clientX-r.left;
+  const py = e.clientY-r.top;
   const s  = gs(name);
   if (s.pts.length < 8) { s.pts.push(pxToPt(W,H,px,py)); renderCurve(name); }
 }
+
+function setCurveOpt(name, key, v, lo, hi) {
+  gs(name)[key] = Math.max(lo, Math.min(hi, parseInt(v) || 0));
+  renderCurve(name);
+}
+window.addEventListener('resize', () => Object.keys(fanStates).forEach(n => { if (gs(n).mode === 'curve') renderCurve(n); }));
 
 function resetCurve(name) {
   gs(name).pts = [{t:30,s:20},{t:50,s:40},{t:70,s:70},{t:85,s:100}];
@@ -273,8 +327,10 @@ function resetCurve(name) {
 
 function saveCurve(name) {
   const s = gs(name);
+  if (PROFILE !== 'custom') onFanProfile('custom');
   sendToHost({type:'saveFanCurve', fanCurve:{
     FanName:name, TempSource:s.tempSrc, Enabled:true,
+    Hysteresis: s.hyst, MinSpeed: s.min,
     Points: s.pts.map(p=>({Temp:p.t,Speed:p.s}))
   }});
   sendToHost({type:'fanSetCurveMode', fanName:name, enabled:true});
@@ -289,7 +345,7 @@ function buildCard(fan) {
     const st = gs(fan.name);
     if (fan.isGpu) st.tempSrc = 'gpu';
     // Start from what the fan is really doing (curve / manual / auto)
-    if (fan.mode) st.mode = fan.mode;
+    if (fan.mode && fan.mode !== 'profile') st.mode = fan.mode;
     if (fan.mode === 'manual' && fan.pct > 0) st.pct = Math.round(fan.pct);
   }
   const id  = sid(fan.name);
@@ -315,6 +371,7 @@ function buildCard(fan) {
     <div class="bar-wrap"><div class="bar-fill bar-mem" id="g-${id}" style="width:${pct}%"></div></div>
 
     ${fan.hasControl ? `
+    <div class="preset-note">Following the <b>${PROFILE_NAMES[PROFILE].toUpperCase()}</b> fan profile. Pick a mode below to control this fan yourself (switches to Custom).</div>
     <div class="mode-tabs">
       <button class="mode-tab ${s.mode==='auto'?'active':''}"   data-mode="auto"   onclick="setMode('${fan.name}','auto')">AUTO</button>
       <button class="mode-tab ${s.mode==='manual'?'active':''}" data-mode="manual" onclick="setMode('${fan.name}','manual')">MANUAL</button>
@@ -359,6 +416,13 @@ function buildCard(fan) {
         <span>20°</span><span>40°</span><span>60°</span><span>80°</span><span>100°</span>
       </div>
       <div class="curve-hint">Click to add point · Right-click point to remove · Drag to move · Orange line = current temp</div>
+      <div class="curve-opts">
+        <label title="Fans speed up straight away, but only slow down once the temperature has dropped this many degrees. Stops fans revving up and down when a temperature hovers around a curve point.">
+          HYSTERESIS <input type="number" min="0" max="15" step="1" value="${s.hyst}" oninput="setCurveOpt('${fan.name}','hyst',this.value,0,15)"> °C</label>
+        <label title="The fan never runs slower than this, even when the curve says lower.">
+          MINIMUM SPEED <input type="number" min="0" max="80" step="5" value="${s.min}" oninput="setCurveOpt('${fan.name}','min',this.value,0,80)"> %</label>
+        <small>Hover a setting for what it does</small>
+      </div>
       <div class="curve-btns">
         <button class="btn btn-primary" id="csave-${id}" onclick="saveCurve('${fan.name}')"
           style="flex:1;justify-content:center">SAVE CURVE</button>
@@ -389,6 +453,8 @@ function receiveData(data) {
   const allControllable = fans.every(f => f.hasControl);
   const notice = document.getElementById('fan-notice');
   if (notice) notice.style.display = anyControllable ? 'none' : 'block';
+  document.getElementById('prof-card').style.display = anyControllable ? '' : 'none';
+  if (data.fan_profile && data.fan_profile !== PROFILE) onFanProfile(data.fan_profile);
 
   const controlled = fans.filter(f => f.hasControl).length;
   const total      = fans.length;
@@ -426,12 +492,15 @@ function onConfigReceived(cfg) {
     cfg.fanCurves.forEach(c => {
       const s = gs(c.FanName);
       s.tempSrc = c.TempSource || 'cpu';
+      if (c.Hysteresis != null) s.hyst = c.Hysteresis;
+      if (c.MinSpeed != null) s.min = c.MinSpeed;
       if (c.Points && c.Points.length)
         s.pts = c.Points.map(p => ({t:p.Temp, s:p.Speed}));
       if (c.Enabled) s.mode = 'curve';
     });
   }
   navOnConfig(cfg);
+  if (cfg.fanProfile) onFanProfile(cfg.fanProfile);
 }
 
 if (IS_WEBVIEW) {

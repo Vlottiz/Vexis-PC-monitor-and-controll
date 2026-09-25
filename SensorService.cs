@@ -47,6 +47,9 @@ public class SensorData
     public GpuDetail?                 gpu       { get; set; }  // full metrics for the GPU page
     public RecordStatus?              recording { get; set; }  // CSV recorder state (set by MainForm)
     public List<AlertEntry>?          alerts    { get; set; }  // notifications not yet cleared (set by MainForm)
+    public string?                    fan_profile { get; set; } // active fan profile (set by MainForm)
+    public List<DriveInfoData>?       storage   { get; set; }  // drives (Storage page), refreshed every 2 s
+    public CrashHelper.Report?        crash     { get; set; }  // last session ended badly (set by MainForm)
     public string?                    alert_status { get; set; } // set by MainForm for the settings panel
 }
 
@@ -141,7 +144,7 @@ public class SensorService : IDisposable
             IsMotherboardEnabled = true,
             IsControllerEnabled  = false,
             IsNetworkEnabled     = false,
-            IsStorageEnabled     = false
+            IsStorageEnabled     = true
         };
         // ── Sensor driver ────────────────────────────────────────────────────────
         // LHM 0.9.6 reads per-core temps/clocks, SMU, SuperIO fans and DIMM temps
@@ -418,6 +421,8 @@ public class SensorService : IDisposable
 
 
     private int _polling; // 1 while a poll is running — LHM Update() is not re-entrant
+    private List<DriveInfoData> _storage = new();
+    private DateTime _storageAt = DateTime.MinValue;
 
     private void Poll(object? _)
     {
@@ -432,8 +437,21 @@ public class SensorService : IDisposable
     {
         var data = new SensorData { info = _hwInfo };
 
+        // Drives: SMART is a disk command, so read it every 2 s, not every poll
+        bool storageDue = DateTime.Now - _storageAt >= TimeSpan.FromSeconds(2);
+        List<DriveInfoData>? drives = storageDue ? new() : null;
+
         foreach (var hw in _computer.Hardware)
         {
+            if (hw.HardwareType == HardwareType.Storage)
+            {
+                if (storageDue)
+                {
+                    try { hw.Update(); drives!.Add(StorageReader.Read(hw)); }
+                    catch (Exception ex) { Console.WriteLine($"[storage] {hw.Name}: {ex.Message}"); }
+                }
+                continue;
+            }
             hw.Update();
             if (hw.HardwareType == HardwareType.Cpu) hw.Update();
 
@@ -491,6 +509,12 @@ public class SensorService : IDisposable
                 if (IsRealTemp(s))
                     data.all_temps[$"{prefix}/{s.Name}"] = (float)Math.Round(s.Value!.Value, 2);
         }
+
+        if (drives != null) { _storage = drives; _storageAt = DateTime.Now; }
+        data.storage = _storage;
+        // Drive temperatures on the Temperatures page (one per drive, named by model)
+        foreach (var d in _storage)
+            if (d.temp is float dt && dt > 1 && dt < 120) data.all_temps[$"Storage/{d.name}"] = (float)Math.Round(dt, 2);
 
         // ── WMI fallback when LHM driver can't read (blocked by BIOS/firmware) ───
         if (data.cores.Count == 0 || data.cpu_temp == null)

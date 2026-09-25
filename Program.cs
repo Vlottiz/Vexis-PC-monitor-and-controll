@@ -102,11 +102,17 @@ internal static class Program
 
         // ── Kill any existing Vexis instances ────────────────────────────
         var current = Process.GetCurrentProcess();
+        bool replacedOther = false;
         foreach (var p in Process.GetProcessesByName(current.ProcessName))
         {
             if (p.Id == current.Id) continue;
-            try { p.Kill(); p.WaitForExit(3000); } catch { }
+            try { p.Kill(); p.WaitForExit(3000); replacedOther = true; } catch { }
         }
+
+        // ── Did the last session end badly? (must run before the log is truncated) ──
+        CrashHelper.OnStart(replacedOther);
+        CrashHelper.InstallHandlers();
+        Application.ApplicationExit += (_, _) => CrashHelper.OnCleanExit();
 
         // ── Log to AppData (always writable, even from Program Files) ──────────
         try
@@ -123,6 +129,7 @@ internal static class Program
         }
         catch { }
 
+        if (CrashHelper.Pending != null) Console.WriteLine("[crash] Previous session ended unexpectedly — log kept as debug-previous.log");
         Application.SetHighDpiMode(HighDpiMode.SystemAware);
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);

@@ -154,7 +154,14 @@ Function .onInstSuccess
   ClearErrors
   ${GetOptions} $R0 "/UPDATE" $R1
   ${IfNot} ${Errors}
-    Exec '"$INSTDIR\Vexis.exe"'
+    ; /MINIMIZED: Vexis was running in the tray (auto-update) — restart it there
+    ClearErrors
+    ${GetOptions} $R0 "/MINIMIZED" $R2
+    ${If} ${Errors}
+      Exec '"$INSTDIR\Vexis.exe"'
+    ${Else}
+      Exec '"$INSTDIR\Vexis.exe" --minimized'
+    ${EndIf}
   ${EndIf}
 FunctionEnd
 

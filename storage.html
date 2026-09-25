@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store">
+<title>PC Monitor — Storage</title>
+<link rel="stylesheet" href="/ui.css?v=12">
+<style>
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; }
+  .tile { text-align:center; padding:12px 8px; }
+  .tile .stat-value { font-family:monospace; white-space:nowrap; font-size:calc(var(--fs-xl)*var(--data-scale,1)); }
+  .tile .stat-sub { font-size:calc(9px*var(--fs-base,1)); margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  .drive-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
+  .drive-name { font-size:calc(13px*var(--fs-base,1)); color:var(--header-title); font-weight:700; letter-spacing:.04em; }
+  .pill { font-size:calc(9px*var(--fs-base,1)); letter-spacing:.1em; padding:2px 8px; border-radius:10px; border:1px solid var(--border); color:var(--label); font-family:monospace; }
+  .health { margin-left:auto; font-weight:700; }
+  .health.good    { color:#22c55e; border-color:#22c55e55; background:#22c55e14; }
+  .health.worn    { color:#f59e0b; border-color:#f59e0b55; background:#f59e0b14; }
+  .health.replace, .health.hot { color:#ff5555; border-color:#ff555566; background:#ff555518; }
+  .health.unknown { color:var(--label-dim); }
+
+  .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px 24px; }
+  .meter-lbl { display:flex; justify-content:space-between; font-size:calc(10px*var(--fs-base,1)); color:var(--label); margin-bottom:5px; }
+  .meter-lbl b { font-family:monospace; color:var(--text); font-size:calc(12px*var(--fs-base,1)*var(--data-scale,1)); }
+  .meter { height:8px; background:var(--bar-bg); border:1px solid var(--border); border-radius:4px; overflow:hidden; }
+  .meter i { display:block; height:100%; border-radius:4px; transition:width .5s; }
+  .facts { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:8px; margin-top:14px; }
+  .fact { background:var(--bar-bg); border:1px solid var(--border); border-radius:4px; padding:7px 9px; }
+  .fact span { display:block; font-size:calc(8px*var(--fs-base,1)); letter-spacing:.14em; color:var(--label-dim); }
+  .fact b { font-family:monospace; font-size:calc(12px*var(--fs-base,1)*var(--data-scale,1)); color:var(--text); }
+  .spark { width:100%; height:34px; display:block; margin-top:6px; }
+  .note { font-size:calc(9px*var(--fs-base,1)); color:var(--label-dim); line-height:1.5; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title">&#x25A5; Storage</div>
+      <div class="page-subtitle" id="st-sub">Loading...</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:calc(11px*var(--fs-base,1));color:var(--label-dim)" id="st-time">--:--:--</div>
+      <div id="st-badge" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--avg-col);font-weight:700;margin-top:2px;white-space:nowrap">--</div>
+    </div>
+  </div>
+  <div class="page-body">
+    <div id="st-empty" class="empty-state">Reading drives… (drive health is read every 2 seconds)</div>
+    <div id="st-main" style="display:none;flex-direction:column;gap:12px">
+      <div class="tiles">
+        <div class="card tile"><div class="stat-label">DRIVES</div><div class="stat-value" id="t-count">--</div><div class="stat-sub" id="t-count-s"></div></div>
+        <div class="card tile"><div class="stat-label">CAPACITY</div><div class="stat-value" id="t-cap" style="color:var(--mem-acc)">--</div><div class="stat-sub" id="t-cap-s"></div></div>
+        <div class="card tile"><div class="stat-label">HOTTEST</div><div class="stat-value" id="t-hot">--</div><div class="stat-sub" id="t-hot-s"></div></div>
+        <div class="card tile"><div class="stat-label">LOWEST HEALTH</div><div class="stat-value" id="t-life">--</div><div class="stat-sub" id="t-life-s"></div></div>
+        <div class="card tile"><div class="stat-label">READ / WRITE</div><div class="stat-value" id="t-io" style="color:var(--avg-col)">--</div><div class="stat-sub">all drives</div></div>
+      </div>
+      <div id="drives" style="display:flex;flex-direction:column;gap:12px"></div>
+      <div class="note">Health is the drive's own wear estimate (SSDs report it; most hard drives don't). Temperatures come from the drive's SMART data. USB drives and RAID arrays may report less.</div>
+    </div>
+  </div>
+</div>
+
+<script src="/nav.js?v=21" data-page="storage"></script>
+<script>
+function $(id) { return document.getElementById(id); }
+function esc(t) { return String(t ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c])); }
+function fmtGb(v) { return v == null ? '--' : v >= 1000 ? (v / 1024).toFixed(2) + ' TB' : Math.round(v) + ' GB'; }
+function fmtRate(b) { if (b == null) return '--'; return b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB/s' : b >= 1024 ? Math.round(b / 1024) + ' KB/s' : Math.round(b) + ' B/s'; }
+function fmtHours(h) { if (h == null) return '--'; const d = Math.floor(h / 24); return d >= 365 ? (d / 365).toFixed(1) + ' years' : d >= 1 ? d + ' days' : Math.round(h) + ' h'; }
+function tempCol(t, warn) { const w = warn || 70; return t >= w ? 'var(--temp-hot)' : t >= w - 15 ? 'var(--temp-warn)' : 'var(--temp-low)'; }
+function lifeCol(l) { return l < 10 ? 'var(--temp-hot)' : l < 50 ? 'var(--temp-warn)' : '#22c55e'; }
+const HEALTH = { good:'HEALTH GOOD', worn:'WORN — PLAN A REPLACEMENT', replace:'REPLACE SOON', hot:'RUNNING HOT', unknown:'HEALTH NOT REPORTED' };
+const HIST = {};   // drive name -> temps
+
+function keyOf(d, i) { return 'd' + i + '_' + d.name.replace(/[^a-z0-9]/gi, ''); }
+
+function receiveData(data) {
+  const list = data && data.storage;
+  if (!list) return;
+  $('st-empty').style.display = list.length ? 'none' : 'block';
+  if (!list.length) { $('st-empty').textContent = 'No drives reported yet.'; return; }
+  $('st-main').style.display = 'flex';
+  setText('st-time', new Date().toLocaleTimeString());
+
+  // Summary tiles
+  const total = list.reduce((a, d) => a + (d.total_gb || 0), 0), free = list.reduce((a, d) => a + (d.free_gb || 0), 0);
+  const withT = list.filter(d => d.temp != null), hot = withT.reduce((a, d) => !a || d.temp > a.temp ? d : a, null);
+  const withL = list.filter(d => d.life != null), low = withL.reduce((a, d) => !a || d.life < a.life ? d : a, null);
+  const io = list.reduce((a, d) => a + (d.read_rate || 0) + (d.write_rate || 0), 0);
+  setText('t-count', list.length); setText('t-count-s', [...new Set(list.map(d => d.kind).filter(Boolean))].join(' · ') || 'drives');
+  setText('t-cap', total ? fmtGb(total) : '--'); setText('t-cap-s', total ? fmtGb(free) + ' free' : '');
+  const th = $('t-hot'); th.textContent = hot ? hot.temp.toFixed(0) + '°C' : '--'; if (hot) th.style.color = tempCol(hot.temp, hot.temp_warn);
+  setText('t-hot-s', hot ? hot.name : 'no drive temperatures');
+  const tl = $('t-life'); tl.textContent = low ? Math.round(low.life) + '%' : '--'; if (low) tl.style.color = lifeCol(low.life);
+  setText('t-life-s', low ? low.name : 'not reported');
+  setText('t-io', fmtRate(io));
+  const bad = list.filter(d => d.health === 'replace' || d.health === 'hot').length;
+  $('st-badge').textContent = bad ? `${bad} drive${bad > 1 ? 's' : ''} need attention` : 'All drives OK';
+  $('st-badge').style.color = bad ? 'var(--temp-hot)' : 'var(--avg-col)';
+  setText('st-sub', `${list.length} drive${list.length > 1 ? 's' : ''} · ${fmtGb(total)}`);
+
+  // Drive cards (built once per drive set, then updated)
+  const box = $('drives'), sig = list.map(keyOf).join('|');
+  if (box.dataset.sig !== sig) {
+    box.dataset.sig = sig;
+    box.innerHTML = list.map((d, i) => { const k = keyOf(d, i); return `<div class="card" id="${k}">
+      <div class="drive-head"><span class="drive-name">${esc(d.name)}</span>
+        ${d.kind ? `<span class="pill">${esc(d.kind)}</span>` : ''}${d.letters ? `<span class="pill">${esc(d.letters)}</span>` : ''}
+        <span class="pill health" id="${k}-h"></span></div>
+      <div class="grid2">
+        <div><div class="meter-lbl"><span>TEMPERATURE</span><b id="${k}-t">--</b></div><div class="meter"><i id="${k}-tb"></i></div>
+          <svg class="spark" id="${k}-sp" viewBox="0 0 300 34" preserveAspectRatio="none"></svg></div>
+        <div><div class="meter-lbl"><span>HEALTH (LIFE LEFT)</span><b id="${k}-l">--</b></div><div class="meter"><i id="${k}-lb"></i></div>
+          <div class="meter-lbl" style="margin-top:14px"><span>SPACE USED</span><b id="${k}-u">--</b></div><div class="meter"><i id="${k}-ub" style="background:linear-gradient(90deg,var(--surface2),var(--mem-acc))"></i></div></div>
+      </div>
+      <div class="facts">
+        <div class="fact"><span>READ</span><b id="${k}-r">--</b></div>
+        <div class="fact"><span>WRITE</span><b id="${k}-w">--</b></div>
+        <div class="fact"><span>ACTIVITY</span><b id="${k}-a">--</b></div>
+        <div class="fact"><span>WRITTEN (LIFETIME)</span><b id="${k}-dw">--</b></div>
+        <div class="fact"><span>READ (LIFETIME)</span><b id="${k}-dr">--</b></div>
+        <div class="fact"><span>POWERED ON</span><b id="${k}-po">--</b></div>
+      </div></div>`; }).join('');
+  }
+  list.forEach((d, i) => {
+    const k = keyOf(d, i);
+    const h = $(k + '-h'); h.textContent = HEALTH[d.health] || HEALTH.unknown; h.className = 'pill health ' + (d.health || 'unknown');
+    const warn = d.temp_warn || (d.kind.includes('HDD') ? 55 : 70);
+    setText(k + '-t', d.temp != null ? d.temp.toFixed(0) + '°C' + (d.temp_warn ? ` / warns at ${d.temp_warn.toFixed(0)}°C` : '') : 'not reported');
+    const tb = $(k + '-tb'); tb.style.width = d.temp != null ? Math.min(100, d.temp / (warn + 10) * 100) + '%' : '0';
+    tb.style.background = d.temp != null ? `linear-gradient(90deg,var(--temp-low),${tempCol(d.temp, warn)})` : '';
+    setText(k + '-l', d.life != null ? Math.round(d.life) + '%' : 'not reported');
+    const lb = $(k + '-lb'); lb.style.width = (d.life ?? 0) + '%'; lb.style.background = d.life != null ? lifeCol(d.life) : '';
+    setText(k + '-u', d.used_pct != null ? `${Math.round(d.used_pct)}% · ${fmtGb(d.total_gb != null && d.free_gb != null ? d.total_gb - d.free_gb : null)} of ${fmtGb(d.total_gb)}` : '--');
+    $(k + '-ub').style.width = (d.used_pct ?? 0) + '%';
+    setText(k + '-r', fmtRate(d.read_rate)); setText(k + '-w', fmtRate(d.write_rate));
+    setText(k + '-a', d.activity != null ? Math.round(d.activity) + '%' : '--');
+    setText(k + '-dw', d.data_written != null ? fmtGb(d.data_written) : '--'); setText(k + '-dr', d.data_read != null ? fmtGb(d.data_read) : '--');
+    setText(k + '-po', d.power_on_hours != null ? fmtHours(d.power_on_hours) + (d.power_on_count != null ? ` · ${Math.round(d.power_on_count)} starts` : '') : '--');
+    // Temperature history (one point per reading of this page)
+    if (d.temp != null) {
+      const hs = HIST[k] || (HIST[k] = []); hs.push(d.temp); if (hs.length > 120) hs.shift();
+      const lo = Math.min(...hs) - 2, hi = Math.max(...hs) + 2;
+      const pts = hs.map((t, j) => `${(j / 119 * 300).toFixed(1)},${(34 - (t - lo) / (hi - lo) * 32 - 1).toFixed(1)}`).join(' ');
+      $(k + '-sp').innerHTML = `<polyline points="${pts}" fill="none" stroke="var(--temp-warn)" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`;
+    }
+  });
+}
+function setText(id, v) { const e = $(id); if (e) e.textContent = v; }
+function onConfigReceived(cfg) { navOnConfig(cfg); }
+if (IS_WEBVIEW) {
+  window.chrome.webview.addEventListener('message', e => {
+    try { const m = JSON.parse(e.data); if (m.type === 'config') onConfigReceived(m); else receiveData(m); } catch {}
+  });
+  sendToHost({ type:'requestConfig' });
+}
+</script>
+</body>
+</html>

@@ -28,6 +28,7 @@ public class PopoutForm : Form
         ["threads"]     = ("threads.html",  "THREAD VIEWER", new(720, 860)),
         ["processes"]   = ("processes.html","PROCESSES",     new(760, 860)),
         ["memory"]      = ("memory.html",   "MEMORY",        new(420, 700)),
+        ["storage"]     = ("storage.html",  "STORAGE",       new(620, 800)),
         ["temps"]       = ("temps.html",    "TEMPERATURES",  new(600, 700)),
         ["fans"]        = ("fans.html",     "FAN CONTROL",   new(500, 700)),
         ["rgb"]         = ("rgb.html",      "RGB CONTROL",   new(500, 600)),
