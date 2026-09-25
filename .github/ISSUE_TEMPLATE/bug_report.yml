@@ -1,0 +1,88 @@
+name: Bug report
+description: Something is wrong or broken (sensors, fans, RGB, crashes, the installer...)
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Hardware problems usually depend on the exact board and chips,
+        so the more of this you fill in, the faster it can be reproduced and fixed.
+        **Security problems:** please report them privately instead (see SECURITY.md).
+  - type: input
+    id: version
+    attributes:
+      label: Vexis version
+      description: Info → Version (and the Build commit shown under About, if there is one)
+      placeholder: "2.11.0 (commit abc1234)"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of Vexis?
+      multiple: true
+      options: [Sensors / temperatures, CPU / threads, GPU, Fan control, RGB, Storage / duplicate finder, Processes, CSV recording, Alerts, Updates / installer, Start with Windows, Crash / won't start, Other]
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+      description: Screenshots help a lot.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Fan Control
+        2. Set CPU Fan to Curve
+        3. ...
+  - type: input
+    id: cpu
+    attributes:
+      label: CPU
+      placeholder: "AMD Ryzen 9 9950X3D / Intel Core i9-12900KF"
+    validations:
+      required: true
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU
+      placeholder: "AMD RX 7900 XTX / NVIDIA RTX 4080"
+  - type: input
+    id: board
+    attributes:
+      label: Motherboard and BIOS version
+      description: Windows key → "System Information" shows both (BaseBoard Product, BIOS Version/Date)
+      placeholder: "ASUS ROG STRIX X870E-E, BIOS 1403"
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      description: Windows key → "winver"
+      placeholder: "Windows 11 24H2 (26100.xxxx)"
+    validations:
+      required: true
+  - type: textarea
+    id: fans
+    attributes:
+      label: Fans / RGB setup (if relevant)
+      description: Fan names as Vexis shows them, the mode or curve you set, AIO/pump, fan hubs or controllers, OpenRGB version
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log
+      description: |
+        Open %AppData%\Vexis and attach debug.log (and debug-previous.log / crash.txt if Vexis crashed).
+        You can drag the files into this box. Logs contain hardware names and readings, no personal files.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I'm on the latest Vexis version (Info → Check again)
+        - label: For sensor problems, I checked the Security page shows the PawnIO driver as installed

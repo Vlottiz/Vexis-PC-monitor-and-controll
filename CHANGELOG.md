@@ -2,7 +2,16 @@
 
 <!--
 How to use: before a release, add a section at the top:
-  ## 2.11.0 — 2026-10-01
+  ## 2.12.0 — 2026-09-26
+- Updates are checked against the release's SHA-256 checksum before they're installed; a download that doesn't match is deleted, not run
+- Info → About shows the exact source commit your copy was built from
+- Every release now lists its SHA-256, source commit, build date and toolchain, and is only built if the automated tests pass
+- Automated tests for fan curves, hysteresis, fan profiles, CPU thread mapping, updates and the duplicate finder
+- New SECURITY.md (why admin rights are needed, every network connection, what's stored), CONTRIBUTING.md and docs/ARCHITECTURE.md
+- Bug report and feature request forms on GitHub
+- LibreHardwareMonitor's license is shown correctly (MPL-2.0)
+
+## 2.11.0 — 2026-10-01
   - What changed, one line each
 The version must match <Version> in Pcmonitor2_0.csproj. Vexis shows the section
 for the installed version on Info → Version, and the release workflow uses it as

@@ -1,0 +1,7 @@
+# Blank issues stay enabled so the in-app crash helper's "Report on GitHub" link
+# (which fills in the details itself) keeps working.
+blank_issues_enabled: true
+contact_links:
+  - name: Security problem
+    url: https://github.com/Vlottiz/Vexis-PC-monitor-and-controll/security/advisories/new
+    about: Please report security problems privately, not as a public issue.
