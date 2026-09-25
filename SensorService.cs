@@ -670,25 +670,17 @@ public class SensorService : IDisposable
     {
         var coreTemps = new Dictionary<int, float>();
         var coreLoads = new Dictionary<int, float>();
-        var threadLoads = new Dictionary<int, SortedDictionary<string, float>>();
+        var threadLoads = new Dictionary<int, SortedDictionary<int, float>>();
+        var loadSensors = new List<(string Name, float Value)>();
 
         foreach (var s in hw.Sensors)
         {
             if (s.Value is null) continue;
             float v = s.Value.Value;
 
-            // Per-thread load (an idle thread reads 0, so this comes before the zero filter)
-            if (s.SensorType == SensorType.Load)
-            {
-                int key = CoreKey(ThreadSuffixRe.Replace(s.Name, ""));
-                if (key >= 0 && _coreMap.TryGetValue(key, out var li))
-                {
-                    coreLoads[li.displayId] = Math.Max(v, coreLoads.GetValueOrDefault(li.displayId));
-                    if (!threadLoads.TryGetValue(li.displayId, out var tl)) threadLoads[li.displayId] = tl = new();
-                    tl[s.Name] = v;
-                }
-                continue;
-            }
+            // Loads are assigned to cores after the loop (an idle thread reads 0,
+            // so this comes before the zero filter)
+            if (s.SensorType == SensorType.Load) { loadSensors.Add((s.Name, v)); continue; }
             if (v == 0f) continue;
 
             switch (s.SensorType)
@@ -740,11 +732,64 @@ public class SensorService : IDisposable
             }
         }
 
+        AssignThreadLoads(loadSensors, coreLoads, threadLoads);
+
         foreach (var (id, core) in data.cores)
         {
             if (coreTemps.TryGetValue(id, out float t)) core.temp = t;
             if (coreLoads.TryGetValue(id, out float l)) core.load = l;
             if (threadLoads.TryGetValue(id, out var tl)) core.threads = tl.Values.Select(x => (float)Math.Round(x, 1)).ToList();
+        }
+    }
+
+    // "CPU Core #3" or "CPU Core #3 Thread #2" → (3, 2); thread 0 = no suffix
+    private static readonly Regex LoadNameRe = new(@"^CPU Core #(\d+)(?: Thread #(\d+))?$", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Puts every per-thread load sensor under its physical core.
+    /// Normal case: LHM names them "CPU Core #N Thread #M". When LHM couldn't group
+    /// threads it lists "CPU Core #1".."#T" (one per logical processor); then the
+    /// Windows topology says which core each logical processor belongs to.
+    /// </summary>
+    private void AssignThreadLoads(List<(string Name, float Value)> loads,
+                                   Dictionary<int, float> coreLoads, Dictionary<int, SortedDictionary<int, float>> threadLoads)
+    {
+        var parsed = loads.Select(l => (l.Value, m: LoadNameRe.Match(l.Name)))
+                          .Where(x => x.m.Success)
+                          .Select(x => (n: int.Parse(x.m.Groups[1].Value), t: x.m.Groups[2].Success ? int.Parse(x.m.Groups[2].Value) : 0, x.Value))
+                          .ToList();
+        var topo = CpuTopology.LogicalToCore;
+        bool ungrouped = parsed.Count > _coreMap.Count && parsed.All(p => p.t == 0) &&
+                         topo != null && topo.Length == parsed.Count && CpuTopology.CoreCount == _coreMap.Count;
+
+        void Add(int displayId, int order, float v)
+        {
+            coreLoads[displayId] = Math.Max(v, coreLoads.GetValueOrDefault(displayId));
+            if (!threadLoads.TryGetValue(displayId, out var tl)) threadLoads[displayId] = tl = new();
+            tl[order] = v;
+        }
+
+        if (ungrouped)
+        {
+            // "CPU Core #k" = logical processor k-1; core i (Windows order) = i-th display core
+            var displayIds = _coreMap.Values.Select(v => v.displayId).OrderBy(d => d).ToArray();
+            foreach (var (n, _, v) in parsed)
+            {
+                int logical = n - 1;
+                if (logical < 0 || logical >= topo!.Length) continue;
+                int core = topo[logical];
+                if (core < displayIds.Length) Add(displayIds[core], logical, v);
+            }
+            return;
+        }
+
+        foreach (var l in loads)
+        {
+            int key = CoreKey(ThreadSuffixRe.Replace(l.Name, ""));
+            if (key < 0 || !_coreMap.TryGetValue(key, out var li)) continue;
+            var tm = ThreadSuffixRe.Match(l.Name);
+            int order = tm.Success && int.TryParse(tm.Value.AsSpan(tm.Value.LastIndexOf('#') + 1), out int t) ? t : 0;
+            Add(li.displayId, order, l.Value);
         }
     }
 
