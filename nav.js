@@ -755,6 +755,16 @@ function buildPanelHTML() {
         <div id="nv-version" style="font-size:11px;color:var(--mem-acc);font-family:monospace">v${window.NAV_APP_VERSION||'?'}</div>
       </div>
 
+      <div style="padding:8px 0;border-bottom:1px solid rgba(68,51,0,.2)">
+        <div style="font-size:10px;color:var(--label);margin-bottom:4px">Reset</div>
+        <div style="font-size:9px;color:var(--label);opacity:.75;line-height:1.5;margin-bottom:6px">
+          Puts every setting back the way it was when Vexis was installed, then restarts.
+        </div>
+        <button onclick="navFactoryReset()" class="nvc-reset-all nv-danger-btn" style="width:100%;justify-content:center">
+          ⟲ Reset to factory settings
+        </button>
+      </div>
+
       <button onclick="sendToHost({type:'openUrl',url:'https://github.com/Vlottiz/Vexis-PC-monitor-and-controll'})"
         class="nvc-reset-all" style="width:100%;margin-top:8px;justify-content:center">
         ⊞ GitHub
@@ -808,6 +818,37 @@ function navApplyStoredFontScale() {
   if (navSlider) navSlider.value = navStored;
   navSetNavScale(navStored);
 }
+
+// ── Reset to factory settings (System tab and Info page) ───────────────────
+// Asks first, then the host turns fans back to automatic, removes the startup
+// entry, deletes the saved settings and restarts Vexis. Recordings are kept.
+window.navFactoryReset = function() {
+  if (document.getElementById('nv-reset-dlg')) return;
+  const d = document.createElement('div');
+  d.id = 'nv-reset-dlg';
+  d.innerHTML = `<div class="nv-rd-box" role="dialog" aria-modal="true">
+    <div class="nv-rd-title">RESET VEXIS TO FACTORY SETTINGS?</div>
+    <div class="nv-rd-text">This puts everything back the way it was when Vexis was installed:</div>
+    <ul class="nv-rd-list">
+      <li>Temperature alerts: switched off, limits back to default</li>
+      <li>Fans: back to automatic, saved curves and fan profile removed</li>
+      <li>Colours, themes, text size, zoom, side menu order and window position</li>
+      <li>Saved RGB looks, recording choices and every other setting</li>
+      <li>Start with Windows and automatic updates: switched off</li>
+    </ul>
+    <div class="nv-rd-text">Your CSV recordings are kept. Vexis restarts when it's done.</div>
+    <div class="nv-rd-btns">
+      <button class="nvc-reset-all" onclick="document.getElementById('nv-reset-dlg').remove()">Cancel</button>
+      <button class="nvc-reset-all nv-danger-btn" id="nv-rd-go">⟲ Reset everything</button>
+    </div></div>`;
+  d.addEventListener('click', e => { if (e.target === d) d.remove(); });
+  document.body.appendChild(d);
+  document.getElementById('nv-rd-go').onclick = () => {
+    try { localStorage.clear(); } catch {}
+    d.querySelector('.nv-rd-box').innerHTML = '<div class="nv-rd-title">RESETTING…</div><div class="nv-rd-text">Vexis will restart in a moment.</div>';
+    sendToHost({ type:'factoryReset' });
+  };
+};
 
 // Generic setting saved to the shared config (config.json via the host)
 window.navSaveSetting = function(key, val) {
@@ -1312,6 +1353,15 @@ function injectNavStyles() {
       display:flex;align-items:center;justify-content:space-between;
       padding:8px 12px 6px;flex-shrink:0;border-bottom:1px solid color-mix(in srgb,var(--border,#443300) 25%,transparent);
     }
+    .nv-danger-btn { color:#ff6655 !important; border-color:rgba(255,80,60,.45) !important; }
+    .nv-danger-btn:hover { background:rgba(255,60,40,.12) !important; }
+    #nv-reset-dlg { position:fixed; inset:0; z-index:100000; background:rgba(0,0,0,.72); display:flex; align-items:center; justify-content:center; padding:16px; }
+    #nv-reset-dlg .nv-rd-box { background:var(--surface, #111); border:1px solid rgba(255,80,60,.5); border-radius:8px; padding:18px 20px; max-width:440px; width:100%; font-family:inherit; }
+    #nv-reset-dlg .nv-rd-title { font-size:12px; font-weight:700; letter-spacing:.12em; color:#ff6655; margin-bottom:10px; }
+    #nv-reset-dlg .nv-rd-text { font-size:11px; color:var(--label); line-height:1.5; margin:6px 0; }
+    #nv-reset-dlg .nv-rd-list { font-size:11px; color:var(--label); opacity:.85; line-height:1.6; margin:4px 0 8px 18px; padding:0; }
+    #nv-reset-dlg .nv-rd-btns { display:flex; gap:8px; justify-content:flex-end; margin-top:14px; }
+    #nv-reset-dlg .nv-rd-btns button { padding:6px 14px; }
     .nvc-reset-all {
       background:color-mix(in srgb,var(--border,#443300) 20%,transparent);
       border:1px solid color-mix(in srgb,var(--border,#443300) 40%,transparent);

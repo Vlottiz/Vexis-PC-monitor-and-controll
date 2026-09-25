@@ -473,6 +473,10 @@ public class MainForm : Form
                     PushRecordings();
                     break;
 
+                case "factoryReset":
+                    Invoke(FactoryReset);
+                    break;
+
                 case "recordStop":
                     _recorder.Stop();
                     PushRecordings();
@@ -1038,6 +1042,47 @@ public class MainForm : Form
         _blinkTimer.Stop(); _blinkOn = false;
         _tray.Icon = _trayIcon;
         _tray.Text = "Vexis Hardware Monitoring";
+    }
+
+    // ── Reset to factory settings ──────────────────────────────────────────────
+    // Back to a fresh install: fans to BIOS/driver control, no startup entry, saved
+    // settings and page storage deleted, then Vexis restarts. CSV recordings are kept.
+    private bool _resetting;
+    private async void FactoryReset()
+    {
+        if (_resetting) return;
+        _resetting = true;
+        Console.WriteLine("[reset] Reset to factory settings");
+        try { _fans.RestoreAll(); } catch (Exception ex) { Console.WriteLine($"[reset] fans: {ex.Message}"); }
+        try { if (_recorder.IsRecording) _recorder.Stop(); } catch { }
+        try { ClearInbox(); } catch { }
+        try { await Task.Run(() => StartupManager.SetEnabled(false)); StartWithWindowsEnabled = false; }
+        catch (Exception ex) { Console.WriteLine($"[reset] startup: {ex.Message}"); }
+        AppConfig.DeleteSaved();
+        // Page storage (theme cache, text sizes, RGB brightness, menu order…) — every page shares it
+        try
+        {
+            if (_webView.CoreWebView2 != null)
+                await _webView.CoreWebView2.Profile.ClearBrowsingDataAsync(
+                    Microsoft.Web.WebView2.Core.CoreWebView2BrowsingDataKinds.LocalStorage |
+                    Microsoft.Web.WebView2.Core.CoreWebView2BrowsingDataKinds.IndexedDb |
+                    Microsoft.Web.WebView2.Core.CoreWebView2BrowsingDataKinds.CacheStorage);
+        }
+        catch (Exception ex) { Console.WriteLine($"[reset] page storage: {ex.Message}"); }
+
+        // Start a fresh copy that waits for this one to close, then quit
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName        = Environment.ProcessPath ?? Application.ExecutablePath,
+                Arguments       = $"--after-reset {Environment.ProcessId}",
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex) { Console.WriteLine($"[reset] relaunch: {ex.Message}"); }
+        _tray.Visible = false;
+        Application.Exit();
     }
 
     private void ClearInbox()

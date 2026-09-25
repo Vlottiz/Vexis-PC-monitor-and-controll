@@ -103,6 +103,12 @@ internal static class Program
         // ── Kill any existing Vexis instances ────────────────────────────
         var current = Process.GetCurrentProcess();
         bool replacedOther = false;
+        // After "Reset to factory settings": give the old copy time to hand the fans back and close
+        int resetIdx = Array.FindIndex(args, a => a.Equals("--after-reset", StringComparison.OrdinalIgnoreCase));
+        if (resetIdx >= 0 && resetIdx + 1 < args.Length && int.TryParse(args[resetIdx + 1], out int oldPid))
+        {
+            try { using var old = Process.GetProcessById(oldPid); old.WaitForExit(10000); } catch { }
+        }
         foreach (var p in Process.GetProcessesByName(current.ProcessName))
         {
             if (p.Id == current.Id) continue;

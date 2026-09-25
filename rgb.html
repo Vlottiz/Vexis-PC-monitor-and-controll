@@ -32,6 +32,17 @@
   .fx-off .fx-body *{cursor:not-allowed;}
   .fx-note{font-size:calc(10px*var(--fs-base,1));line-height:1.6;color:var(--label);background:rgba(80,60,0,.15);border:1px solid rgba(180,120,0,.3);border-radius:4px;padding:8px 12px;margin:8px 0 6px;}
   .fx-note b{color:var(--header-title);}
+  .look-hint{font-size:calc(10px*var(--fs-base,1));color:var(--label-dim);line-height:1.5;margin:2px 0 8px;}
+  .look-name{flex:1;min-width:0;background:var(--surface2);border:1px solid var(--border);color:var(--label);padding:5px 8px;border-radius:3px;font-family:inherit;font-size:calc(11px*var(--fs-base,1));}
+  .look-list{display:flex;flex-direction:column;gap:6px;margin-top:8px;}
+  .look{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--border);border-radius:4px;background:rgba(0,0,0,.18);}
+  .look.cur{border-color:var(--header-title);}
+  .look-sw{display:flex;gap:2px;flex:0 0 auto;}
+  .look-sw i{width:10px;height:14px;border-radius:2px;display:block;border:1px solid rgba(255,255,255,.08);}
+  .look-n{flex:1;min-width:0;font-size:calc(11px*var(--fs-base,1));color:var(--label);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .look-d{font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);}
+  .look-empty{font-size:calc(10px*var(--fs-base,1));color:var(--label-dim);padding:6px 0;}
+  .look-auto{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:calc(10px*var(--fs-base,1));color:var(--label);cursor:pointer;}
   .anim-stop{color:#cc4444;border-color:rgba(180,40,40,.3);}
   .anim-stop:hover{background:rgba(180,40,40,.15);color:#ff6666;}
   .anim-spd{flex:1;min-width:60px;max-width:120px;accent-color:var(--mem-acc);}
@@ -113,6 +124,18 @@
         </div>
       </div>
 
+      <!-- Saved looks: colours, modes and brightness of every device -->
+      <div class="card">
+        <div class="card-header"><span class="card-title">SAVED LOOKS</span><span class="badge badge-dim" id="look-pill" style="display:none"></span></div>
+        <div class="look-hint">Set your devices up how you like them, then save it here. Colours, per-LED painting, built-in modes and brightness are all kept, and one click brings them back.</div>
+        <div class="cprow">
+          <input class="look-name" id="look-name" maxlength="28" placeholder="Name this look, e.g. Gaming" onkeydown="if(event.key==='Enter')saveLook()">
+          <button class="btn btn-primary" onclick="saveLook()" style="padding:5px 12px">&#x2B07; SAVE CURRENT</button>
+        </div>
+        <div class="look-list" id="look-list"></div>
+        <label class="look-auto"><input type="checkbox" id="look-auto" onchange="setLookAuto(this.checked)"> Put my last used look back automatically when Vexis connects to OpenRGB</label>
+      </div>
+
       <!-- Looping effects, all devices -->
       <div class="card fx-off">
         <div class="card-header"><span class="card-title">EFFECTS &#x2014; ALL DEVICES</span><span class="badge badge-warn">UNDER DEVELOPMENT</span><span class="badge badge-dim" id="fx-pill" style="display:none"></span></div>
@@ -133,7 +156,7 @@
     </div>
   </div>
 </div>
-<script src="/nav.js?v=23" data-page="rgb"></script>
+<script src="/nav.js?v=24" data-page="rgb"></script>
 <script>
 const ORGB_PORT=localStorage.getItem('pcm-rgb-port')||'6742';
 let _devices=[],_connected=false,_callCounter=0;
@@ -442,6 +465,110 @@ function buildFx(){
 }
 function resumeFx(){if(!FX_ENABLED){_fx.type=null;return;}if(_fx.type&&!Object.keys(_devAnim).length){const t=_fx.type;_fx.type=null;startFx(t);}}
 
+// ── Saved looks ──────────────────────────────────────────────────────────────
+// Stored in the shared settings (config.json), so every window sees the same list
+// and "Reset to factory settings" clears them. Each device is kept by position +
+// name (like brightness), with a name-only fallback if the device order changes.
+function looksGet(){try{const a=JSON.parse((typeof NAV_SETTINGS!=='undefined'&&NAV_SETTINGS.rgbLooks)||'[]');return Array.isArray(a)?a:[];}catch{return[];}}
+function looksPut(a){navSaveSetting('rgbLooks',JSON.stringify(a));renderLooks();}
+function lookSetting(k){return (typeof NAV_SETTINGS!=='undefined'&&NAV_SETTINGS[k])||'';}
+function escH(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+// What one device is showing right now (unscaled colours, or its built-in mode)
+function captureDev(i){
+  const d=_devices[i];if(!canColor(d))return null;
+  const e={name:d.name||'',bright:devB(i)};
+  const mi=_hwMode[i];
+  if(mi!=null&&d.modes?.[mi]){e.mode=d.modes[mi].name;return e;}
+  const l=_last[i];
+  if(l&&Array.isArray(l.b))e.leds=l.b.map(c=>({r:c.r|0,g:c.g|0,b:c.b|0}));
+  else if(l&&l.b&&l.b.r!=null)e.leds=[{r:l.b.r|0,g:l.b.g|0,b:l.b.b|0}];
+  else if(_lc[i])e.leds=_lc[i].map(c=>({r:c.r|0,g:c.g|0,b:c.b|0}));
+  else{
+    const am=d.modes?.[d.active_mode];
+    if(am&&am.color_mode===0)e.mode=am.name;                          // hardware animation
+    else if(d.colors?.length)e.leds=d.colors.map(c=>({r:c.r|0,g:c.g|0,b:c.b|0}));
+    else return null;
+  }
+  return e;
+}
+function saveLook(){
+  if(!_connected){lookMsg('Connect to OpenRGB first');return;}
+  const inp=document.getElementById('look-name');
+  const looks=looksGet();
+  let name=(inp.value||'').trim()||('Look '+(looks.length+1));
+  const devs={};
+  for(let i=0;i<_devices.length;i++){const e=captureDev(i);if(e)devs[devKey(i)]=e;}
+  if(!Object.keys(devs).length){lookMsg('Nothing to save yet');return;}
+  const look={name,bright:_bright,devs,saved:new Date().toISOString().slice(0,16).replace('T',' ')};
+  const at=looks.findIndex(l=>l.name.toLowerCase()===name.toLowerCase());
+  if(at>=0){if(!confirm('Replace the saved look "'+name+'"?'))return;looks[at]=look;}else looks.push(look);
+  inp.value='';
+  navSaveSetting('rgbLookLast',name);
+  looksPut(looks);lookMsg('Saved "'+name+'"');
+}
+function fitLeds(leds,n){if(!leds.length)return new Array(n).fill({r:0,g:0,b:0});if(leds.length===n)return leds;return Array.from({length:n},(_,k)=>leds[Math.min(leds.length-1,Math.floor(k*leds.length/n))]);}
+let _lookBusy=false;
+async function applyLook(idx){
+  const look=looksGet()[idx];if(!look||!_connected||_lookBusy)return;
+  _lookBusy=true;lookMsg('Applying "'+look.name+'"…');
+  try{
+    _bright=Math.max(0,Math.min(100,parseInt(look.bright??100)||0));
+    try{localStorage.setItem('pcm-rgb-brightness',String(_bright));}catch{}
+    const sl=document.getElementById('rgb-bright');if(sl)sl.value=_bright;
+    const bl=document.getElementById('rgb-bright-val');if(bl)bl.textContent=_bright+'%';
+    const used=new Set();
+    for(let i=0;i<_devices.length;i++){
+      const d=_devices[i];if(!canColor(d))continue;
+      let k=devKey(i),e=look.devs[k];
+      if(!e||used.has(k)){k=Object.keys(look.devs).find(x=>!used.has(x)&&look.devs[x].name===(d.name||''));e=k&&look.devs[k];}
+      if(!e)continue;used.add(k);
+      _devBright[devKey(i)]=Math.max(0,Math.min(100,parseInt(e.bright??100)||0));
+      const s=document.getElementById('dev-bright-'+i);if(s)s.value=_devBright[devKey(i)];
+      const v=document.getElementById('dev-bright-val-'+i);if(v)v.textContent=_devBright[devKey(i)]+'%';
+      try{
+        if(e.mode){const mi=(d.modes||[]).findIndex(m=>m.name===e.mode);if(mi>=0){await setDevMode(i,mi);updateModeChips(i,mi);}}
+        else if(e.leds?.length){
+          const leds=fitLeds(e.leds,ledCnt(i)),c=leds[0],same=leds.every(x=>x.r===c.r&&x.g===c.g&&x.b===c.b);
+          _lc[i]=leds.map(x=>({...x}));
+          await setDC(i,leds,same?rgbHex(c.r,c.g,c.b):null);
+          const p=document.getElementById('dev-col-'+i);if(p)p.value=rgbHex(c.r,c.g,c.b);
+          if(_exp.has(i))renderGrid(i);
+        }
+      }catch(err){}
+    }
+    try{localStorage.setItem('pcm-rgb-bright-dev',JSON.stringify(_devBright));}catch{}
+    navSaveSetting('rgbLookLast',look.name);
+    renderLooks();lookMsg('Applied "'+look.name+'"');
+  }finally{_lookBusy=false;}
+}
+function deleteLook(idx){const looks=looksGet(),l=looks[idx];if(!l||!confirm('Delete the saved look "'+l.name+'"?'))return;looks.splice(idx,1);looksPut(looks);}
+function setLookAuto(on){navSaveSetting('rgbLookAuto',on?'true':'false');}
+let _lookMsgT=null;
+function lookMsg(t){const p=document.getElementById('look-pill');if(!p)return;p.textContent=t;p.style.display='';clearTimeout(_lookMsgT);_lookMsgT=setTimeout(()=>{p.style.display='none';},3000);}
+function lookSwatches(l){
+  const cols=[];Object.values(l.devs||{}).forEach(e=>{if(e.leds?.length){const c=e.leds[0];cols.push(rgbHex(c.r,c.g,c.b));}else if(e.mode)cols.push('linear-gradient(#f00,#0f0,#00f)');});
+  return [...new Set(cols)].slice(0,6).map(c=>`<i style="background:${c}"></i>`).join('');
+}
+function renderLooks(){
+  const box=document.getElementById('look-list');if(!box)return;
+  const looks=looksGet(),last=lookSetting('rgbLookLast');
+  box.innerHTML=looks.length?looks.map((l,i)=>`<div class="look${l.name===last?' cur':''}">
+      <span class="look-sw">${lookSwatches(l)}</span>
+      <span class="look-n" title="${escH(l.name)}">${escH(l.name)}${l.name===last?' <span class="look-d">· last used</span>':''}</span>
+      <span class="look-d">${Object.keys(l.devs||{}).length} dev · ${escH(l.saved||'')}</span>
+      <button class="btn btn-primary" onclick="applyLook(${i})" style="padding:3px 10px">APPLY</button>
+      <button class="btn btn-ghost" onclick="deleteLook(${i})" title="Delete" style="padding:3px 8px">&#x2715;</button>
+    </div>`).join(''):'<div class="look-empty">No saved looks yet.</div>';
+  const a=document.getElementById('look-auto');if(a)a.checked=lookSetting('rgbLookAuto')==='true';
+}
+// Once per Vexis session (not every time you open this page), if switched on
+function autoApplyLook(){
+  if(lookSetting('rgbLookAuto')!=='true')return;
+  try{if(sessionStorage.getItem('pcm-look-auto-done'))return;sessionStorage.setItem('pcm-look-auto-done','1');}catch{}
+  const looks=looksGet(),i=looks.findIndex(l=>l.name===lookSetting('rgbLookLast'));
+  if(i>=0)applyLook(i);
+}
+
 // ── Render ───────────────────────────────────────────────────────────────────
 function buildQC(){document.getElementById('quick-colors').innerHTML=QCOLS.map(({c,l})=>`<div class="qcol" style="background:${c}" title="${l}" onclick="applyAllColor('${c}');document.getElementById('custom-color').value='${c}'"></div>`).join('');}
 
@@ -578,11 +705,11 @@ async function connSilent(){
     if(_devices.length===0){setStatus('offline','Detecting devices...');_lastDevCount=-1;return;}
     if(_devices.length!==_lastDevCount){_lastDevCount=_devices.length;setStatus('offline','Detecting devices...');return;}
     _lastDevCount=-1;
-    setStatus('online');renderDevices();buildFx();resumeFx();stopRetryLoop();
+    setStatus('online');renderDevices();buildFx();resumeFx();renderLooks();autoApplyLook();stopRetryLoop();
   }catch(e){if(!_retryLoop)setStatus('offline',e.message);}
 }
 function receiveData(){}
-function onConfigReceived(cfg){navOnConfig(cfg);}
+function onConfigReceived(cfg){navOnConfig(cfg);renderLooks();if(_connected)autoApplyLook();}
 if(IS_WEBVIEW){window.chrome.webview.addEventListener('message',e=>{try{const m=JSON.parse(e.data);if(m.type==='config')onConfigReceived(m);}catch{}});sendToHost({type:'requestConfig'});chkProc();startRetryLoop();}
 </script>
 </body>

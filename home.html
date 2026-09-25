@@ -211,7 +211,7 @@
   </div>
 </div>
 
-<script src="/nav.js?v=23" data-page="home"></script>
+<script src="/nav.js?v=24" data-page="home"></script>
 <script>
 setInterval(()=>{ const e=document.getElementById('htime'); if(e)e.textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}); },1000);
 
@@ -290,7 +290,7 @@ function updateTiles(d) {
   tile('performance', peak ? Math.round(peak) + ' MHz' : '--', 'PEAK CLOCK' + (d.cpu_temp != null ? ' · ' + d.cpu_temp.toFixed(0) + '°C' : ''));
   const busyAt = parseFloat((typeof NAV_SETTINGS !== 'undefined' && NAV_SETTINGS.threadBusy) || 10);
   const thr = cores.flatMap(c => c.threads || []);
-  tile('threads', thr.length ? thr.filter(l => l >= busyAt).length + '/' + thr.length : '--', 'THREADS IN USE (≥' + busyAt + '%)');
+  tile('threads', thr.length ? thr.filter(l => l >= busyAt).length + '/' + Math.max(thr.length, (d.info && d.info.threads) || 0) : '--', 'THREADS IN USE (≥' + busyAt + '%)');
   tile('processes', d.cpu_load != null ? Math.round(d.cpu_load) + '% CPU' : '--', 'APPS & PROCESSES · END TASK');
   const g = d.gpu || {};
   tile('gpu', (g.load_core ?? d.gpu_load) != null ? Math.round(g.load_core ?? d.gpu_load) + ' %' : '--',
