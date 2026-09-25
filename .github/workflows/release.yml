@@ -5,6 +5,15 @@
 # (or on GitHub: Releases → Draft a new release → new tag v2.9.0 → Publish).
 # The build fails if the tag doesn't match the version, so installed copies
 # always see the update.
+#
+# Every release also gets: the unit tests run first (no release if they fail),
+# a SHA-256 checksum file that the in-app updater checks before installing, and a
+# "Build information" section in the notes (commit, date, toolchain, this run).
+#
+# Code signing (optional): add two repository secrets and the app and installer are
+# signed automatically:  SIGN_PFX_BASE64  = the .pfx certificate, base64-encoded
+#                        SIGN_PFX_PASSWORD = its password
+# Without them the build is unsigned, as before. See SECURITY.md → "Code signing".
 name: Release
 
 on:
@@ -47,6 +56,9 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - name: Run the unit tests
+        run: dotnet test tests/Vexis.Tests -c Release
+
       - name: Download PawnIO and WebView2 installers (bundled into the setup)
         shell: pwsh
         run: |
@@ -54,7 +66,32 @@ jobs:
           Invoke-WebRequest "https://go.microsoft.com/fwlink/p/?LinkId=2124703" -OutFile MicrosoftEdgeWebview2Setup.exe
 
       - name: Publish the app
-        run: dotnet publish Pcmonitor2_0.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o publish
+        # SourceRevisionId puts the commit into the version info; Info → About shows it
+        run: dotnet publish Pcmonitor2_0.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:SourceRevisionId=${{ github.sha }} -o publish
+
+      - name: Prepare code signing (only if the signing secrets are set)
+        id: sign
+        shell: pwsh
+        env:
+          SIGN_PFX_BASE64: ${{ secrets.SIGN_PFX_BASE64 }}
+        run: |
+          if (-not $env:SIGN_PFX_BASE64) { "enabled=false" >> $env:GITHUB_OUTPUT; Write-Host "No signing certificate configured - building unsigned."; exit 0 }
+          $pfx = Join-Path $env:RUNNER_TEMP 'sign.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:SIGN_PFX_BASE64))
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $signtool) { Write-Error "signtool.exe not found"; exit 1 }
+          "enabled=true" >> $env:GITHUB_OUTPUT
+          "pfx=$pfx" >> $env:GITHUB_OUTPUT
+          "signtool=$($signtool.FullName)" >> $env:GITHUB_OUTPUT
+
+      - name: Sign the app
+        if: steps.sign.outputs.enabled == 'true'
+        shell: pwsh
+        env:
+          SIGN_PFX_PASSWORD: ${{ secrets.SIGN_PFX_PASSWORD }}
+        run: |
+          & '${{ steps.sign.outputs.signtool }}' sign /f '${{ steps.sign.outputs.pfx }}' /p $env:SIGN_PFX_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /d "Vexis" publish\Vexis.exe publish\Vexis.dll
+          if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Build the installer
         shell: pwsh
@@ -68,21 +105,78 @@ jobs:
           & $nsis /V2 "/DVERSION=${{ steps.ver.outputs.version }}" installer.nsi
           if (-not (Test-Path VexisHM-Setup.exe)) { Write-Error "VexisHM-Setup.exe was not created"; exit 1 }
           Get-Item VexisHM-Setup.exe | Select-Object Name, Length
+          "nsis=$((& $nsis /VERSION) -join '')" >> $env:GITHUB_OUTPUT
+        id: nsis
 
-      - name: Release notes from CHANGELOG.md
-        id: notes
+      - name: Sign the installer
+        if: steps.sign.outputs.enabled == 'true'
+        shell: pwsh
+        env:
+          SIGN_PFX_PASSWORD: ${{ secrets.SIGN_PFX_PASSWORD }}
+        run: |
+          & '${{ steps.sign.outputs.signtool }}' sign /f '${{ steps.sign.outputs.pfx }}' /p $env:SIGN_PFX_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /d "Vexis Setup" VexisHM-Setup.exe
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Remove-Item '${{ steps.sign.outputs.pfx }}' -Force
+
+      - name: SHA-256 checksum
+        id: sum
         shell: pwsh
         run: |
+          $hash = (Get-FileHash VexisHM-Setup.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          # sha256sum format, so "sha256sum -c" works too; the in-app updater checks this file
+          "$hash  VexisHM-Setup.exe" | Set-Content VexisHM-Setup.exe.sha256 -Encoding ascii -NoNewline
+          "hash=$hash" >> $env:GITHUB_OUTPUT
+          Write-Host "SHA-256: $hash"
+
+      - name: Release notes (CHANGELOG.md or the website) + build information
+        id: notes
+        shell: pwsh
+        env:
+          RELEASE_BODY: ${{ github.event.release.body }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
           $v = '${{ steps.ver.outputs.version }}'
-          $lines = Get-Content CHANGELOG.md
-          $out = @(); $on = $false
-          foreach ($l in $lines) {
-            if ($l -match '^##\s+v?([\d.]+)') { $on = ($Matches[1] -eq $v); continue }
-            if ($on) { $out += $l }
+          # Notes written on the website win; otherwise this version's CHANGELOG section
+          $base = "$env:RELEASE_BODY"
+          if (-not $base -and $env:GITHUB_EVENT_NAME -eq 'push') {
+            # Tag push: the release may already exist with notes written on the website
+            $base = (gh release view '${{ steps.ver.outputs.tag }}' --json body -q .body 2>$null) -join "`n"
           }
-          $text = ($out -join "`n").Trim()
-          if ($text) { $text | Set-Content notes.md -Encoding utf8; "found=true" >> $env:GITHUB_OUTPUT; Write-Host $text }
-          else { "found=false" >> $env:GITHUB_OUTPUT; Write-Host "No CHANGELOG section for $v - using GitHub's generated notes" }
+          $marker = '<!-- build-info -->'
+          if ($base.Contains($marker)) { $base = $base.Substring(0, $base.IndexOf($marker)) }   # re-run: replace the old block
+          $base = $base.Trim()
+          if (-not $base) {
+            $out = @(); $on = $false
+            foreach ($l in (Get-Content CHANGELOG.md)) {
+              if ($l -match '^##\s+v?([\d.]+)') { $on = ($Matches[1] -eq $v); continue }
+              if ($on) { $out += $l }
+            }
+            $base = ($out -join "`n").Trim()
+          }
+          $signed = if ('${{ steps.sign.outputs.enabled }}' -eq 'true') { 'yes (Authenticode, SHA-256, timestamped)' } else { 'no' }
+          $commit = '${{ github.sha }}'
+          $repoUrl = '${{ github.server_url }}/${{ github.repository }}'
+          $bt = [char]96   # backtick, for markdown code spans
+          $info = @(
+            $marker,
+            '## Build information',
+            '',
+            '| | |',
+            '|---|---|',
+            "| Version | $v |",
+            "| Source commit | [$($bt)$commit$($bt)]($repoUrl/commit/$commit) |",
+            "| Built | $((Get-Date).ToUniversalTime().ToString('yyyy-MM-dd HH:mm')) UTC |",
+            "| Built by | GitHub Actions, [run #${{ github.run_number }}]($repoUrl/actions/runs/${{ github.run_id }}) on $bt$env:ImageOS $env:ImageVersion$bt |",
+            "| Toolchain | .NET SDK $(dotnet --version), NSIS ${{ steps.nsis.outputs.nsis }} |",
+            "| Tests | passed ($($bt)tests/Vexis.Tests$bt) |",
+            "| Signed | $signed |",
+            "| VexisHM-Setup.exe SHA-256 | $($bt)${{ steps.sum.outputs.hash }}$($bt) |",
+            '',
+            "To check your download, run $($bt)Get-FileHash .\VexisHM-Setup.exe$bt in PowerShell and compare it with the SHA-256 above (also in $($bt)VexisHM-Setup.exe.sha256$bt). The in-app updater does this check for you."
+          ) -join "`n"
+          (($base, $info) | Where-Object { $_ }) -join "`n`n" | Set-Content notes.md -Encoding utf8
+          "generate=$((-not $base) -and ($env:GITHUB_EVENT_NAME -ne 'release'))" >> $env:GITHUB_OUTPUT
+          Get-Content notes.md
 
       - name: Attach to the release
         if: github.event_name != 'workflow_dispatch'
@@ -90,10 +184,12 @@ jobs:
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
           name: ${{ github.event_name == 'release' && github.event.release.name || format('Vexis {0}', steps.ver.outputs.version) }}
-          # Notes: keep what was written on the website; otherwise this version's CHANGELOG section
-          body_path: ${{ (steps.notes.outputs.found == 'true' && (github.event_name != 'release' || github.event.release.body == '')) && 'notes.md' || '' }}
-          generate_release_notes: ${{ github.event_name != 'release' && steps.notes.outputs.found != 'true' }}
-          files: VexisHM-Setup.exe
+          # Notes: what was written on the website (or the CHANGELOG section) + build information
+          body_path: notes.md
+          generate_release_notes: ${{ steps.notes.outputs.generate == 'True' }}
+          files: |
+            VexisHM-Setup.exe
+            VexisHM-Setup.exe.sha256
           fail_on_unmatched_files: true
           overwrite_files: true
 
@@ -102,4 +198,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: VexisHM-Setup-${{ steps.ver.outputs.version }}
-          path: VexisHM-Setup.exe
+          path: |
+            VexisHM-Setup.exe
+            VexisHM-Setup.exe.sha256
+            notes.md
