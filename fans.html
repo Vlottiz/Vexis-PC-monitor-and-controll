@@ -285,7 +285,13 @@ function saveCurve(name) {
 // ── Card HTML ─────────────────────────────────────────────────────────────────
 function buildCard(fan) {
   // GPU fans follow the GPU temperature unless a saved curve says otherwise
-  if (fan.isGpu && !fanStates[fan.name]) gs(fan.name).tempSrc = 'gpu';
+  if (!fanStates[fan.name]) {
+    const st = gs(fan.name);
+    if (fan.isGpu) st.tempSrc = 'gpu';
+    // Start from what the fan is really doing (curve / manual / auto)
+    if (fan.mode) st.mode = fan.mode;
+    if (fan.mode === 'manual' && fan.pct > 0) st.pct = Math.round(fan.pct);
+  }
   const id  = sid(fan.name);
   const s   = gs(fan.name);
   const pct = Math.min(100,(fan.rpm/3000)*100);

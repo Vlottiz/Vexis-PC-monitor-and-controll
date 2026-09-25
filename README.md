@@ -1,237 +1,186 @@
-# Vexis
+<div align="center">
 
-> A real-time hardware monitoring dashboard for Windows — built with C# + WebView2 + pure HTML/CSS/JS.
+# VEXIS
 
-[![Release](https://img.shields.io/github/v/release/Vlottiz/vexis?style=flat-square&color=ffcc00)](https://github.com/Vlottiz/vexis/releases/latest) [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](https://github.com/Vlottiz/vexis/blob/main/LICENSE) [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey?style=flat-square&logo=windows)](https://github.com/Vlottiz/vexis/blob/main) [![Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-reyobu-ffd000?style=flat-square&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/reyobu)
+**Hardware monitoring, fan control and RGB — in one Windows app.**
+
+[![Latest release](https://img.shields.io/github/v/release/Vlottiz/Vexis-PC-monitor-and-controll?style=flat-square&color=ffcc00&label=release)](https://github.com/Vlottiz/Vexis-PC-monitor-and-controll/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/Vlottiz/Vexis-PC-monitor-and-controll/total?style=flat-square&color=00ffcc)](https://github.com/Vlottiz/Vexis-PC-monitor-and-controll/releases)
+[![Platform](https://img.shields.io/badge/Windows-10%20%7C%2011-lightgrey?style=flat-square&logo=windows)](#requirements)
+[![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE.txt)
+[![Buy me a coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-ffd000?style=flat-square&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/reyobu)
+
+### [⬇ Download the latest version](https://github.com/Vlottiz/Vexis-PC-monitor-and-controll/releases/latest)
+
+<img src="docs/screenshots/home.png" alt="Vexis home dashboard" width="900">
+
+</div>
 
 ---
 
 ## Why Vexis?
 
-Vexis was built to combine hardware monitoring, fan control, and RGB control into one lightweight application with a modern UI.
+Most PCs end up with three or four vendor apps just to see temperatures, set fan curves and change the RGB. Vexis puts it all in one lightweight app:
 
-Unlike traditional monitoring tools, Vexis offers:
-
-- Fully customizable themes with live color editing
-- Native fan curve editor with hysteresis and minimum speed
-- RGB control via OpenRGB (500+ devices) with auto-launch
-- Multi-window dashboards — pop any page to a separate monitor
-- Simple installer with automatic updates
-
----
-
-## Features
-
-| Feature | Details |
-|---|---|
-| **CPU Monitoring** | Per-core clock speeds, threads in use per core (adjustable busy threshold), temperatures, CCD temps (AMD), package power |
-| **Thread Viewer** | Every core and hardware thread: live thread map, activity timeline, per-core clock / load / temp with session peaks and averages |
-| **Processes** | Task-Manager-style list grouped by app with icons: CPU, memory and GPU per process, search, sort, End task (Windows-critical processes protected) |
-| **GPU Monitoring** | Dedicated GPU tab: load (core, memory controller, video, bus), core / hot-spot / memory temps, clocks, power, VRAM, fans, PCIe traffic, FPS, history charts and every raw sensor |
-| **Fan Control** | Auto / Manual / Custom curve editor for motherboard **and GPU fans** (NVIDIA / AMD), with a GPU over-temperature guard |
-| **Temperature History** | Min / Max / Avg for every thermal sensor on the system |
-| **RGB Control** | OpenRGB integration — auto-launch, master + per-device brightness, hardware modes, GUI toggle |
-| **Multi-window** | Pop out any page to a separate window |
-| **Themes** | 8 built-in color presets + full per-color customization + 3 saved profiles |
-| **Nav Scaling** | Separate text size sliders for UI, data values, and nav panel |
-| **Hardware Auto-detect** | CPU, GPU, RAM, socket type all detected and displayed automatically |
-| **AMD Full Support** | Per-core clocks, CCD0/CCD1 temps, Ryzen SMU sensors |
-| **Intel Support** | All-core clock via Windows Performance Counters |
-| **One-click updates** | Checks GitHub Releases; *Update now* downloads the installer, installs silently and restarts Vexis |
-| **Driver check** | Every launch: repairs the PawnIO sensor driver and reports missing / broken drivers (graphics driver, Device Manager problems) |
-| **CSV Recording** | Own tab: pick what to record (CPU, per-core clocks/load, memory, GPU, fans), raw CSV or pretty aligned text, row interval; built-in viewer with summary, chart and table. Written row by row, so logs survive crashes |
-| **Start with Windows** | Optional — launches minimized to the tray at sign-in (no UAC prompt) |
-| **Temperature Alerts** | Tray notification when CPU, GPU, GPU hot spot or GPU memory passes a limit you set; the tray icon blinks and the app lists what triggered until you clear it |
-| **Collapsible Sections** | Click any section header to fold it away — remembered per page |
+- **Everything live** — per-core clocks and threads, temperatures, GPU, memory, fans and processes
+- **Real control** — fan curves for motherboard *and* GPU fans, RGB for 500+ devices through OpenRGB
+- **Works with Windows security on** — uses the signed PawnIO driver; Memory Integrity and VBS stay enabled
+- **Yours to style** — 8 themes, full colour editing, text scaling, pop-out windows for a second monitor
+- **Keeps itself current** — one-click updates from inside the app
 
 ---
 
 ## Screenshots
 
-> *Coming soon — drop screenshots in `/docs/screenshots/` and update these links*
+> Screenshots show the real interface with sample readings.
 
-| Home | Performance | Fan Control |
-|---|---|---|
-| ![Home](docs/screenshots/home.png) | ![Performance](docs/screenshots/performance.png) | ![Fans](docs/screenshots/fans.png) |
+| Performance | Thread Viewer |
+|---|---|
+| ![Performance](docs/screenshots/performance.png) | ![Thread Viewer](docs/screenshots/thread-viewer.png) |
+| **Per-core clocks with threads in use, CCD groups, thermals** | **Every hardware thread: live map, activity timeline, core table** |
 
-| Temperatures | RGB | Settings |
-|---|---|---|
-| ![Temps](docs/screenshots/temps.png) | ![RGB](docs/screenshots/rgb.png) | ![Settings](docs/screenshots/settings.png) |
+| GPU | Processes |
+|---|---|
+| ![GPU](docs/screenshots/gpu.png) | ![Processes](docs/screenshots/processes.png) |
+| **Load, clocks, hot spot and VRAM temps, power, FPS, history** | **Task-Manager-style list with CPU, memory and GPU per app** |
+
+| Fan Control | Temperatures |
+|---|---|
+| ![Fan control](docs/screenshots/fans.png) | ![Temperatures](docs/screenshots/temps.png) |
+| **Auto / manual / curve for motherboard and GPU fans** | **Every sensor with current, min, max and average** |
+
+| RGB Control | CSV Recording |
+|---|---|
+| ![RGB](docs/screenshots/rgb.png) | ![CSV recording](docs/screenshots/csv-recording.png) |
+| **OpenRGB devices, brightness, hardware modes** | **Record what you choose; built-in viewer with charts** |
+
+| Settings | Memory |
+|---|---|
+| ![Settings](docs/screenshots/settings.png) | ![Memory](docs/screenshots/memory.png) |
+| **Text scaling, alerts, start with Windows, themes** | **Usage, DIMM temperatures, history** |
 
 ---
 
-## Quick Start
+## Features
 
-1. Download the [latest release](https://github.com/Vlottiz/vexis/releases/latest)
-2. Run the installer
-3. Launch Vexis as Administrator
-4. Monitor your system in real time
+### Monitoring
+| | |
+|---|---|
+| **CPU** | Per-core clocks, threads in use per core (adjustable busy threshold), temperatures, CCD temps and V-Cache / Compute groups on Ryzen, P- and E-cores on Intel, package power |
+| **Thread Viewer** | Every core and hardware thread: live thread map, labelled activity timeline, sortable core table with session peaks and averages |
+| **GPU** | Load (core, memory controller, video engine, bus, power limit), core / hot-spot / memory temperatures, clocks, power, VRAM, fans, PCIe traffic, FPS, history charts and every raw sensor |
+| **Memory** | RAM and virtual memory usage, DDR5 DIMM temperatures, load history |
+| **Temperatures** | Every thermal sensor grouped by component, with min / max / average |
+| **Processes** | Grouped by app with icons; CPU, memory and GPU per process; search, sort, pause, End task (Windows-critical processes are protected) |
+
+### Control
+| | |
+|---|---|
+| **Fan Control** | Auto / Manual / Curve for motherboard and GPU fans (NVIDIA & AMD). Curves can follow CPU, CCD, GPU core, GPU hot spot or VRAM temperature. GPU fans are forced to 100% if the GPU overheats, and every fan goes back to BIOS / driver control when Vexis closes. Health check per fan. |
+| **RGB Control** | OpenRGB integration: quick colours for all devices, master and per-device brightness, hardware modes (rainbow, breathing…), per-LED painting, RAM stick sync |
+
+### Tools
+| | |
+|---|---|
+| **Temperature Alerts** | Tray notification when CPU, GPU, GPU hot spot or VRAM passes your limit. The tray icon blinks and the app lists what triggered until you clear it. |
+| **CSV Recording** | Choose what to record, raw CSV (Excel / Sheets) or pretty aligned text with a summary, and the row interval. Built-in viewer with summary, chart and table. Rows are written as they happen, so a log survives a crash. |
+| **Driver Check** | Every launch: repairs the PawnIO sensor driver if needed and reports a missing graphics driver or devices with driver problems |
+| **One-click Updates** | New release on GitHub → **Update now** downloads, installs and restarts Vexis |
+
+### Comfort
+| | |
+|---|---|
+| **Themes** | 8 presets plus full per-colour editing and 3 saved profiles |
+| **Scaling** | Separate sliders for page text, data values and the navigation panel, plus zoom buttons |
+| **Pop-out windows** | Open any page in its own window — great for a second monitor |
+| **Start with Windows** | Starts minimized to the tray at sign-in, no UAC prompt |
+| **Remembers you** | Window size and position, collapsed sections, settings |
 
 ---
 
 ## Installation
 
-### Option A — Installer (Recommended)
-
-1. Download **`Vexis-Setup.exe`** from the [latest release](https://github.com/Vlottiz/vexis/releases/latest)
-2. Run it — click Next → Next → Install → Finish
-3. Vexis launches automatically
+1. Download **`VexisHM-Setup.exe`** from the [latest release](https://github.com/Vlottiz/Vexis-PC-monitor-and-controll/releases/latest).
+2. Run it and click through the installer.
+3. Start Vexis from the Desktop or Start Menu. It asks for administrator rights — these are needed to read hardware sensors.
 
 The installer:
-- Places the app in `Program Files\Vexis`
-- Creates a Desktop and Start Menu shortcut
-- Adds a Windows Defender exclusion to prevent false positives from low-level hardware monitoring components
-- Appears in Add/Remove Programs for clean uninstall
+- installs Vexis to `C:\Program Files\Vexis` with Desktop and Start Menu shortcuts,
+- installs the **PawnIO** sensor driver if it is missing,
+- installs the **Microsoft WebView2 Runtime** on Windows 10 if it is missing (needs internet once),
+- adds Vexis to *Apps & features* for a clean uninstall.
 
-### Option B — Build it yourself
+> **"Windows protected your PC"?** Vexis isn't code-signed yet, so SmartScreen warns about new downloads. Click **More info → Run anyway**.
 
-See [Building from Source](#building-from-source).
+### Updating
+
+Vexis checks GitHub for a new release when it starts. When one is out, an **UPDATE** badge appears at the top right — click it, then **Update now**. Your settings are kept.
 
 ---
 
 ## Requirements
 
-- **Windows 10 or 11, 64-bit (x64)** — Intel or AMD processor
-- **Administrator rights** — Vexis asks for them when it starts (needed for hardware sensors)
-- **No .NET install needed** — the runtime is bundled
-- **WebView2 Runtime** — built into Windows 11; the installer adds it on Windows 10 if missing (needs internet once)
-- **PawnIO sensor driver** — installed by the installer
+- **Windows 10 or 11, 64-bit** — Intel or AMD processor
+- **Administrator rights** (Vexis asks when it starts)
+- Nothing else — the .NET runtime is bundled, WebView2 and PawnIO come with the installer
+- **For RGB:** [OpenRGB](https://openrgb.org) installed
 
-## Compatibility
+### Compatibility
 
-| | Works | Notes |
+| | Supported | Notes |
 |---|---|---|
-| **Intel CPUs** | Temps, per-core clocks & load, power | 12th gen+ P-cores and E-cores shown separately |
-| **AMD Ryzen** | Tctl/Tdie, CCD temps, per-core clocks & load, power | Dual-CCD X3D parts show V-Cache / Compute groups |
-| **GPUs** | NVIDIA, AMD, Intel Arc | Temp, clock, load, power, VRAM, fan |
-| **Motherboards** | Most ASUS, MSI, Gigabyte, ASRock boards | Fans and board temps depend on [LibreHardwareMonitor support](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) for the SuperIO chip |
-| **RAM** | Usage, DDR5 DIMM temps | DIMM temps need sticks with a thermal sensor |
+| **Intel CPUs** | Temperatures, per-core clocks, load, threads, power | 12th gen+ P-cores and E-cores shown separately |
+| **AMD Ryzen** | Tctl/Tdie, CCD temps, per-core clocks, load, threads, power | Dual-CCD X3D parts show V-Cache and Compute groups |
+| **GPUs** | NVIDIA, AMD, Intel Arc | Fan control on NVIDIA and AMD |
+| **Motherboards** | Most ASUS, MSI, Gigabyte and ASRock boards | Fans and board sensors depend on [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) support for the board's sensor chip |
+| **RAM** | Usage, DDR5 DIMM temperatures | DIMM temperatures need sticks with a thermal sensor |
 
-**Not supported**
-- **Windows on ARM** (Snapdragon laptops) — the sensor driver can't run there.
-- **Windows 7 / 8.1**, 32-bit Windows.
-
-**Known limitations**
-- **Fans missing?** Motherboard fan chips are shared. If **MSI Center, HWiNFO, AIDA64, Armoury Crate** or similar is running, Vexis may not be able to read them — close those apps and restart Vexis.
-- **First download warnings.** Vexis isn't code-signed yet, so Windows SmartScreen may show *"Windows protected your PC"* → **More info → Run anyway**. Antivirus machine-learning scanners can also flag new, unsigned hardware tools.
-- **Anti-cheat.** Some game anti-cheat systems restrict kernel drivers used by hardware monitors. If a game complains, close Vexis while playing.
-
-### Sensor driver (PawnIO)
-
-Per-core temperatures and clocks, motherboard fan sensors and DIMM temperatures are read through
-[PawnIO](https://pawnio.eu), the driver used by LibreHardwareMonitor 0.9.6+. PawnIO is signed and
-works with **Memory Integrity, VBS and the Vulnerable Driver Blocklist left ON** — Vexis does not
-change any Windows security settings.
-
-Older Vexis versions used WinRing0 and switched those protections off. If you ran one of them, open
-**Security** in Vexis and click **Restore Windows Protections**, then restart Windows.
-
-If CPU data shows as unavailable: **Security → Install / Repair PawnIO**, then restart Vexis.
+Not supported: Windows on ARM, Windows 7 / 8.1, 32-bit Windows, Linux and macOS.
 
 ---
 
-## Fan Curve Editor
+## Troubleshooting
 
-The fan curve editor supports:
+| Problem | Fix |
+|---|---|
+| **Fans missing** | MSI Center, Armoury Crate, HWiNFO, AIDA64 and similar apps lock the fan chip. Close them and restart Vexis. |
+| **No per-core data** | Open **Security → Install / Repair PawnIO**, then restart Vexis. |
+| **A game's anti-cheat complains** | Some anti-cheat systems restrict hardware-monitoring drivers. Close Vexis while playing that game. |
+| **Antivirus flags the download** | New, unsigned hardware tools sometimes trigger machine-learning detections. The source is here to inspect. |
+| **Something else** | The log is at `%AppData%\Vexis\debug.log`, and live on the **Security** page. Please attach it to an [issue](https://github.com/Vlottiz/Vexis-PC-monitor-and-controll/issues). |
 
-- **Click** the graph to add a point (up to 8)
-- **Drag** points to adjust
-- **Right-click** a point to delete it
-- **Temp source** — drive the curve from CPU, GPU, CCD0, or CCD1
-- **Hysteresis** — prevents fan flutter by requiring the temperature to drop N°C below a threshold before reducing speed (0–10°C, default 5°C)
-- **Minimum Speed** — sets a floor so fans never drop below a set percentage even at idle (0–50%)
-- **Save** persists the curve — it activates automatically on next launch
-- **Health Check** — ramps the fan through 30/60/100% and reports if it's responding correctly
+### About the sensor driver
 
----
+Vexis reads sensors through [PawnIO](https://pawnio.eu), the signed driver used by LibreHardwareMonitor. It works with **Memory Integrity, VBS and the Vulnerable Driver Blocklist left on** — Vexis does not change any Windows security settings. (Very early Vexis builds did; if you used one, open **Security → Restore Windows Protections** and restart.)
 
-## RGB Control
+### Privacy
 
-RGB requires [OpenRGB](https://openrgb.org) to be installed:
-
-1. Install OpenRGB from [openrgb.org](https://openrgb.org)
-2. Open Vexis → RGB tab
-3. Vexis auto-launches OpenRGB with the SDK server enabled
-
-**Features:**
-- **Auto-launch** — OpenRGB starts automatically when you open the RGB page
-- **Color persistence** — colors are committed to hardware firmware so they survive animations and reconnects
-- **GUI button** — click ⚙ GUI to open the full OpenRGB interface for advanced configuration, then close it to return to SDK server mode
-- **Quick Colors** — one-click presets applied to all devices simultaneously
-- **Per-device control** — individual color pickers and per-LED support for supported devices
-- **Keep-alive** — colors are re-sent every 2 seconds to prevent hardware animations from reverting
-
-Supports 500+ devices including RAM (ENE/Corsair/G.Skill), GPUs (AMD/Nvidia), keyboards, Corsair iCUE hubs, and more.
-
-### MSI Motherboard ARGB Headers
-
-For MSI motherboards (X870E, B850, Z890 series), OpenRGB nightly builds include direct ARGB header support (JAF, JARGB 1/2/3). Use the [OpenRGB nightly pipeline build](https://gitlab.com/CalcProgrammer1/OpenRGB/-/pipelines) and run it as Administrator to enable PawnIO driver access.
-
-> If using the nightly, close MSI Center completely — the two apps will conflict for HID device access.
+Vexis has no telemetry and no accounts. The only internet access is checking and downloading releases from this GitHub repository. Everything else stays on your PC.
 
 ---
 
-## Theme System
+## Building from source
 
-Vexis ships with 8 built-in presets (AMBER, OCEAN, MATRIX, GHOST, RUBY, VIOLET, ARCTIC, SOLAR) plus full per-color customization.
+Prerequisites: [.NET 8 SDK](https://dotnet.microsoft.com/download) and [NSIS](https://nsis.sourceforge.io/Download) (for the installer).
 
-**Three text scaling sliders** in the System tab:
-- **Page UI Font** — scales labels, headers, and UI text across all pages
-- **Data Text** — scales sensor readings (temperatures, RPM, clocks)
-- **Nav Panel Text** — scales the navigation sidebar independently
-
-All settings persist across sessions.
-
----
-
-## Building from Source
-
-Prerequisites (one-time):
-- [.NET 8 SDK](https://dotnet.microsoft.com/download)
-- [NSIS](https://nsis.sourceforge.io/Download) — builds the installer `.exe`
-
-```bash
-git clone https://github.com/Vlottiz/vexis.git
-cd vexis
-
-# Run in development (admin PowerShell)
-dotnet run
+```powershell
+git clone https://github.com/Vlottiz/Vexis-PC-monitor-and-controll.git
+cd Vexis-PC-monitor-and-controll
+dotnet run          # run from an administrator terminal
 ```
 
-### Making a new installer after changes
+### Making a release
 
-1. Bump `<Version>` in `Pcmonitor2_0.csproj` (e.g. `2.1.0` → `2.1.1`). This is the only place the
-   version lives — the app, the update check and the installer all read it.
-2. Double-click `build-installer.bat` (or run it from a terminal). It will:
-   - download `PawnIO_setup.exe` if it is missing,
-   - `dotnet publish` the app into `publish\`,
-   - run NSIS to produce **`VexisHM-Setup.exe`** in the project folder.
-3. Create a GitHub release tagged `v<version>` (e.g. `v2.1.1`) and attach `VexisHM-Setup.exe`.
-   Installed copies will show the update badge on next launch.
+1. Set `<Version>` in `Pcmonitor2_0.csproj` (e.g. `2.8.1`) — the app, the installer and the update check all read it.
+2. Run **`build-installer.bat`**. It downloads PawnIO and WebView2 if needed, publishes the app and builds **`VexisHM-Setup.exe`**.
+3. On GitHub: **Releases → Draft a new release**, tag **`v2.8.1`** (a `v` plus the exact version), attach `VexisHM-Setup.exe`, publish. Don't mark it as a pre-release.
 
-Running the new installer over an existing install updates it in place (settings in
-`%AppData%\Vexis` are kept).
+> The tag must match the version. Installed copies compare the tag with their own version — a tag like `1.0.1` or `Vexis` is never seen as an update.
 
-The in-app **Update now** button downloads the `.exe` attached to the latest release and runs it
-with `/S /UPDATE` (silent; the installer restarts Vexis when done). So each release needs the tag
-`v<version>` and `VexisHM-Setup.exe` attached, and the repository must be public for the update
-check to see it.
+### Customising
 
-### Changing the loading-screen animation
-
-The loading screen shows **`splash.gif`** (or `splash.png` if there is no GIF) from the folder
-Vexis.exe runs in. Animated GIFs play automatically.
-
-- **Quick test, no rebuild:** replace `C:\Program Files\Vexis\splash.gif` with your own file
-  (same name) and start Vexis.
-- **Ship it in the installer:** replace `splash.gif` in the project folder, then run
-  `build-installer.bat`.
-- **Size:** 440 × 220 px looks best; other sizes are scaled to fit.
-- **Edit the default animation:** change the settings at the top of `assets/make_splash.py`
-  (text, colours, speed, frame count) and run `python assets/make_splash.py` (needs
-  `pip install pillow`). It rewrites `splash.gif`.
-- **Window colours, size and the status text style** are constants at the top of `SplashForm.cs`.
-- Delete both files to get the built-in spinning-ring animation instead.
+- **Loading screen:** replace `splash.gif` (440 × 220 px works best) — see `SplashForm.cs`, or edit and run `assets/make_splash.py`.
+- **Screenshots:** the images in `docs/screenshots/` are shown on this page. To use your own, take a screenshot of a Vexis page (`Win + Shift + S`), save it with the same file name (e.g. `gpu.png`), and replace the file on GitHub (**Add file → Upload files** into `docs/screenshots`).
 
 ---
 
@@ -240,6 +189,7 @@ Vexis.exe runs in. Animated GIFs play automatically.
 | Project | Use | License |
 |---|---|---|
 | [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) | All hardware sensor reading | MIT |
+| [PawnIO](https://pawnio.eu) | Signed sensor driver (installed unmodified) | — |
 | [OpenRGB](https://gitlab.com/CalcProgrammer1/OpenRGB) | RGB device control (external, not bundled) | GPL-2.0 |
 | [HIDAPI](https://github.com/libusb/hidapi) | HID device communication | MIT/BSD |
 | [Microsoft WebView2](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) | Embedded browser for the UI | Free |
@@ -254,14 +204,12 @@ Claude assisted with implementation speed, debugging, and boilerplate. Every fea
 
 ## Support
 
-If Vexis has been useful to you, consider buying me a coffee:
+If Vexis is useful to you, you can support development:
 
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-%E2%98%95-ffd000?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/reyobu)
 
----
+Found a bug or have an idea? [Open an issue](https://github.com/Vlottiz/Vexis-PC-monitor-and-controll/issues).
 
 ## License
 
-MIT — see [LICENSE](https://github.com/Vlottiz/vexis/blob/main/LICENSE) for details.
-
-This project uses open source components. See the Credits section above for individual licenses.
+MIT — see [LICENSE.txt](LICENSE.txt). Bundled and linked components keep their own licenses (see Credits).
