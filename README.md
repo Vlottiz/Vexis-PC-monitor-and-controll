@@ -71,6 +71,7 @@ Most PCs end up with three or four vendor apps just to see temperatures, set fan
 | **GPU** | Load (core, memory controller, video engine, bus, power limit), core / hot-spot / memory temperatures, clocks, power, VRAM, fans, PCIe traffic, FPS, history charts and every raw sensor |
 | **Memory** | RAM and virtual memory usage, DDR5 DIMM temperatures, load history |
 | **Storage** | Every drive: temperature, health (SSD life left), space used, read / write speed, lifetime data written, power-on time, drive letters and type |
+| **Duplicate Finder** | On the Storage page: finds files with identical contents on the drives or folders you pick, sorted by space wasted. Keep-oldest / keep-newest selection, and removal goes to the Recycle Bin — at least one copy is always kept |
 | **Temperatures** | Every thermal sensor grouped by component, with min / max / average |
 | **Processes** | Grouped by app with icons; CPU, memory and GPU per process; search, sort, pause, End task (Windows-critical processes are protected) |
 
@@ -95,6 +96,8 @@ Most PCs end up with three or four vendor apps just to see temperatures, set fan
 |---|---|
 | **Themes** | 8 presets plus full per-colour editing and 3 saved profiles |
 | **Scaling** | Separate sliders for page text, data values and the navigation panel, plus zoom buttons |
+| **Your layout** | Drag the ⋮⋮ grip in the side menu to put the pages in any order — saved, and the Home page tiles follow it |
+| **Update log** | Info → Version shows what changed in your version (from `CHANGELOG.md`) |
 | **Pop-out windows** | Open any page in its own window — great for a second monitor |
 | **Start with Windows** | Starts minimized to the tray at sign-in, no UAC prompt |
 | **Remembers you** | Window size and position, collapsed sections, settings |
@@ -178,7 +181,7 @@ dotnet run          # run from an administrator terminal
 
 Releases are built automatically by GitHub Actions (`.github/workflows/release.yml`):
 
-1. Set `<Version>` in `Pcmonitor2_0.csproj` (e.g. `2.9.0`) and merge it into `main`.
+1. Set `<Version>` in `Pcmonitor2_0.csproj` (e.g. `2.9.0`), add a `## 2.9.0 — <date>` section with `- ` lines at the top of **`CHANGELOG.md`**, and merge into `main`. The app shows those lines on Info → Version, and the workflow uses them as the release notes (unless you write your own on the website).
 2. On GitHub: **Releases → Draft a new release**, create the tag **`v2.9.0`** (a `v` plus the exact version), write the notes and **Publish**.
 3. Within a few minutes the **Release** workflow builds `VexisHM-Setup.exe` and attaches it to that release (watch it under the **Actions** tab).
 

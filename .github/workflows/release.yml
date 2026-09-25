@@ -69,13 +69,30 @@ jobs:
           if (-not (Test-Path VexisHM-Setup.exe)) { Write-Error "VexisHM-Setup.exe was not created"; exit 1 }
           Get-Item VexisHM-Setup.exe | Select-Object Name, Length
 
+      - name: Release notes from CHANGELOG.md
+        id: notes
+        shell: pwsh
+        run: |
+          $v = '${{ steps.ver.outputs.version }}'
+          $lines = Get-Content CHANGELOG.md
+          $out = @(); $on = $false
+          foreach ($l in $lines) {
+            if ($l -match '^##\s+v?([\d.]+)') { $on = ($Matches[1] -eq $v); continue }
+            if ($on) { $out += $l }
+          }
+          $text = ($out -join "`n").Trim()
+          if ($text) { $text | Set-Content notes.md -Encoding utf8; "found=true" >> $env:GITHUB_OUTPUT; Write-Host $text }
+          else { "found=false" >> $env:GITHUB_OUTPUT; Write-Host "No CHANGELOG section for $v - using GitHub's generated notes" }
+
       - name: Attach to the release
         if: github.event_name != 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
           name: ${{ github.event_name == 'release' && github.event.release.name || format('Vexis {0}', steps.ver.outputs.version) }}
-          generate_release_notes: ${{ github.event_name != 'release' }}
+          # Notes: keep what was written on the website; otherwise this version's CHANGELOG section
+          body_path: ${{ (steps.notes.outputs.found == 'true' && (github.event_name != 'release' || github.event.release.body == '')) && 'notes.md' || '' }}
+          generate_release_notes: ${{ github.event_name != 'release' && steps.notes.outputs.found != 'true' }}
           files: VexisHM-Setup.exe
           fail_on_unmatched_files: true
           overwrite_files: true

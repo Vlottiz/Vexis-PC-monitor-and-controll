@@ -6,7 +6,7 @@
     <AssemblyName>Vexis</AssemblyName>
     <Product>Vexis Hardware Monitoring</Product>
     <!-- Bump this for every release. build-installer.bat reads it for the installer too. -->
-    <Version>2.9.0</Version>
+    <Version>2.10.0</Version>
     <ApplicationIcon>vexis.ico</ApplicationIcon>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -48,6 +48,11 @@
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
     <Content Include="splash.png" Condition="Exists('splash.png')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <!-- Update log shown on Info → Version -->
+    <Content Include="CHANGELOG.md">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>

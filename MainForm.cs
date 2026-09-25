@@ -17,6 +17,7 @@ public class MainForm : Form
     private int   _pollCount      = 0;
     private readonly CsvRecorder _recorder = new();
     private readonly ProcessMonitor _procs = new();
+    private readonly DuplicateFinder _dupes = new();
     private SensorData? _lastData;   // last reading sent to the pages (includes fans)
     private float _lastLoggedTemp = 0;
 
@@ -766,6 +767,36 @@ public class MainForm : Form
                         UpdateTrayProfile();
                     }
                     break;
+                // ── Storage page: duplicate file finder ─────────────────────────
+                case "dupPickFolder":
+                {
+                    using var dlg = new FolderBrowserDialog { Description = "Choose a folder to search for duplicate files", UseDescriptionForTitle = true };
+                    if (dlg.ShowDialog(this) == DialogResult.OK)
+                        RunScriptEverywhere($"typeof onDupFolder==='function'&&onDupFolder({JsonSerializer.Serialize(dlg.SelectedPath)})");
+                    break;
+                }
+                case "dupStart":
+                    if (msg.dup?.paths is { Count: > 0 } && !_dupes.Running)
+                        _dupes.Start(new DuplicateFinder.Options(msg.dup.paths, (long)(Math.Max(0, msg.dup.minMb) * 1048576), msg.dup.includeSystem),
+                            pr => RunScriptEverywhere($"typeof onDupProgress==='function'&&onDupProgress({JsonSerializer.Serialize(pr, _json)})"),
+                            res => RunScriptEverywhere($"typeof onDupResults==='function'&&onDupResults({JsonSerializer.Serialize(res, _json)})"));
+                    break;
+                case "dupCancel":
+                    _dupes.Cancel();
+                    break;
+                case "dupRecycle":
+                    if (msg.dup?.files is { Count: > 0 } files)
+                        _ = Task.Run(() =>
+                        {
+                            var (removed, freed, skipped) = _dupes.Recycle(files);
+                            RunScriptEverywhere($"typeof onDupRecycled==='function'&&onDupRecycled({JsonSerializer.Serialize(new { removed, freed, skipped }, _json)})");
+                        });
+                    break;
+                case "dupReveal":
+                    if (msg.file != null && File.Exists(msg.file))
+                        System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{msg.file}\"");
+                    break;
+
                 case "crashOpenLog":  CrashHelper.OpenLog(); break;
                 case "crashReport":   CrashHelper.OpenReport(_lastData?.info); break;
                 case "crashDismiss":  CrashHelper.Dismiss(); break;
@@ -1196,4 +1227,13 @@ public class IncomingMessage
     public RecordOptions? record { get; set; } // recordStart: what to record
     public int?  pid      { get; set; } // endTask: one process (otherwise every process named "file")
     public string? profile { get; set; } // setFanProfile: custom | silent | balanced | performance
+    public DupRequest? dup { get; set; } // duplicate finder: scan options / files to recycle
+}
+
+public class DupRequest
+{
+    public List<string>? paths { get; set; }          // folders / drives to scan
+    public double        minMb { get; set; } = 1;     // ignore smaller files
+    public bool          includeSystem { get; set; }  // also scan Windows / Program Files / AppData
+    public List<string>? files { get; set; }          // dupRecycle: files to send to the Recycle Bin
 }

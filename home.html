@@ -27,7 +27,18 @@
 
   /* Responsive grid — more columns on wider windows */
   .card-grid-2 { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
-  .home-nav-grid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+  .home-nav-grid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+  .ht { display:flex;flex-direction:column;align-items:flex-start;padding:12px 14px;text-align:left;height:auto;min-height:86px; }
+  .ht-head { display:flex;align-items:center;gap:8px;width:100%;margin-bottom:8px; }
+  .ht-icon { font-size:calc(16px*var(--fs-base,1)); }
+  .ht-val { font-size:calc(18px*var(--fs-base,1)*var(--data-scale,1));font-weight:700;font-family:monospace;white-space:nowrap; }
+  .ht-sub { font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);margin-top:2px;letter-spacing:.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%; }
+  .hdrive { display:grid;grid-template-columns:1fr auto;gap:2px 8px;padding:5px 0;border-bottom:1px solid rgba(68,51,0,.18); }
+  .hdrive:last-child { border-bottom:none; }
+  .hdrive .n { font-size:calc(10px*var(--fs-base,1));color:var(--label);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+  .hdrive .t { font-family:monospace;font-size:calc(12px*var(--fs-base,1)*var(--data-scale,1));font-weight:700;text-align:right; }
+  .hdrive .bar { grid-column:1/3;height:4px;background:var(--bar-bg);border-radius:2px;overflow:hidden; }
+  .hdrive .bar i { display:block;height:100%;background:linear-gradient(90deg,var(--surface2),var(--mem-acc)); }
 </style>
 </head>
 <body>
@@ -172,66 +183,19 @@
       </div>
 
       <div class="card">
-        <div class="card-header"><span class="card-title">FANS</span></div>
+        <div class="card-header"><span class="card-title">FANS</span><span class="badge badge-dim" id="h-fanprof" style="display:none"></span></div>
         <div id="h-fans"><div class="empty-state">Waiting...</div></div>
+      </div>
+
+      <div class="card" style="cursor:pointer" onclick="navView('storage.html')" title="Open Storage">
+        <div class="card-header"><span class="card-title">STORAGE</span><span class="badge badge-dim" id="h-st-badge">···</span></div>
+        <div id="h-storage"><div class="empty-state">Reading drives...</div></div>
       </div>
 
     </div>
 
-    <!-- Quick nav tiles with live data -->
-    <div class="home-nav-grid">
-
-      <button class="nav-tile" onclick="navView('index.html')"
-        style="display:flex;flex-direction:column;align-items:flex-start;padding:12px 14px;text-align:left;height:auto">
-        <div style="display:flex;align-items:center;gap:8px;width:100%;margin-bottom:8px">
-          <span style="font-size:calc(16px*var(--fs-base,1));color:var(--peak-col)">▣</span>
-          <span class="nav-tile-label" style="font-size:calc(10px*var(--fs-base,1))">PERFORMANCE</span>
-        </div>
-        <div style="font-size:calc(18px*var(--fs-base,1)*var(--data-scale,1));font-weight:700;color:var(--peak-col)" id="nt-peakclk">-- MHz</div>
-        <div style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);margin-top:2px">PEAK CLOCK</div>
-      </button>
-
-      <button class="nav-tile" onclick="navView('gpu.html')"
-        style="display:flex;flex-direction:column;align-items:flex-start;padding:12px 14px;text-align:left;height:auto">
-        <div style="display:flex;align-items:center;gap:8px;width:100%;margin-bottom:8px">
-          <span style="font-size:calc(16px*var(--fs-base,1));color:var(--gpu-acc)">▩</span>
-          <span class="nav-tile-label" style="font-size:calc(10px*var(--fs-base,1))">GPU</span>
-        </div>
-        <div style="font-size:calc(18px*var(--fs-base,1)*var(--data-scale,1));font-weight:700;color:var(--gpu-acc)" id="nt-gpuload">-- %</div>
-        <div style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);margin-top:2px">GPU LOAD</div>
-      </button>
-
-      <button class="nav-tile" onclick="navView('temps.html')"
-        style="display:flex;flex-direction:column;align-items:flex-start;padding:12px 14px;text-align:left;height:auto">
-        <div style="display:flex;align-items:center;gap:8px;width:100%;margin-bottom:8px">
-          <span style="font-size:calc(16px*var(--fs-base,1));color:var(--temp-val)">◈</span>
-          <span class="nav-tile-label" style="font-size:calc(10px*var(--fs-base,1))">TEMPERATURES</span>
-        </div>
-        <div style="font-size:calc(18px*var(--fs-base,1)*var(--data-scale,1));font-weight:700;color:var(--temp-val)" id="nt-gputemp">-- °C</div>
-        <div style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);margin-top:2px">GPU TEMP</div>
-      </button>
-
-      <button class="nav-tile" onclick="navView('fans.html')"
-        style="display:flex;flex-direction:column;align-items:flex-start;padding:12px 14px;text-align:left;height:auto">
-        <div style="display:flex;align-items:center;gap:8px;width:100%;margin-bottom:8px">
-          <span style="font-size:calc(16px*var(--fs-base,1));color:var(--mem-acc)">◎</span>
-          <span class="nav-tile-label" style="font-size:calc(10px*var(--fs-base,1))">FAN CONTROL</span>
-        </div>
-        <div style="font-size:calc(18px*var(--fs-base,1)*var(--data-scale,1));font-weight:700;color:var(--mem-acc)" id="nt-fanrpm">-- RPM</div>
-        <div id="nt-fanname" style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);margin-top:2px">FANS</div>
-      </button>
-
-      <button class="nav-tile" onclick="navView('rgb.html')"
-        style="display:flex;flex-direction:column;align-items:flex-start;padding:12px 14px;text-align:left;height:auto">
-        <div style="display:flex;align-items:center;gap:8px;width:100%;margin-bottom:8px">
-          <span style="font-size:calc(16px*var(--fs-base,1));color:var(--gpu-acc)">◐</span>
-          <span class="nav-tile-label" style="font-size:calc(10px*var(--fs-base,1))">RGB CONTROL</span>
-        </div>
-        <div style="font-size:calc(18px*var(--fs-base,1));font-weight:700;color:var(--gpu-acc)">OpenRGB</div>
-        <div style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);margin-top:2px">500+ DEVICES</div>
-      </button>
-
-    </div>
+    <!-- Quick nav tiles: one per page, live data, same order as the side menu -->
+    <div class="home-nav-grid" id="home-tiles"></div>
 
     <!-- Info strip -->
     <div class="card" style="padding:10px 14px">
@@ -247,7 +211,7 @@
   </div>
 </div>
 
-<script src="/nav.js?v=21" data-page="home"></script>
+<script src="/nav.js?v=23" data-page="home"></script>
 <script>
 setInterval(()=>{ const e=document.getElementById('htime'); if(e)e.textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}); },1000);
 
@@ -296,24 +260,78 @@ function sv(id,v){const e=document.getElementById(id);if(e)e.textContent=v;}
 function sc(id,c){const e=document.getElementById(id);if(e)e.style.color=c;}
 function sw(id,w){const e=document.getElementById(id);if(e)e.style.width=w+'%';}
 
-function receiveData(data){
-  // Update quick-nav tiles with live data
-  const cores=data.cores||{}; let peakClk=0;
-  Object.values(cores).forEach(c=>{ if(c.clk>peakClk)peakClk=c.clk; });
-  const ntP=document.getElementById('nt-peakclk');
-  if(ntP)ntP.textContent=peakClk>0?Math.round(peakClk)+' MHz':'-- MHz';
-  const ntL=document.getElementById('nt-gpuload');
-  if(ntL)ntL.textContent=data.gpu_load!=null?Math.round(data.gpu_load)+' %':'-- %';
-  const ntG=document.getElementById('nt-gputemp');
-  if(ntG)ntG.textContent=data.gpu_temp!=null?data.gpu_temp.toFixed(1)+' °C':'-- °C';
-  // Fan tile: the busiest fan, not just the first header (often an empty CPU_FAN)
-  const ntF=document.getElementById('nt-fanrpm');
-  if(ntF&&data.fans&&data.fans.length){
-    const top=data.fans.reduce((a,f)=>f.rpm>a.rpm?f:a,data.fans[0]);
-    ntF.textContent=Math.round(top.rpm)+' RPM';
-    sv('nt-fanname',top.name.toUpperCase());
+// ── Page tiles (built from the side menu's page list, in the user's order) ─────
+const TILE_COLOR = { performance:'var(--peak-col)', threads:'var(--avg-col)', processes:'var(--avg-col)', gpu:'var(--gpu-acc)',
+  memory:'var(--mem-acc)', storage:'var(--mem-acc)', temps:'var(--temp-val)', fans:'var(--mem-acc)', rgb:'var(--gpu-acc)',
+  info:'var(--label)', record:'#ff6666', security:'var(--label)' };
+let _tileSig = '';
+function buildTiles() {
+  if (typeof navOrderedPages !== 'function') return;
+  const pages = navOrderedPages().filter(p => p.id !== 'home');
+  const sig = pages.map(p => p.id).join(',');
+  if (sig === _tileSig) return;
+  _tileSig = sig;
+  document.getElementById('home-tiles').innerHTML = pages.map(p => `
+    <button class="nav-tile ht" onclick="navView('${NAV_PAGE_FILES[p.id]}')" title="Open ${p.label}">
+      <div class="ht-head"><span class="ht-icon" style="color:${TILE_COLOR[p.id] || 'var(--label)'}">${p.icon}</span>
+        <span class="nav-tile-label" style="font-size:calc(10px*var(--fs-base,1))">${p.label}</span></div>
+      <div class="ht-val" id="ht-${p.id}" style="color:${TILE_COLOR[p.id] || 'var(--text)'}">--</div>
+      <div class="ht-sub" id="hs-${p.id}"></div>
+    </button>`).join('');
+}
+function tile(id, val, sub) {
+  const v = document.getElementById('ht-' + id), s = document.getElementById('hs-' + id);
+  if (v) v.textContent = val; if (s) s.textContent = sub || '';
+}
+function updateTiles(d) {
+  buildTiles();
+  const cores = Object.values(d.cores || {});
+  const peak = Math.max(0, ...cores.map(c => c.clk || 0));
+  tile('performance', peak ? Math.round(peak) + ' MHz' : '--', 'PEAK CLOCK' + (d.cpu_temp != null ? ' · ' + d.cpu_temp.toFixed(0) + '°C' : ''));
+  const busyAt = parseFloat((typeof NAV_SETTINGS !== 'undefined' && NAV_SETTINGS.threadBusy) || 10);
+  const thr = cores.flatMap(c => c.threads || []);
+  tile('threads', thr.length ? thr.filter(l => l >= busyAt).length + '/' + thr.length : '--', 'THREADS IN USE (≥' + busyAt + '%)');
+  tile('processes', d.cpu_load != null ? Math.round(d.cpu_load) + '% CPU' : '--', 'APPS & PROCESSES · END TASK');
+  const g = d.gpu || {};
+  tile('gpu', (g.load_core ?? d.gpu_load) != null ? Math.round(g.load_core ?? d.gpu_load) + ' %' : '--',
+       'GPU LOAD' + ((g.temp_core ?? d.gpu_temp) != null ? ' · ' + (g.temp_core ?? d.gpu_temp).toFixed(0) + '°C' : ''));
+  tile('memory', d.ram_load != null ? Math.round(d.ram_load) + ' %' : '--', d.ram_used_gb != null ? d.ram_used_gb.toFixed(1) + ' GB IN USE' : 'RAM IN USE');
+  const drives = d.storage || [];
+  const hot = drives.filter(x => x.temp != null).sort((a, b) => b.temp - a.temp)[0];
+  const lowLife = drives.filter(x => x.life != null).sort((a, b) => a.life - b.life)[0];
+  tile('storage', hot ? hot.temp.toFixed(0) + ' °C' : drives.length ? drives.length + ' drives' : '--',
+       drives.length ? `${drives.length} DRIVE${drives.length > 1 ? 'S' : ''}${lowLife ? ' · LOWEST HEALTH ' + Math.round(lowLife.life) + '%' : ''}` : 'DRIVES');
+  const temps = Object.entries(d.all_temps || {});
+  const hottest = temps.sort((a, b) => b[1] - a[1])[0];
+  tile('temps', hottest ? hottest[1].toFixed(1) + ' °C' : '--', hottest ? 'HOTTEST · ' + hottest[0].split('/').pop().toUpperCase() : 'ALL SENSORS');
+  const fans = d.fans || [];
+  const topFan = fans.reduce((a, f) => !a || f.rpm > a.rpm ? f : a, null);
+  const prof = { custom:'CUSTOM', silent:'SILENT', balanced:'BALANCED', performance:'PERFORMANCE' }[d.fan_profile] || '';
+  tile('fans', topFan ? Math.round(topFan.rpm) + ' RPM' : '--', (prof ? prof + ' PROFILE · ' : '') + (topFan ? topFan.name.toUpperCase() : 'FANS'));
+  tile('rgb', 'OpenRGB', 'COLOURS, BRIGHTNESS & MODES');
+  const up = window.NAV_UPDATE;
+  tile('info', window.NAV_APP_VERSION ? 'v' + window.NAV_APP_VERSION : '--', up && up.available ? 'UPDATE ' + up.latest + ' AVAILABLE' : 'WHAT\'S NEW · UPDATES');
+  const r = d.recording;
+  tile('record', r && r.active ? '● ' + Math.floor(r.seconds / 60) + ':' + String(r.seconds % 60).padStart(2, '0') : 'Idle',
+       r && r.active ? r.rows.toLocaleString() + ' ROWS RECORDED' : 'RECORD SENSOR DATA TO CSV');
+  tile('security', 'PawnIO', 'DRIVER CHECK & PROTECTIONS');
+  // Storage card
+  const box = document.getElementById('h-storage');
+  if (box && drives.length) {
+    box.innerHTML = drives.map(x => `<div class="hdrive"><span class="n" title="${x.name}">${x.letters ? x.letters + ' ' : ''}${x.name}</span>
+      <span class="t" style="color:${x.temp == null ? 'var(--label-dim)' : x.temp >= (x.temp_warn || 70) ? 'var(--temp-hot)' : 'var(--temp-val)'}">${x.temp != null ? x.temp.toFixed(0) + '°C' : '--'}</span>
+      <div class="bar" title="${x.used_pct != null ? Math.round(x.used_pct) + '% used' : ''}"><i style="width:${x.used_pct ?? 0}%"></i></div></div>`).join('');
+    const bad = drives.filter(x => x.health === 'replace' || x.health === 'hot').length;
+    const badge = document.getElementById('h-st-badge');
+    badge.textContent = bad ? bad + ' NEED ATTENTION' : 'ALL OK';
+    badge.className = 'badge ' + (bad ? 'badge-hot' : 'badge-ok');
   }
+  const fp = document.getElementById('h-fanprof');
+  if (fp && prof) { fp.textContent = prof; fp.style.display = ''; }
+}
 
+function receiveData(data){
+  updateTiles(data);
   if(data.info)applyHwInfo(data.info);
   if(data.fans&&data.fans.length>0){
     const div=document.getElementById('h-fans');
@@ -356,7 +374,7 @@ function receiveData(data){
   const gb=document.getElementById('gpu-badge');
   if(gb){gb.textContent=gt!=null?gt.toFixed(1)+'°C':'···'; gb.className='badge '+tempBadge(gt);}
   let peak=0,tot=0,cnt=0;
-  Object.values(cores).forEach(c=>{if(c.clk>peak)peak=c.clk;if(c.clk>0){tot+=c.clk;cnt++;}});
+  Object.values(data.cores||{}).forEach(c=>{if(c.clk>peak)peak=c.clk;if(c.clk>0){tot+=c.clk;cnt++;}});
   sv('h-peak',peak>0?Math.round(peak)+' MHz':'--');
   sv('h-avg',cnt>0?Math.round(tot/cnt)+' MHz':'--');
   // CPUs without two CCDs (Intel, single-CCD Ryzen): use those slots for CPU temp / power
