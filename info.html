@@ -11,6 +11,14 @@
   .credit-name { font-size:calc(11px*var(--fs-base,1));color:var(--label);font-weight:500; }
   .credit-role { font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);margin-top:2px;letter-spacing:.04em;line-height:1.5; }
   .credit-badge { font-size:calc(8px*var(--fs-base,1));padding:2px 7px;border-radius:10px;background:rgba(68,51,0,.2);border:1px solid rgba(68,51,0,.3);color:var(--label-dim);letter-spacing:.06em;white-space:nowrap; }
+  .chlog { margin-top:14px; padding:10px 12px; border:1px dashed var(--border); border-radius:4px; background:var(--bar-bg); opacity:.78; }
+  .chlog-title { font-size:calc(9px*var(--fs-base,1)); letter-spacing:.16em; color:var(--label-dim); margin-bottom:6px; }
+  .chlog-title span { color:var(--label); letter-spacing:.06em; }
+  .chlog ul { margin:0; padding-left:16px; }
+  .chlog li { font-size:calc(10px*var(--fs-base,1)); color:var(--label); line-height:1.6; }
+  .chlog details { margin-top:8px; }
+  .chlog summary { cursor:pointer; font-size:calc(9px*var(--fs-base,1)); letter-spacing:.12em; color:var(--label-dim); }
+  .chlog .old-ver { font-size:calc(9px*var(--fs-base,1)); color:var(--label-dim); letter-spacing:.1em; margin:8px 0 2px; }
   .update-dot { width:8px;height:8px;border-radius:50%;background:#333;flex-shrink:0;transition:background .3s; }
   .update-dot.ok  { background:#44aa66;box-shadow:0 0 6px #44aa66; }
   .update-dot.new { background:#ffaa00;box-shadow:0 0 6px #ffaa00; }
@@ -67,6 +75,13 @@
         <button class="btn btn-ghost" style="flex:1;justify-content:center" onclick="checkUpdate(true)">↻ Check again</button>
         <button class="btn btn-ghost" style="flex:1;justify-content:center"
           onclick="sendToHost({type:'openUrl',url:'https://github.com/Vlottiz/Vexis-PC-monitor-and-controll/releases/latest'})">Release page</button>
+      </div>
+
+      <!-- Update log (CHANGELOG.md, shipped with the app) -->
+      <div class="chlog" id="chlog">
+        <div class="chlog-title">WHAT'S NEW <span id="chlog-ver"></span></div>
+        <ul id="chlog-now"><li>Loading…</li></ul>
+        <details id="chlog-older" style="display:none"><summary>Other versions</summary><div id="chlog-list"></div></details>
       </div>
     </div>
 
@@ -163,7 +178,7 @@
   </div>
 </div>
 
-<script src="/nav.js?v=22" data-page="info"></script>
+<script src="/nav.js?v=23" data-page="info"></script>
 <script>
 // Update state comes from the host (UpdateManager), which also does the install
 function setStatus(text, col, dotCls) {
@@ -211,10 +226,43 @@ function checkUpdate(force) {
   sendToHost({ type: 'checkUpdate', enabled: !!force });
 }
 
+// ── Update log: CHANGELOG.md sections "## <version> — <date>" with "- " items ──
+let CHLOG = null;
+async function loadChangelog() {
+  try {
+    const text = await (await fetch('CHANGELOG.md', { cache:'no-store' })).text();
+    CHLOG = [];
+    let cur = null;
+    text.replace(/<!--[\s\S]*?-->/g, '').split(/\r?\n/).forEach(line => {
+      const h = /^##\s+v?([\d.]+)\s*(?:[—–-]\s*(.*))?$/.exec(line.trim());
+      if (h) { cur = { version:h[1], date:(h[2] || '').trim(), items:[] }; CHLOG.push(cur); return; }
+      const it = /^\s*[-*]\s+(.*)$/.exec(line);
+      if (it && cur) cur.items.push(it[1]);
+    });
+  } catch { CHLOG = []; }
+  renderChangelog();
+}
+function renderChangelog() {
+  if (!CHLOG) return;
+  const esc = t => String(t).replace(/[&<>]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[c]));
+  const ver = window.NAV_APP_VERSION;
+  if (!CHLOG.length) { document.getElementById('chlog').style.display = 'none'; return; }
+  // The installed version's notes; if it isn't listed, the newest entry
+  const now = CHLOG.find(e => e.version === ver) || CHLOG[0];
+  document.getElementById('chlog-ver').textContent = 'IN v' + now.version + (now.date ? ' · ' + now.date : '');
+  document.getElementById('chlog-now').innerHTML = now.items.map(i => `<li>${esc(i)}</li>`).join('') || '<li>No notes for this version.</li>';
+  const older = CHLOG.filter(e => e !== now);
+  document.getElementById('chlog-older').style.display = older.length ? '' : 'none';
+  document.getElementById('chlog-list').innerHTML = older.map(e =>
+    `<div class="old-ver">v${esc(e.version)}${e.date ? ' · ' + esc(e.date) : ''}</div><ul>${e.items.map(i => `<li>${esc(i)}</li>`).join('')}</ul>`).join('');
+}
+loadChangelog();
+
 function receiveData(d) {}
 function onConfigReceived(cfg) {
   navOnConfig(cfg);
   if (cfg.appVersion) ['ver-current', 'ver-badge', 'ver-sub'].forEach(id => document.getElementById(id).textContent = 'v' + cfg.appVersion);
+  renderChangelog();
 }
 if (IS_WEBVIEW) {
   window.chrome.webview.addEventListener('message', e => {

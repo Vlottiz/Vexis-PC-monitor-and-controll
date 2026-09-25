@@ -94,6 +94,91 @@ const NAV_PAGES = [
   { id:'security',    icon:'🛡', label:'SECURITY'     },
 ];
 
+// ── Tab order (drag ⋮⋮ in the Pages list; saved in settings "navOrder") ─────────
+function navSavedOrder() {
+  let o = NAV_SETTINGS && NAV_SETTINGS.navOrder;
+  if (!o) { try { o = localStorage.getItem('pcm-nav-order'); } catch {} }
+  return o ? String(o).split(',').filter(Boolean) : [];
+}
+// Saved order first; pages it doesn't mention (new ones) keep their default spot
+function navOrderedPages() {
+  const saved = navSavedOrder().filter(id => NAV_PAGES.some(p => p.id === id));
+  if (!saved.length) return NAV_PAGES.slice();
+  const out = saved.map(id => NAV_PAGES.find(p => p.id === id));
+  NAV_PAGES.forEach((p, i) => {
+    if (saved.includes(p.id)) return;
+    const prev = NAV_PAGES.slice(0, i).reverse().find(q => out.includes(q));   // after the page it followed by default
+    out.splice(prev ? out.indexOf(prev) + 1 : 0, 0, p);
+  });
+  return out;
+}
+function navPageItemsHtml() {
+  return navOrderedPages().map(p => {
+    const active = p.id === NAV_CURRENT_PAGE;
+    const file   = NAV_PAGE_FILES[p.id];
+    return `<div class="nv-item${active ? ' nv-active' : ''}" data-id="${p.id}" onclick="navView('${file}')" title="Open ${p.label}">
+      <span class="nv-grip" title="Drag to reorder" onclick="event.stopPropagation()" onpointerdown="navDragStart(event,'${p.id}')">⋮⋮</span>
+      <span class="nv-icon">${p.icon}</span>
+      <span class="nv-lbl">${p.label}</span>
+      <button class="nv-pop" onclick="event.stopPropagation();navPopOut('${p.id}')" title="Pop out to window">
+        <span class="nv-pop-art">⬡</span> POP
+      </button>
+    </div>`;
+  }).join('');
+}
+function navRenderPageList() {
+  const list = document.getElementById('nv-page-list');
+  if (list) list.innerHTML = navPageItemsHtml();
+}
+function navSaveOrder(ids) {
+  const v = ids.join(',');
+  try { localStorage.setItem('pcm-nav-order', v); } catch {}
+  if (typeof navSaveSetting === 'function') navSaveSetting('navOrder', v);
+}
+window.navResetOrder = function() {
+  try { localStorage.removeItem('pcm-nav-order'); } catch {}
+  if (NAV_SETTINGS) NAV_SETTINGS.navOrder = '';
+  if (typeof navSaveSetting === 'function') navSaveSetting('navOrder', '');
+  navRenderPageList();
+};
+// Pointer-based drag: the row follows the pointer, a gap shows where it will land
+let _navDrag = null;
+window.navDragStart = function(e, id) {
+  e.preventDefault(); e.stopPropagation();
+  const list = document.getElementById('nv-page-list');
+  const item = list && list.querySelector(`.nv-item[data-id="${id}"]`);
+  if (!item) return;
+  const r = item.getBoundingClientRect();
+  const ph = document.createElement('div');
+  ph.className = 'nv-drop'; ph.style.height = r.height + 'px';
+  item.after(ph);
+  item.classList.add('nv-dragging');
+  Object.assign(item.style, { position:'fixed', left:r.left + 'px', top:r.top + 'px', width:r.width + 'px', zIndex:10050, pointerEvents:'none' });
+  _navDrag = { item, ph, list, dy: e.clientY - r.top };
+  document.addEventListener('pointermove', navDragMove);
+  document.addEventListener('pointerup', navDragEnd, { once:true });
+};
+function navDragMove(e) {
+  const d = _navDrag; if (!d) return;
+  d.item.style.top = (e.clientY - d.dy) + 'px';
+  const others = [...d.list.querySelectorAll('.nv-item:not(.nv-dragging)')];
+  const before = others.find(o => { const r = o.getBoundingClientRect(); return e.clientY < r.top + r.height / 2; });
+  if (before) { if (d.ph.nextElementSibling !== before) before.before(d.ph); }
+  else if (d.list.lastElementChild !== d.ph) d.list.appendChild(d.ph);
+  // Scroll the list when dragging near its edges
+  const lr = d.list.getBoundingClientRect();
+  if (e.clientY < lr.top + 24) d.list.scrollTop -= 8; else if (e.clientY > lr.bottom - 24) d.list.scrollTop += 8;
+}
+function navDragEnd() {
+  const d = _navDrag; _navDrag = null;
+  document.removeEventListener('pointermove', navDragMove);
+  if (!d) return;
+  d.item.classList.remove('nv-dragging');
+  d.item.removeAttribute('style');
+  d.ph.replaceWith(d.item);
+  navSaveOrder([...d.list.querySelectorAll('.nv-item')].map(x => x.dataset.id));
+}
+
 // ── Color state ───────────────────────────────────────────────────────────────
 let NAV_CURRENT_COLORS = {};
 let NAV_PROFILES       = {};
@@ -248,7 +333,9 @@ window.navOnConfig = function(cfg) {
   }
   // Restore settings
   if (cfg.settings) {
+    const orderChanged = (cfg.settings.navOrder || '') !== ((NAV_SETTINGS && NAV_SETTINGS.navOrder) || '');
     NAV_SETTINGS = cfg.settings;
+    if (orderChanged) { try { localStorage.setItem('pcm-nav-order', cfg.settings.navOrder || ''); } catch {} navRenderPageList(); }
     navSyncPerfSettings();
     const bypassDisabled = cfg.settings['disableSecurityBypass'] === 'true';
     const cb = document.getElementById('nv-sec-bypass');
@@ -441,17 +528,7 @@ function initNav() {
 }
 
 function buildPanelHTML() {
-  const pageItems = NAV_PAGES.map(p => {
-    const active = p.id === NAV_CURRENT_PAGE;
-    const file   = NAV_PAGE_FILES[p.id];
-    return `<div class="nv-item${active ? ' nv-active' : ''}" onclick="navView('${file}')" title="Open ${p.label}">
-      <span class="nv-icon">${p.icon}</span>
-      <span class="nv-lbl">${p.label}</span>
-      <button class="nv-pop" onclick="event.stopPropagation();navPopOut('${p.id}')" title="Pop out to window">
-        <span class="nv-pop-art">⬡</span> POP
-      </button>
-    </div>`;
-  }).join('');
+  const pageItems = navPageItemsHtml();
 
   const presetBtns = NAV_PRESETS.map((p, i) => {
     const c = p.colors;
@@ -498,7 +575,8 @@ function buildPanelHTML() {
 
     <!-- PAGES TAB -->
     <div id="nvs-pages" class="nv-section">
-      <div class="nv-items">${pageItems}</div>
+      <div class="nv-items" id="nv-page-list">${pageItems}</div>
+      <div class="nv-order-bar"><span>Drag <b>⋮⋮</b> to reorder</span><button onclick="navResetOrder()">↺ Reset order</button></div>
     </div>
 
     <!-- COLORS TAB -->
@@ -1216,6 +1294,18 @@ function injectNavStyles() {
     }
     .nv-pop-art { font-size:10px;opacity:.55; }
     .nv-item { cursor:pointer; }
+    .nv-grip { cursor:grab;color:var(--label-dim,#665500);font-size:calc(11px*var(--nv-scale,1));letter-spacing:-2px;padding:4px 2px;margin:-4px -4px -4px -6px;
+               opacity:.45;user-select:none;touch-action:none;flex-shrink:0; }
+    .nv-item:hover .nv-grip { opacity:1; }
+    .nv-grip:active { cursor:grabbing; }
+    .nv-dragging { background:var(--surface2,#1e1608) !important;box-shadow:0 8px 24px rgba(0,0,0,.6);border-left-color:var(--header-title,#ffcc00) !important;opacity:.95; }
+    .nv-drop { border:1px dashed color-mix(in srgb,var(--header-title,#ffcc00) 55%,transparent);border-radius:4px;margin:2px 8px;
+               background:color-mix(in srgb,var(--header-title,#ffcc00) 6%,transparent); }
+    .nv-order-bar { display:flex;justify-content:space-between;align-items:center;padding:6px 14px 10px;font-size:calc(9px*var(--nv-scale,1));
+                    color:var(--label-dim,#665500);font-family:monospace;letter-spacing:.06em; }
+    .nv-order-bar b { color:var(--label,#aa7700); }
+    .nv-order-bar button { background:none;border:none;color:var(--label,#aa7700);cursor:pointer;font-family:monospace;font-size:inherit;letter-spacing:.06em; }
+    .nv-order-bar button:hover { color:var(--header-title,#ffcc00); }
 
     /* ── Colors tab ── */
     .nvc-toolbar {
