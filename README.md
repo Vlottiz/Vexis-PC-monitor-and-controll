@@ -70,13 +70,15 @@ Most PCs end up with three or four vendor apps just to see temperatures, set fan
 | **Thread Viewer** | Every core and hardware thread: live thread map, labelled activity timeline, sortable core table with session peaks and averages |
 | **GPU** | Load (core, memory controller, video engine, bus, power limit), core / hot-spot / memory temperatures, clocks, power, VRAM, fans, PCIe traffic, FPS, history charts and every raw sensor |
 | **Memory** | RAM and virtual memory usage, DDR5 DIMM temperatures, load history |
+| **Storage** | Every drive: temperature, health (SSD life left), space used, read / write speed, lifetime data written, power-on time, drive letters and type |
 | **Temperatures** | Every thermal sensor grouped by component, with min / max / average |
 | **Processes** | Grouped by app with icons; CPU, memory and GPU per process; search, sort, pause, End task (Windows-critical processes are protected) |
 
 ### Control
 | | |
 |---|---|
-| **Fan Control** | Auto / Manual / Curve for motherboard and GPU fans (NVIDIA & AMD). Curves can follow CPU, CCD, GPU core, GPU hot spot or VRAM temperature. GPU fans are forced to 100% if the GPU overheats, and every fan goes back to BIOS / driver control when Vexis closes. Health check per fan. |
+| **Fan Profiles** | **Silent**, **Balanced** and **Performance** presets for every fan at once, or **Custom** — switch on the Fan Control page or straight from the tray icon |
+| **Fan Control** | Auto / Manual / Curve for motherboard and GPU fans (NVIDIA & AMD). Curves follow CPU, CCD, GPU core, GPU hot spot or VRAM temperature, with **hysteresis** (no revving up and down) and a **minimum speed**. GPU fans are forced to 100% if the GPU overheats, and every fan goes back to BIOS / driver control when Vexis closes. Health check per fan. |
 | **RGB Control** | OpenRGB integration: quick colours for all devices, master and per-device brightness, hardware modes (rainbow, breathing…), per-LED painting, RAM stick sync |
 
 ### Tools
@@ -85,7 +87,8 @@ Most PCs end up with three or four vendor apps just to see temperatures, set fan
 | **Temperature Alerts** | Tray notification when CPU, GPU, GPU hot spot or VRAM passes your limit. The tray icon blinks and the app lists what triggered until you clear it. |
 | **CSV Recording** | Choose what to record, raw CSV (Excel / Sheets) or pretty aligned text with a summary, and the row interval. Built-in viewer with summary, chart and table. Rows are written as they happen, so a log survives a crash. |
 | **Driver Check** | Every launch: repairs the PawnIO sensor driver if needed and reports a missing graphics driver or devices with driver problems |
-| **One-click Updates** | New release on GitHub → **Update now** downloads, installs and restarts Vexis |
+| **Updates** | New release on GitHub → **Update now** downloads, installs and restarts Vexis — or switch on **Install updates automatically** |
+| **Crash helper** | If Vexis didn't close properly, the next launch keeps the log and offers **Open log** or **Report on GitHub** with the details filled in |
 
 ### Comfort
 | | |
@@ -115,6 +118,7 @@ The installer:
 ### Updating
 
 Vexis checks GitHub for a new release when it starts. When one is out, an **UPDATE** badge appears at the top right — click it, then **Update now**. Your settings are kept.
+Prefer hands-off? **Settings → System → Install updates automatically** installs new versions at launch.
 
 ---
 
@@ -147,6 +151,7 @@ Not supported: Windows on ARM, Windows 7 / 8.1, 32-bit Windows, Linux and macOS.
 | **No per-core data** | Open **Security → Install / Repair PawnIO**, then restart Vexis. |
 | **A game's anti-cheat complains** | Some anti-cheat systems restrict hardware-monitoring drivers. Close Vexis while playing that game. |
 | **Antivirus flags the download** | New, unsigned hardware tools sometimes trigger machine-learning detections. The source is here to inspect. |
+| **Vexis crashed** | The next launch shows a banner with **Open log** and **Report on GitHub**. The log from the crashed session is kept as `%AppData%\Vexis\debug-previous.log`. |
 | **Something else** | The log is at `%AppData%\Vexis\debug.log`, and live on the **Security** page. Please attach it to an [issue](https://github.com/Vlottiz/Vexis-PC-monitor-and-controll/issues). |
 
 ### About the sensor driver
@@ -171,11 +176,15 @@ dotnet run          # run from an administrator terminal
 
 ### Making a release
 
-1. Set `<Version>` in `Pcmonitor2_0.csproj` (e.g. `2.8.1`) — the app, the installer and the update check all read it.
-2. Run **`build-installer.bat`**. It downloads PawnIO and WebView2 if needed, publishes the app and builds **`VexisHM-Setup.exe`**.
-3. On GitHub: **Releases → Draft a new release**, tag **`v2.8.1`** (a `v` plus the exact version), attach `VexisHM-Setup.exe`, publish. Don't mark it as a pre-release.
+Releases are built automatically by GitHub Actions (`.github/workflows/release.yml`):
 
-> The tag must match the version. Installed copies compare the tag with their own version — a tag like `1.0.1` or `Vexis` is never seen as an update.
+1. Set `<Version>` in `Pcmonitor2_0.csproj` (e.g. `2.9.0`) and merge it into `main`.
+2. On GitHub: **Releases → Draft a new release**, create the tag **`v2.9.0`** (a `v` plus the exact version), write the notes and **Publish**.
+3. Within a few minutes the **Release** workflow builds `VexisHM-Setup.exe` and attaches it to that release (watch it under the **Actions** tab).
+
+The workflow stops with a clear error if the tag doesn't match `<Version>`, because installed copies compare the tag with their own version — a tag like `1.0.1` or `Vexis` would never be seen as an update. You can also run it by hand from the **Actions** tab (**Run workflow**) to get a test build as a download, without releasing.
+
+**Building the installer locally** still works: run **`build-installer.bat`** (needs the .NET 8 SDK and NSIS). It downloads PawnIO and WebView2 if needed, publishes the app and builds `VexisHM-Setup.exe`.
 
 ### Customising
 

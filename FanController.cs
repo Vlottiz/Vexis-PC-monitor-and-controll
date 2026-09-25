@@ -9,7 +9,7 @@ public class FanInfo
     public float   pct        { get; set; }     // current control %
     public bool    hasControl { get; set; }
     public bool    curveActive{ get; set; }
-    public string  mode       { get; set; } = "auto";  // auto | manual | curve
+    public string  mode       { get; set; } = "auto";  // auto | manual | curve | profile
     public string? healthStatus { get; set; }
     public bool    isGpu      { get; set; }     // graphics-card fan (driver control)
     public bool    failsafe   { get; set; }     // forced to 100% by the GPU over-temperature guard
@@ -24,6 +24,14 @@ internal class FanEntry
     public string   Mode         { get; set; } = "auto";   // auto | manual | curve
     public float    ManualPct    { get; set; } = 50f;
     public string?  HealthStatus { get; set; }
+
+    // Curve state for hysteresis: the speed last set and the temperature it was set at
+    public int      CurveSpeed   { get; set; } = -1;
+    public float    CurveTemp    { get; set; }
+    public int      LastSent     { get; set; } = -1;
+
+    public bool IsPump => Name.Contains("Pump", StringComparison.OrdinalIgnoreCase) ||
+                          Name.Contains("AIO", StringComparison.OrdinalIgnoreCase);
 
     // For health check
     public List<(float SetPct, float MeasuredRpm)> HealthReadings { get; set; } = new();
@@ -161,9 +169,12 @@ public class FanController
     public const float GpuCoreLimit = 90f, GpuHotspotLimit = 100f, GpuGuardRelease = 8f;
     private bool _gpuGuard;
 
+    private AppConfig? _config;
+
     public void Update(SensorData sensorData, AppConfig config)
     {
         if (!_discovered) return;
+        _config = config;
         RescanIfNewFans();
 
         float gCore = sensorData.gpu?.temp_core ?? sensorData.gpu_temp ?? 0f;
@@ -176,32 +187,90 @@ public class FanController
                 ? $"[fans] GPU over-temperature guard ON (core {gCore:F0}°C, hot spot {gHot:F0}°C) — GPU fans at 100%."
                 : "[fans] GPU over-temperature guard off — GPU fans back to their setting.");
 
+        string profile = FanProfiles.Normalize(config.FanProfile);
         foreach (var fan in _fans)
         {
+            if (fan.CtrlSensor?.Control == null || fan.RpmSensor.Hardware.HardwareType == HardwareType.GpuIntel) continue;
             if (fan.IsGpu && fan.Mode != "auto")
             {
-                if (_gpuGuard) { fan.CtrlSensor?.Control?.SetSoftware(100); continue; }
-                if (wasGuard && fan.Mode == "manual") fan.CtrlSensor?.Control?.SetSoftware(fan.ManualPct);
+                if (_gpuGuard) { Send(fan, 100); continue; }
+                if (wasGuard && fan.Mode == "manual") Send(fan, (int)fan.ManualPct);
             }
-            if (fan.Mode != "curve") continue;
 
-            var curve = config.GetCurve(fan.Name);
-            if (curve == null || !curve.Enabled || curve.Points.Count == 0) continue;
-
-            float temp = curve.TempSource switch
+            FanCurve? curve = fan.Mode switch
             {
-                "ccd0" => sensorData.ccd0_temp ?? sensorData.cpu_temp ?? 50f,
-                "ccd1" => sensorData.ccd1_temp ?? sensorData.cpu_temp ?? 50f,
-                "gpu"  => sensorData.gpu_temp  ?? 50f,
-                "gpu_hotspot" => sensorData.gpu?.temp_hotspot ?? sensorData.gpu_temp ?? 50f,
-                "gpu_mem"     => sensorData.gpu?.temp_mem     ?? sensorData.gpu_temp ?? 50f,
-                _      => sensorData.cpu_temp  ?? 50f
+                "profile" => FanProfiles.CurveFor(profile, fan.Name, fan.IsGpu, fan.IsPump),
+                "curve"   => config.GetCurve(fan.Name) is { Enabled: true } c && c.Points.Count > 0 ? c : null,
+                _         => null
             };
-
-            int targetPct = AppConfig.InterpolateCurve(curve.Points, temp);
-
-            fan.CtrlSensor?.Control?.SetSoftware(targetPct);
+            if (curve == null) continue;
+            Send(fan, CurveSpeed(fan, curve, SourceTemp(curve.TempSource, sensorData)));
         }
+    }
+
+    private static float SourceTemp(string? source, SensorData d) => source switch
+    {
+        "ccd0"        => d.ccd0_temp ?? d.cpu_temp ?? 50f,
+        "ccd1"        => d.ccd1_temp ?? d.cpu_temp ?? 50f,
+        "gpu"         => d.gpu?.temp_core ?? d.gpu_temp ?? 50f,
+        "gpu_hotspot" => d.gpu?.temp_hotspot ?? d.gpu_temp ?? 50f,
+        "gpu_mem"     => d.gpu?.temp_mem ?? d.gpu_temp ?? 50f,
+        _             => d.cpu_temp ?? 50f
+    };
+
+    /// <summary>
+    /// Curve speed with hysteresis and a minimum speed. Speeding up happens at once;
+    /// slowing down waits until the temperature has dropped <c>Hysteresis</c> °C below
+    /// the temperature that set the current speed — so a CPU hovering around a curve
+    /// point doesn't make the fans rev up and down.
+    /// </summary>
+    internal static int CurveSpeed(FanEntry fan, FanCurve curve, float temp)
+    {
+        int target = AppConfig.InterpolateCurve(curve.Points, temp);
+        if (fan.CurveSpeed < 0 || target > fan.CurveSpeed || temp <= fan.CurveTemp - Math.Max(0, curve.Hysteresis))
+        {
+            fan.CurveSpeed = target;
+            fan.CurveTemp  = temp;
+        }
+        return Math.Clamp(Math.Max(fan.CurveSpeed, curve.MinSpeed), 0, 100);
+    }
+
+    // Only talk to the hardware when the speed actually changes
+    private static void Send(FanEntry fan, int pct)
+    {
+        if (pct == fan.LastSent) return;
+        fan.CtrlSensor?.Control?.SetSoftware(pct);
+        fan.LastSent = pct;
+    }
+
+    /// <summary>
+    /// Applies the fan profile. A preset puts every controllable fan on its preset
+    /// curve; "custom" restores each fan's own saved curve (or BIOS / driver auto).
+    /// Called at startup, after fans are rediscovered and when the profile changes.
+    /// </summary>
+    public void ApplyProfile(AppConfig config)
+    {
+        string profile = FanProfiles.Normalize(config.FanProfile);
+        foreach (var fan in _fans)
+        {
+            if (fan.CtrlSensor?.Control == null || fan.RpmSensor.Hardware.HardwareType == HardwareType.GpuIntel) continue;
+            fan.CurveSpeed = -1; fan.LastSent = -1;
+            if (profile != "custom") { fan.Mode = "profile"; continue; }
+            if (fan.Mode == "manual") { Send(fan, (int)fan.ManualPct); continue; }
+            if (config.GetCurve(fan.Name) is { Enabled: true } c && c.Points.Count > 0) fan.Mode = "curve";
+            else { fan.Mode = "auto"; try { fan.CtrlSensor.Control.SetDefault(); } catch { } }
+        }
+        Console.WriteLine($"[fans] Profile: {profile}");
+    }
+
+    /// <summary>Changing one fan by hand leaves the preset and goes back to Custom.</summary>
+    public void LeavePreset(AppConfig config)
+    {
+        if (FanProfiles.Normalize(config.FanProfile) == "custom") return;
+        config.FanProfile = "custom";
+        config.Save();
+        foreach (var f in _fans) if (f.Mode == "profile") f.Mode = "auto";
+        ApplyProfile(config);
     }
 
     // Every 5 s for the first 2 minutes, then every 30 s: if LHM now exposes more
@@ -224,13 +293,26 @@ public class FanController
             Console.WriteLine($"[fans] {fanSensors - _fans.Count} new fan sensor(s) appeared — rescanning.");
             var previous = _fans.ToDictionary(f => f.Name);
             Discover(_hardware);
+            var fresh = new List<FanEntry>();
             foreach (var f in _fans)
                 if (previous.TryGetValue(f.Name, out var old))
                 {
                     f.Mode = old.Mode;
                     f.ManualPct = old.ManualPct;
-                    if (f.Mode == "manual") f.CtrlSensor?.Control?.SetSoftware(f.ManualPct);
+                    if (f.Mode == "manual") Send(f, (int)f.ManualPct);
                 }
+                else fresh.Add(f);
+            // Newly found fans join the active profile / their saved curve
+            if (_config != null && fresh.Count > 0)
+            {
+                string profile = FanProfiles.Normalize(_config.FanProfile);
+                foreach (var f in fresh)
+                {
+                    if (f.CtrlSensor?.Control == null || f.RpmSensor.Hardware.HardwareType == HardwareType.GpuIntel) continue;
+                    if (profile != "custom") f.Mode = "profile";
+                    else if (_config.GetCurve(f.Name) is { Enabled: true } c && c.Points.Count > 0) f.Mode = "curve";
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -247,6 +329,7 @@ public class FanController
         fan.Mode = "manual";
         fan.ManualPct = pct;
         fan.CtrlSensor?.Control?.SetSoftware(pct);
+        fan.LastSent = (int)pct;
     }
 
     public void SetAuto(string fanName)
@@ -254,6 +337,7 @@ public class FanController
         var fan = Find(fanName);
         if (fan == null) return;
         fan.Mode = "auto";
+        fan.LastSent = -1;
         fan.CtrlSensor?.Control?.SetDefault();
     }
 
@@ -262,6 +346,7 @@ public class FanController
         var fan = Find(fanName);
         if (fan == null) return;
         fan.Mode = enabled ? "curve" : "auto";
+        fan.CurveSpeed = -1; fan.LastSent = -1;
         if (!enabled)
             fan.CtrlSensor?.Control?.SetDefault();
     }

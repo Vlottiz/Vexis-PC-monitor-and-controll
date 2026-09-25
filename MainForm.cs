@@ -114,6 +114,7 @@ public class MainForm : Form
         SplashForm.SetStatus("Finding fans…");
         _fans   = new FanController();
         await Task.Run(() => _fans.Discover(_sensor.AllHardware));
+        _fans.ApplyProfile(_config);   // saved curves / fan profile take effect at launch
         Application.ApplicationExit += (_, _) => { try { _fans.RestoreAll(); } catch { } };
         SetupTray();
         SplashForm.SetStatus("Loading interface…");
@@ -236,6 +237,7 @@ public class MainForm : Form
     // Runs a script in the main window and every popout (safe from any thread)
     // ── Updates (GitHub Releases) ──────────────────────────────────────────────
     private string? _updateJson;       // last check result, re-sent to pages that load later
+    private bool    _autoUpdateTried;  // auto-install at most once per launch
     private int     _updateChecking;
 
     private void PushUpdateInfo(bool force)
@@ -269,6 +271,17 @@ public class MainForm : Form
             };
             _updateJson = JsonSerializer.Serialize(info, _json);
             RunScriptEverywhere($"typeof navUpdateInfo==='function'&&navUpdateInfo({_updateJson})");
+
+            // Optional: install straight away (Settings → Install updates automatically)
+            if (newer && r!.InstallerUrl != null && !_autoUpdateTried &&
+                _config.Settings?.GetValueOrDefault("autoUpdate") == "true")
+            {
+                _autoUpdateTried = true;
+                Console.WriteLine($"[update] Auto-install: {r.Tag}");
+                BeginInvoke(() => QueueNotification("Updating Vexis", $"Installing {r.Tag} — Vexis will restart in a moment.", ToolTipIcon.Info));
+                await Task.Delay(3000);   // let the notification show first
+                await InstallUpdateAsync();
+            }
         }
         catch (Exception ex)
         {
@@ -283,7 +296,8 @@ public class MainForm : Form
         if (r == null || !UpdateManager.IsNewer(r, AppVersionText) || r.InstallerUrl == null) return;
         void Report(int pct, string text) => RunScriptEverywhere(
             $"typeof navUpdateProgress==='function'&&navUpdateProgress({pct},{JsonSerializer.Serialize(text)})");
-        if (await UpdateManager.DownloadAndRunAsync(r, AppVersionText, Report))
+        bool inTray = Invoke(() => !Visible || Opacity == 0);   // restart the same way it was running
+        if (await UpdateManager.DownloadAndRunAsync(r, AppVersionText, Report, restartMinimized: inTray))
         {
             // The installer closes Vexis anyway — exit cleanly first (fans back to BIOS/driver, CSV closed)
             await Task.Delay(800);
@@ -326,6 +340,7 @@ public class MainForm : Form
             {
                 type = "config", colors = _config.Colors, settings = _config.Settings,
                 colorProfiles = _config.ColorProfiles, fanCurves = _config.FanCurves,
+                fanProfile = FanProfiles.Normalize(_config.FanProfile), fanPresets = FanProfiles.Describe(),
                 lastPresetIdx = _config.LastPresetIdx, appVersion = AppVersionText,
                 startWithWindows = StartWithWindowsEnabled, zoom = Math.Round(_webView.ZoomFactor * 100)
             };
@@ -347,6 +362,8 @@ public class MainForm : Form
             CheckTempAlerts(data);
 
             data.fans = _fans.GetSnapshot();
+            data.fan_profile = FanProfiles.Normalize(_config.FanProfile);
+            data.crash = CrashHelper.Pending;
             _lastData = data;
             _recorder.Append(data);
             data.recording = _recorder.Status;
@@ -731,18 +748,30 @@ public class MainForm : Form
                     }
                     break;
 
+                // Changing one fan by hand leaves a preset profile (back to Custom)
                 case "fanSetManual":
-                    if (msg.fanName != null) _fans.SetManual(msg.fanName, msg.value ?? 50f);
+                    if (msg.fanName != null) { _fans.LeavePreset(_config); _fans.SetManual(msg.fanName, msg.value ?? 50f); UpdateTrayProfile(); }
                     break;
                 case "fanSetAuto":
-                    if (msg.fanName != null) _fans.SetAuto(msg.fanName);
+                    if (msg.fanName != null) { _fans.LeavePreset(_config); _fans.SetAuto(msg.fanName); UpdateTrayProfile(); }
                     break;
                 case "fanSetCurveMode":
-                    if (msg.fanName != null) _fans.SetCurveMode(msg.fanName, msg.enabled ?? false);
+                    if (msg.fanName != null) { _fans.LeavePreset(_config); _fans.SetCurveMode(msg.fanName, msg.enabled ?? false); UpdateTrayProfile(); }
                     break;
                 case "saveFanCurve":
                     if (msg.fanCurve != null)
-                    { _config.UpsertCurve(msg.fanCurve); _fans.SetCurveMode(msg.fanCurve.FanName, msg.fanCurve.Enabled); }
+                    {
+                        _fans.LeavePreset(_config);
+                        _config.UpsertCurve(msg.fanCurve); _fans.SetCurveMode(msg.fanCurve.FanName, msg.fanCurve.Enabled);
+                        UpdateTrayProfile();
+                    }
+                    break;
+                case "crashOpenLog":  CrashHelper.OpenLog(); break;
+                case "crashReport":   CrashHelper.OpenReport(_lastData?.info); break;
+                case "crashDismiss":  CrashHelper.Dismiss(); break;
+
+                case "setFanProfile":
+                    SetFanProfile(msg.profile);
                     break;
 
                 case "fanHealthCheck":
@@ -897,6 +926,16 @@ public class MainForm : Form
         _trayMenu.Items.Clear();
         _trayMenu.Items.Add("Show", null, (_, _) => ShowDashboard());
         _trayMenu.Items.Add(new ToolStripSeparator());
+        // Fan profile, switchable without opening the window
+        _trayProfileMenu = new ToolStripMenuItem("Fan profile");
+        foreach (var p in FanProfiles.All)
+        {
+            string name = p;
+            _trayProfileMenu.DropDownItems.Add(new ToolStripMenuItem(FanProfiles.Title(name), null, (_, _) => SetFanProfile(name)) { Tag = name });
+        }
+        _trayMenu.Items.Add(_trayProfileMenu);
+        UpdateTrayProfile();
+        _trayMenu.Items.Add(new ToolStripSeparator());
         _trayMenu.Items.Add("Exit", null, (_, _) => { _tray.Visible = false; Application.Exit(); });
         Icon? appIcon = null;
         try {
@@ -918,6 +957,25 @@ public class MainForm : Form
         };
         // Seeing the window counts as "seen": stop blinking (the alert list stays until cleared)
         Activated += (_, _) => { if (Visible && Opacity > 0) StopBlink(); };
+    }
+
+    private ToolStripMenuItem? _trayProfileMenu;
+
+    private void SetFanProfile(string? profile)
+    {
+        _config.FanProfile = FanProfiles.Normalize(profile);
+        _config.Save();
+        _fans.ApplyProfile(_config);
+        UpdateTrayProfile();
+        RunScriptEverywhere($"typeof onFanProfile==='function'&&onFanProfile('{_config.FanProfile}')");
+    }
+
+    private void UpdateTrayProfile()
+    {
+        if (_trayProfileMenu == null) return;
+        string cur = FanProfiles.Normalize(_config?.FanProfile);
+        _trayProfileMenu.Text = "Fan profile: " + FanProfiles.Title(cur);
+        foreach (ToolStripMenuItem i in _trayProfileMenu.DropDownItems) i.Checked = (string?)i.Tag == cur;
     }
 
     private void ShowDashboard() { Show(); WindowState = FormWindowState.Normal; Activate(); StopBlink(); }
@@ -1137,4 +1195,5 @@ public class IncomingMessage
     public int?  delta    { get; set; } // zoom: +1 / -1 / 0 (reset)
     public RecordOptions? record { get; set; } // recordStart: what to record
     public int?  pid      { get; set; } // endTask: one process (otherwise every process named "file")
+    public string? profile { get; set; } // setFanProfile: custom | silent | balanced | performance
 }

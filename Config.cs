@@ -43,6 +43,9 @@ public class AppConfig
     // Saved fan curves
     public List<FanCurve> FanCurves { get; set; } = new();
 
+    // Active fan profile: custom (your own modes / curves) | silent | balanced | performance
+    public string FanProfile { get; set; } = "custom";
+
     // Main window size/position from the last session
     public WindowPlacement? Window { get; set; }
 

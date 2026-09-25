@@ -1,0 +1,88 @@
+# Builds VexisHM-Setup.exe and publishes it as a GitHub release.
+#
+# How to release:  set <Version> in Pcmonitor2_0.csproj (e.g. 2.9.0), commit, then
+#   push a matching tag:   git tag v2.9.0   &&   git push origin v2.9.0
+# (or on GitHub: Releases → Draft a new release → new tag v2.9.0 → Publish).
+# The build fails if the tag doesn't match the version, so installed copies
+# always see the update.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  release:
+    types: [published]        # a release made on the website builds and attaches the exe too
+  workflow_dispatch:          # manual test build (uploaded as an artifact, not released)
+
+permissions:
+  contents: write
+
+# A release made on the website can fire both the tag push and the release event;
+# run them one at a time so the second just replaces the same exe.
+concurrency:
+  group: release-${{ github.event.release.tag_name || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version and check the tag
+        id: ver
+        shell: pwsh
+        run: |
+          $version = ([xml](Get-Content Pcmonitor2_0.csproj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          $tag = if ($env:GITHUB_EVENT_NAME -eq 'release') { '${{ github.event.release.tag_name }}' } else { '${{ github.ref_name }}' }
+          Write-Host "csproj version: $version   tag: $tag"
+          if ($env:GITHUB_EVENT_NAME -ne 'workflow_dispatch' -and $tag -ne "v$version") {
+            Write-Error "Tag '$tag' does not match the version in Pcmonitor2_0.csproj ($version). Use tag v$version, or change <Version>."
+            exit 1
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=v$version"   >> $env:GITHUB_OUTPUT
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Download PawnIO and WebView2 installers (bundled into the setup)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://github.com/namazso/PawnIO.Setup/releases/latest/download/PawnIO_setup.exe -OutFile PawnIO_setup.exe
+          Invoke-WebRequest "https://go.microsoft.com/fwlink/p/?LinkId=2124703" -OutFile MicrosoftEdgeWebview2Setup.exe
+
+      - name: Publish the app
+        run: dotnet publish Pcmonitor2_0.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o publish
+
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          Copy-Item LICENSE.txt publish\
+          $nsis = @("${env:ProgramFiles(x86)}\NSIS\makensis.exe", "$env:ProgramFiles\NSIS\makensis.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $nsis) {
+            choco install nsis -y --no-progress
+            $nsis = @("${env:ProgramFiles(x86)}\NSIS\makensis.exe", "$env:ProgramFiles\NSIS\makensis.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+          }
+          & $nsis /V2 "/DVERSION=${{ steps.ver.outputs.version }}" installer.nsi
+          if (-not (Test-Path VexisHM-Setup.exe)) { Write-Error "VexisHM-Setup.exe was not created"; exit 1 }
+          Get-Item VexisHM-Setup.exe | Select-Object Name, Length
+
+      - name: Attach to the release
+        if: github.event_name != 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: ${{ github.event_name == 'release' && github.event.release.name || format('Vexis {0}', steps.ver.outputs.version) }}
+          generate_release_notes: ${{ github.event_name != 'release' }}
+          files: VexisHM-Setup.exe
+          fail_on_unmatched_files: true
+          overwrite_files: true
+
+      - name: Keep the test build
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: VexisHM-Setup-${{ steps.ver.outputs.version }}
+          path: VexisHM-Setup.exe

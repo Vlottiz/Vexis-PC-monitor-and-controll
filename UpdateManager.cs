@@ -67,7 +67,7 @@ public static class UpdateManager
     /// Downloads the installer (reporting 0-100 %) and starts it. Returns true when
     /// the installer was launched — the caller should then exit the app.
     /// </summary>
-    public static async Task<bool> DownloadAndRunAsync(ReleaseInfo r, string appVersion, Action<int, string> progress)
+    public static async Task<bool> DownloadAndRunAsync(ReleaseInfo r, string appVersion, Action<int, string> progress, bool restartMinimized = false)
     {
         if (Busy || r.InstallerUrl == null) return false;
         Busy = true;
@@ -105,8 +105,9 @@ public static class UpdateManager
                     throw new Exception("downloaded file is not an installer");
 
             progress(100, "Installing — Vexis will restart");
-            Console.WriteLine($"[update] Running {file} /S /UPDATE");
-            Process.Start(new ProcessStartInfo { FileName = file, Arguments = "/S /UPDATE", UseShellExecute = true });
+            string args = "/S /UPDATE" + (restartMinimized ? " /MINIMIZED" : "");
+            Console.WriteLine($"[update] Running {file} {args}");
+            Process.Start(new ProcessStartInfo { FileName = file, Arguments = args, UseShellExecute = true });
             return true;
         }
         catch (Exception ex)
