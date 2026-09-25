@@ -807,12 +807,26 @@ public class SensorService : IDisposable
             return;
         }
 
+        // Intel hybrid: clocks are "P-Core #1".."E-Core #8" but loads can still be numbered
+        // across the whole CPU ("CPU Core #1".."#16", P-cores first), so "CPU Core #9" is E-Core #1.
+        var displayOrder = _coreMap.Values.Select(v => v.displayId).OrderBy(d => d).ToArray();
+
         foreach (var l in loads)
         {
-            int key = CoreKey(ThreadSuffixRe.Replace(l.Name, ""));
-            if (key < 0 || !_coreMap.TryGetValue(key, out var li)) continue;
             var tm = ThreadSuffixRe.Match(l.Name);
             int order = tm.Success && int.TryParse(tm.Value.AsSpan(tm.Value.LastIndexOf('#') + 1), out int t) ? t : 0;
+            if (_hybrid)
+            {
+                var gm = LoadNameRe.Match(l.Name);
+                if (gm.Success)
+                {
+                    int n = int.Parse(gm.Groups[1].Value);
+                    if (n >= 1 && n <= displayOrder.Length) Add(displayOrder[n - 1], order, l.Value);
+                    continue;
+                }
+            }
+            int key = CoreKey(ThreadSuffixRe.Replace(l.Name, ""));
+            if (key < 0 || !_coreMap.TryGetValue(key, out var li)) continue;
             Add(li.displayId, order, l.Value);
         }
     }

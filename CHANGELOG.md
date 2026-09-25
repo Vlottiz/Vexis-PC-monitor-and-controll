@@ -9,6 +9,9 @@ for the installed version on Info → Version, and the release workflow uses it 
 the GitHub release notes.
 -->
 
+## 2.10.1 — 2026-09-26
+- Intel 12th gen and newer: E-core loads now show up (they were missing, so threads in use read x/16 instead of x/24 on an i9-12900K)
+
 ## 2.10.0 — 2026-09-26
 - Duplicate file finder on the Storage page: finds identical files, moves chosen copies to the Recycle Bin and always keeps one
 - Side menu tabs can be reordered: drag the ⋮⋮ grip; the order is saved (Reset order puts it back)
