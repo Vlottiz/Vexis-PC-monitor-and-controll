@@ -83,9 +83,21 @@ public class AppConfig
         return new();
     }
 
+    // Set by "Reset to factory settings" so nothing writes the file back while Vexis restarts
+    public static bool SavesDisabled { get; set; }
+
+    /// <summary>Deletes the saved settings (config.json). Logs, recordings and crash files stay.</summary>
+    public static void DeleteSaved()
+    {
+        SavesDisabled = true;
+        try { if (File.Exists(ConfigPath)) File.Delete(ConfigPath); }
+        catch (Exception ex) { Console.WriteLine($"[config] Delete error: {ex.Message}"); }
+    }
+
     // ─── Save ─────────────────────────────────────────────────────────────────
     public void Save()
     {
+        if (SavesDisabled) return;
         try
         {
             Directory.CreateDirectory(ConfigDir);

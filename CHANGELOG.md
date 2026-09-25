@@ -9,7 +9,9 @@ for the installed version on Info → Version, and the release workflow uses it 
 the GitHub release notes.
 -->
 
-## 2.10.1 — 2026-09-26
+## 2.11.0 — 2026-09-26
+- Saved RGB looks: save your colours, per-LED painting, built-in modes and brightness under a name and put them back with one click; can reapply your last look automatically when Vexis connects to OpenRGB
+- Reset to factory settings (System tab and Info page): puts every setting back to how it was at install, turns fans back to automatic and restarts Vexis. CSV recordings are kept
 - Intel 12th gen and newer: E-core loads now show up (they were missing, so threads in use read x/16 instead of x/24 on an i9-12900K)
 - "Threads in use" always counts all of the CPU's threads (24 on a 12900K), even if a core reports no load
 

@@ -175,10 +175,22 @@
       </div>
     </div>
 
+    <!-- Reset -->
+    <div class="card">
+      <div class="card-header"><span class="card-title">RESET</span></div>
+      <div style="font-size:calc(10px*var(--fs-base,1));color:var(--label-dim);line-height:1.6;margin-bottom:10px">
+        Something not right, or want a clean start? This puts every setting back the way it was when Vexis was
+        installed (temperature alerts, fans, colours, layout, RGB looks and the rest) and restarts Vexis.
+        Your CSV recordings are kept.
+      </div>
+      <button class="btn btn-ghost" style="width:100%;justify-content:center;color:#ff6655;border-color:rgba(255,80,60,.45)"
+        onclick="navFactoryReset()">⟲ Reset to factory settings</button>
+    </div>
+
   </div>
 </div>
 
-<script src="/nav.js?v=23" data-page="info"></script>
+<script src="/nav.js?v=24" data-page="info"></script>
 <script>
 // Update state comes from the host (UpdateManager), which also does the install
 function setStatus(text, col, dotCls) {
