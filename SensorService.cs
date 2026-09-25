@@ -756,7 +756,7 @@ public class SensorService : IDisposable
             }
         }
 
-        AssignThreadLoads(loadSensors, coreLoads, threadLoads);
+        AssignThreadLoads(loadSensors, _coreMap, _hybrid, CpuTopology.LogicalToCore, coreLoads, threadLoads);
 
         foreach (var (id, core) in data.cores)
         {
@@ -774,17 +774,18 @@ public class SensorService : IDisposable
     /// Normal case: LHM names them "CPU Core #N Thread #M". When LHM couldn't group
     /// threads it lists "CPU Core #1".."#T" (one per logical processor); then the
     /// Windows topology says which core each logical processor belongs to.
+    /// Static and free of LHM types so it can be unit-tested (see tests/Vexis.Tests).
     /// </summary>
-    private void AssignThreadLoads(List<(string Name, float Value)> loads,
+    internal static void AssignThreadLoads(List<(string Name, float Value)> loads,
+                                   Dictionary<int, (int displayId, int rank)> coreMap, bool hybrid, int[]? topo,
                                    Dictionary<int, float> coreLoads, Dictionary<int, SortedDictionary<int, float>> threadLoads)
     {
         var parsed = loads.Select(l => (l.Value, m: LoadNameRe.Match(l.Name)))
                           .Where(x => x.m.Success)
                           .Select(x => (n: int.Parse(x.m.Groups[1].Value), t: x.m.Groups[2].Success ? int.Parse(x.m.Groups[2].Value) : 0, x.Value))
                           .ToList();
-        var topo = CpuTopology.LogicalToCore;
-        bool ungrouped = parsed.Count > _coreMap.Count && parsed.All(p => p.t == 0) &&
-                         topo != null && topo.Length == parsed.Count && CpuTopology.CoreCount == _coreMap.Count;
+        bool ungrouped = parsed.Count > coreMap.Count && parsed.All(p => p.t == 0) &&
+                         topo != null && topo.Length == parsed.Count && topo.Max() + 1 == coreMap.Count;
 
         void Add(int displayId, int order, float v)
         {
@@ -796,7 +797,7 @@ public class SensorService : IDisposable
         if (ungrouped)
         {
             // "CPU Core #k" = logical processor k-1; core i (Windows order) = i-th display core
-            var displayIds = _coreMap.Values.Select(v => v.displayId).OrderBy(d => d).ToArray();
+            var displayIds = coreMap.Values.Select(v => v.displayId).OrderBy(d => d).ToArray();
             foreach (var (n, _, v) in parsed)
             {
                 int logical = n - 1;
@@ -809,13 +810,13 @@ public class SensorService : IDisposable
 
         // Intel hybrid: clocks are "P-Core #1".."E-Core #8" but loads can still be numbered
         // across the whole CPU ("CPU Core #1".."#16", P-cores first), so "CPU Core #9" is E-Core #1.
-        var displayOrder = _coreMap.Values.Select(v => v.displayId).OrderBy(d => d).ToArray();
+        var displayOrder = coreMap.Values.Select(v => v.displayId).OrderBy(d => d).ToArray();
 
         foreach (var l in loads)
         {
             var tm = ThreadSuffixRe.Match(l.Name);
             int order = tm.Success && int.TryParse(tm.Value.AsSpan(tm.Value.LastIndexOf('#') + 1), out int t) ? t : 0;
-            if (_hybrid)
+            if (hybrid)
             {
                 var gm = LoadNameRe.Match(l.Name);
                 if (gm.Success)
@@ -826,7 +827,7 @@ public class SensorService : IDisposable
                 }
             }
             int key = CoreKey(ThreadSuffixRe.Replace(l.Name, ""));
-            if (key < 0 || !_coreMap.TryGetValue(key, out var li)) continue;
+            if (key < 0 || !coreMap.TryGetValue(key, out var li)) continue;
             Add(li.displayId, order, l.Value);
         }
     }
