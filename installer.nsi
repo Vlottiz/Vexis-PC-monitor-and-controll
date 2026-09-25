@@ -36,7 +36,7 @@ VIAddVersionKey   "LegalCopyright"   "MIT License"
 !define MUI_FINISHPAGE_RUN          "$INSTDIR\Vexis.exe"
 !define MUI_FINISHPAGE_RUN_TEXT     "Launch Vexis"
 !define MUI_FINISHPAGE_LINK         "View on GitHub"
-!define MUI_FINISHPAGE_LINK_LOCATION "https://github.com/Vlottiz/pc-monitor"
+!define MUI_FINISHPAGE_LINK_LOCATION "https://github.com/Vlottiz/Vexis-PC-monitor-and-controll"
 
 ; ── Pages ─────────────────────────────────────────────────────────────────────
 !insertmacro MUI_PAGE_WELCOME
