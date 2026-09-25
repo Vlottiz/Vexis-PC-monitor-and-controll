@@ -197,7 +197,8 @@ function render(d) {
 
   setText('t-load', d.cpu_load != null ? Math.round(d.cpu_load) + '%' : '--');
   setText('t-load-s', 'whole CPU');
-  setText('t-busy', all.length ? `${busy}/${all.length}` : '--');
+  const tAll = Math.max(all.length, (d.info && d.info.threads) || 0);   // the CPU's real thread count, even if some cores report no load
+  setText('t-busy', all.length ? `${busy}/${tAll}` : '--');
   setText('t-busy-s', `at or above ${BUSY}%`);
   setText('t-top', top ? Math.round(top.l) + '%' : '--');
   setText('t-top-s', top ? `${top.core} · thread ${top.t}` : '');
@@ -208,7 +209,7 @@ function render(d) {
   setText('t-temp-s', [d.ccd0_temp != null ? 'CCD0 ' + d.ccd0_temp.toFixed(0) + '°' : null, d.ccd1_temp != null ? 'CCD1 ' + d.ccd1_temp.toFixed(0) + '°' : null].filter(Boolean).join(' · '));
   setText('t-pwr', d.pkg_power != null ? d.pkg_power.toFixed(1) + ' W' : '--');
   setText('t-pwr-s', 'package');
-  setText('tv-badge', all.length ? `${busy}/${all.length} threads busy` : '--');
+  setText('tv-badge', all.length ? `${busy}/${tAll} threads busy` : '--');
 
   renderMap(d); renderTimeline(); renderTable(d);
 }

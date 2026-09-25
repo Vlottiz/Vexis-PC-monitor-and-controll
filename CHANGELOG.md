@@ -11,6 +11,7 @@ the GitHub release notes.
 
 ## 2.10.1 — 2026-09-26
 - Intel 12th gen and newer: E-core loads now show up (they were missing, so threads in use read x/16 instead of x/24 on an i9-12900K)
+- "Threads in use" always counts all of the CPU's threads (24 on a 12900K), even if a core reports no load
 
 ## 2.10.0 — 2026-09-26
 - Duplicate file finder on the Storage page: finds identical files, moves chosen copies to the Recycle Bin and always keeps one

@@ -605,7 +605,7 @@ function applyData(data){
     num.textContent=busy+'/'+cd.threads.length;num.className='thr-n'+(busy?' on':'');
     box.title=`${busy} of ${cd.threads.length} thread${cd.threads.length>1?'s':''} at or above ${THREAD_BUSY}%\n`+cd.threads.map((l,i)=>`Thread ${i+1}: ${Math.round(l)}%`).join('\n');
   });
-  if(thrAll)setText('thr-total',`${thrBusy}/${thrAll} THREADS IN USE`);
+  if(thrAll)setText('thr-total',`${thrBusy}/${Math.max(thrAll,(data.info&&data.info.threads)||0)} THREADS IN USE`);
   // Push sparkline data and redraw visible ones
   CORES_META.forEach(c=>{
     const cd=cores[String(c.id)]||cores[c.id];
