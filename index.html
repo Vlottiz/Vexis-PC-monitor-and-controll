@@ -251,7 +251,7 @@ body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;backgr
 
 <div id="status">LIVE</div>
 
-<script src="/nav.js?v=19" data-page="performance"></script>
+<script src="/nav.js?v=20" data-page="performance"></script>
 <script>
 // ══════════════════════════════════════════════════════════════════════════════
 // WEBVIEW2 IPC — IS_WEBVIEW and sendToHost defined in nav.js
@@ -587,7 +587,7 @@ function applyData(data){
   const pkgStr = pkg!=null?Math.round(pkg)+' W':'--';
   setText('hpwr',pkg!=null?Math.round(pkg)+'W':'--W');
   setText('pkgpwr', pkgStr); setText('pkgpwr-bot', pkgStr);
-  const gT=data.gpu_temp;setText('sgpuT',gT!=null?gT+'°C':'--');setCol('sgpuT',tempCol(gT));
+  const gT=data.gpu_temp;setText('sgpuT',gT!=null?parseFloat(gT).toFixed(1)+'°C':'--');setCol('sgpuT',tempCol(gT));
   setText('sgpuV',data.gpu_voltage!=null?parseFloat(data.gpu_voltage).toFixed(3)+'V':'--');setText('sgpuP',data.gpu_power!=null?Math.round(data.gpu_power)+'W':'--');setText('sgpuC',data.gpu_clock!=null?Math.round(data.gpu_clock)+'MHz':'--');
   const cores=data.cores||{};let peak=0,tot=0,cnt=0;
   CORES_META.forEach(c=>{const cd=cores[String(c.id)]||cores[c.id],clk=cd?cd.clk:0;trackMaxClock(clk);const bar=document.getElementById('bar'+c.id),clkEl=document.getElementById('clk'+c.id);if(clk>peak)peak=clk;if(clk>0){tot+=clk;cnt++;}const pct=clk<=0?0:clk<=STOCK?(clk/STOCK)*50:50+((clk-STOCK)/(MAX-STOCK))*50;if(bar){bar._lastClk=clk;bar.style.background=barGrad(clk);bar.style.opacity=pct<3?'0.2':String(0.65+pct/100*0.35);bar.style.clipPath=`inset(0 ${100-pct}% 0 0)`;}if(clkEl){clkEl.textContent=clk>0?Math.round(clk)+'MHz':'--';clkEl.style.color=clk>=STOCK*1.05?clkEnd(clk):COLORS.coreLbl;const tip=[];if(cd&&cd.load!=null)tip.push('Load '+Math.round(cd.load)+'%');if(cd&&cd.temp!=null)tip.push('Temp '+cd.temp.toFixed(1)+'°C');clkEl.title=tip.join(' · ');}});

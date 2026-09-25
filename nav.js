@@ -523,7 +523,7 @@ function buildPanelHTML() {
     <div class="nv-footer-actions">
       <button class="nv-exit-btn" onclick="if(confirm('Exit Vexis?'))sendToHost({type:'exit'})">⏻ EXIT</button>
     </div>
-    <div class="nv-footer">MIT License · <span onclick="sendToHost({type:'openUrl',url:'https://github.com/Vlottiz/vexis'})" style="cursor:pointer;text-decoration:underline">github.com/Vlottiz/vexis</span></div>
+    <div class="nv-footer">MIT License · <span onclick="sendToHost({type:'openUrl',url:'https://github.com/Vlottiz/Vexis-PC-monitor-and-controll'})" style="cursor:pointer;text-decoration:underline">GitHub</span></div>
     <!-- SYSTEM TAB -->
     <div id="nvs-system" class="nv-section" style="display:none;padding:12px 10px">
       <div style="font-size:9px;color:#665500;letter-spacing:.1em;margin-bottom:10px">SYSTEM SETTINGS</div>
@@ -669,7 +669,7 @@ function buildPanelHTML() {
         <div id="nv-version" style="font-size:11px;color:var(--mem-acc);font-family:monospace">v${window.NAV_APP_VERSION||'?'}</div>
       </div>
 
-      <button onclick="sendToHost({type:'openUrl',url:'https://github.com/Vlottiz/vexis'})"
+      <button onclick="sendToHost({type:'openUrl',url:'https://github.com/Vlottiz/Vexis-PC-monitor-and-controll'})"
         class="nvc-reset-all" style="width:100%;margin-top:8px;justify-content:center">
         ⊞ GitHub
       </button>
