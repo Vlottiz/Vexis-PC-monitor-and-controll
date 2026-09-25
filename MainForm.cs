@@ -16,6 +16,7 @@ public class MainForm : Form
     private System.Windows.Forms.Timer _pollTimer = new() { Interval = 250 };
     private int   _pollCount      = 0;
     private readonly CsvRecorder _recorder = new();
+    private readonly ProcessMonitor _procs = new();
     private SensorData? _lastData;   // last reading sent to the pages (includes fans)
     private float _lastLoggedTemp = 0;
 
@@ -458,6 +459,34 @@ public class MainForm : Form
                     _recorder.Stop();
                     PushRecordings();
                     break;
+
+                // ── Processes page (Task-Manager-style list) ──────────────────────
+                case "getProcesses":                 // sampled off the UI thread (~100 ms)
+                {
+                    bool reset = msg.enabled == true;       // page just opened: resend icons
+                    _ = Task.Run(() =>
+                    {
+                        try
+                        {
+                            if (reset) _procs.ResetIcons();
+                            var snap = _procs.Sample();
+                            RunScriptEverywhere($"typeof onProcesses==='function'&&onProcesses({JsonSerializer.Serialize(snap, _json)})");
+                        }
+                        catch (Exception ex) { Console.WriteLine($"[procs] {ex.Message}"); }
+                    });
+                    break;
+                }
+
+                case "endTask":
+                {
+                    int? pid = msg.pid; string? exe = msg.file;
+                    _ = Task.Run(() =>
+                    {
+                        var (ok, text) = _procs.End(pid, exe);
+                        RunScriptEverywhere($"typeof onEndTask==='function'&&onEndTask({(ok ? "true" : "false")},{JsonSerializer.Serialize(text)})");
+                    });
+                    break;
+                }
 
                 case "listRecordings":
                     PushRecordings();
@@ -1107,4 +1136,5 @@ public class IncomingMessage
     public int?  seq      { get; set; }
     public int?  delta    { get; set; } // zoom: +1 / -1 / 0 (reset)
     public RecordOptions? record { get; set; } // recordStart: what to record
+    public int?  pid      { get; set; } // endTask: one process (otherwise every process named "file")
 }
