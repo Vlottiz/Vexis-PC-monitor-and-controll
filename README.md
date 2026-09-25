@@ -24,7 +24,9 @@ Unlike traditional monitoring tools, Vexis offers:
 
 | Feature | Details |
 |---|---|
-| **CPU Monitoring** | Per-core clock speeds, threads in use per core, temperatures, CCD temps (AMD), package power |
+| **CPU Monitoring** | Per-core clock speeds, threads in use per core (adjustable busy threshold), temperatures, CCD temps (AMD), package power |
+| **Thread Viewer** | Every core and hardware thread: live thread map, activity timeline, per-core clock / load / temp with session peaks and averages |
+| **Processes** | Task-Manager-style list grouped by app with icons: CPU, memory and GPU per process, search, sort, End task (Windows-critical processes protected) |
 | **GPU Monitoring** | Dedicated GPU tab: load (core, memory controller, video, bus), core / hot-spot / memory temps, clocks, power, VRAM, fans, PCIe traffic, FPS, history charts and every raw sensor |
 | **Fan Control** | Auto / Manual / Custom curve editor for motherboard **and GPU fans** (NVIDIA / AMD), with a GPU over-temperature guard |
 | **Temperature History** | Min / Max / Avg for every thermal sensor on the system |

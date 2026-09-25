@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store">
+<title>PC Monitor — Processes</title>
+<link rel="stylesheet" href="/ui.css?v=12">
+<style>
+  .page-body { gap:10px; }
+  .toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .search { flex:1; min-width:160px; background:var(--bar-bg); border:1px solid var(--border); border-radius:4px; color:var(--text);
+            font-family:monospace; font-size:calc(11px*var(--fs-base,1)); padding:6px 10px; outline:none; }
+  .search:focus { border-color:var(--border-bright); }
+  .chip { padding:4px 10px; border:1px solid var(--border); border-radius:12px; font-size:calc(9px*var(--fs-base,1)); color:var(--label-dim);
+          cursor:pointer; letter-spacing:.08em; background:transparent; font-family:inherit; white-space:nowrap; }
+  .chip.on { color:var(--header-title); border-color:var(--border-bright); background:rgba(255,204,0,.08); }
+  .end-btn { color:#ff7777 !important; border-color:rgba(255,80,80,.5) !important; }
+  .end-btn:disabled { opacity:.35; cursor:not-allowed; }
+
+  .tbl-wrap { border:1px solid var(--border); border-radius:6px; overflow:auto; background:var(--surface); flex:1; min-height:0; }
+  table.pt { width:100%; border-collapse:collapse; table-layout:fixed; font-size:calc(11px*var(--fs-base,1)); }
+  .pt th { position:sticky; top:0; z-index:2; background:var(--surface2); color:var(--label); font-weight:600; text-align:right; padding:6px 10px;
+           border-bottom:1px solid var(--border-bright); cursor:pointer; user-select:none; white-space:nowrap; }
+  .pt th:first-child { text-align:left; }
+  .pt th:not(:first-child) { width:calc(96px*var(--fs-base,1)*var(--data-scale,1)); }
+  .pt th .tot { display:block; font-family:monospace; font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1)); color:var(--text); }
+  .pt th .lbl { font-size:calc(9px*var(--fs-base,1)); letter-spacing:.12em; color:var(--label-dim); }
+  .pt th.sorted .lbl { color:var(--header-title); }
+  .pt td { padding:4px 10px; text-align:right; white-space:nowrap; border-bottom:1px solid rgba(68,51,0,.18); font-family:monospace;
+           font-size:calc(11px*var(--fs-base,1)*var(--data-scale,1)); color:var(--text); }
+  .pt td:first-child { text-align:left; font-family:inherit; overflow:hidden; text-overflow:ellipsis; }
+  .pt tr.sec td { background:var(--bar-bg); color:var(--card-title); font-size:calc(9px*var(--fs-base,1)); letter-spacing:.16em; padding:8px 10px 5px; font-family:inherit; cursor:default; }
+  .pt tr.prow { cursor:default; }
+  .pt tr.prow:hover td { background:rgba(255,204,0,.04); }
+  .pt tr.sel td { background:rgba(0,255,204,.09) !important; }
+  .pt tr.child td { color:var(--label); }
+  .pt tr.child td:first-child { padding-left:46px; }
+  .caret { display:inline-block; width:14px; color:var(--label-dim); cursor:pointer; text-align:center; }
+  .ico { width:16px; height:16px; vertical-align:-3px; margin-right:6px; image-rendering:auto; }
+  .ico.none { display:inline-block; border:1px solid var(--border); border-radius:3px; background:var(--bar-bg); }
+  .cnt { color:var(--label-dim); font-size:calc(9px*var(--fs-base,1)); margin-left:4px; font-family:monospace; }
+  .sub { color:var(--label-dim); font-size:calc(9px*var(--fs-base,1)); margin-left:6px; }
+  .lock { color:var(--label-dim); font-size:calc(9px*var(--fs-base,1)); margin-left:6px; }
+
+  #toast { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:var(--surface2); border:1px solid var(--border-bright);
+           color:var(--text); padding:8px 16px; border-radius:6px; font-size:calc(10px*var(--fs-base,1)); z-index:9000; display:none; box-shadow:0 6px 20px rgba(0,0,0,.5); }
+  #toast.err { border-color:#cc3333; color:#ff8888; }
+  #confirm { position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; z-index:9600; }
+  #confirm .box { background:var(--surface); border:1px solid var(--border-bright); border-radius:8px; padding:18px 20px; width:min(380px, calc(100vw - 32px)); }
+  #confirm h3 { margin:0 0 8px; font-size:calc(12px*var(--fs-base,1)); color:var(--header-title); letter-spacing:.1em; }
+  #confirm p { margin:0 0 14px; font-size:calc(10px*var(--fs-base,1)); color:var(--label); line-height:1.6; }
+  #confirm .btns { display:flex; gap:8px; justify-content:flex-end; }
+</style>
+</head>
+<body>
+<div class="page" style="grid-template-rows:56px 1fr">
+  <div class="page-header">
+    <div>
+      <div class="page-title">&#x2630; Processes</div>
+      <div class="page-subtitle" id="p-sub">Loading...</div>
+    </div>
+  </div>
+  <div class="page-body" style="display:flex;flex-direction:column;overflow:hidden">
+    <div class="toolbar">
+      <input class="search" id="q" placeholder="Search name, description or PID…" oninput="render()">
+      <button class="chip on" data-f="all" onclick="setFilter('all')">ALL</button>
+      <button class="chip" data-f="app" onclick="setFilter('app')">APPS</button>
+      <button class="chip" data-f="bg" onclick="setFilter('bg')">BACKGROUND</button>
+      <button class="chip" data-f="win" onclick="setFilter('win')">WINDOWS</button>
+      <button class="chip" id="pause" onclick="togglePause()" title="Freeze the list so rows stop moving">&#x23F8; PAUSE</button>
+      <button class="btn btn-ghost end-btn" id="end-btn" onclick="askEnd()" disabled style="padding:5px 12px">&#x2715; END TASK</button>
+    </div>
+    <div class="tbl-wrap">
+      <table class="pt">
+        <thead><tr id="p-head"></tr></thead>
+        <tbody id="p-body"><tr><td colspan="4" style="color:var(--label-dim);padding:20px">Reading processes…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+<div id="confirm"><div class="box"><h3 id="c-title">END TASK?</h3><p id="c-text"></p>
+  <div class="btns"><button class="btn btn-ghost" onclick="closeConfirm()">CANCEL</button><button class="btn btn-primary end-btn" id="c-ok">END TASK</button></div></div></div>
+
+<script src="/nav.js?v=18" data-page="processes"></script>
+<script>
+function $(id) { return document.getElementById(id); }
+function esc(t) { return String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c])); }
+function fmtMem(b) { return b >= 1073741824 ? (b / 1073741824).toFixed(1) + ' GB' : (b / 1048576).toFixed(1) + ' MB'; }
+function fmtPct(v) { return (v || 0).toFixed(1) + '%'; }
+
+const ICONS = {};                // exe name -> data URL (sent once per page load)
+let SNAP = null, FILTER = 'all', PAUSED = false;
+let SORT = { key:'cpu', dir:-1 };
+let SEL = null;                  // { key, pid? }
+const OPEN = new Set();          // expanded groups
+const SECTIONS = [ ['app','APPS'], ['bg','BACKGROUND PROCESSES'], ['win','WINDOWS PROCESSES'] ];
+
+// ── Polling (only while this page is visible) ────────────────────────────────
+let _inFlight = false, _first = true;
+function poll() {
+  if (!document.hidden && !_inFlight && IS_WEBVIEW) {
+    _inFlight = true;
+    sendToHost({ type:'getProcesses', enabled:_first });
+    _first = false;
+    setTimeout(() => { _inFlight = false; }, 5000);  // don't wait forever on a lost reply
+  }
+  setTimeout(poll, 1500);
+}
+window.onProcesses = function(s) {
+  _inFlight = false;
+  Object.assign(ICONS, s.icons || {});
+  if (PAUSED && SNAP) return;
+  SNAP = s; render();
+};
+window.onEndTask = function(ok, text) { toast(text, !ok); if (ok) { SEL = null; updateEndBtn(); } };
+
+function setFilter(f) { FILTER = f; document.querySelectorAll('.chip[data-f]').forEach(c => c.classList.toggle('on', c.dataset.f === f)); render(); }
+function togglePause() { PAUSED = !PAUSED; $('pause').classList.toggle('on', PAUSED); $('pause').innerHTML = PAUSED ? '&#x25B6; RESUME' : '&#x23F8; PAUSE'; }
+function sortBy(k) { SORT = { key:k, dir: SORT.key === k ? -SORT.dir : (k === 'name' ? 1 : -1) }; render(); }
+function toggle(key) { OPEN.has(key) ? OPEN.delete(key) : OPEN.add(key); render(); }
+function select(key, pid) { SEL = { key, pid }; render(); }
+
+// Task Manager style shading: stronger yellow for bigger values
+function shade(v, max) { const a = Math.min(1, (v || 0) / max); return a < 0.02 ? '' : `background:rgba(255,204,0,${(0.05 + a * 0.35).toFixed(2)})`; }
+
+function render() {
+  if (!SNAP) return;
+  const memTotal = SNAP.memTotal || 1;
+  $('p-sub').textContent = `${SNAP.procCount} processes · ${SNAP.threadCount.toLocaleString()} threads · ${SNAP.groups.length} apps and services`;
+  const cols = [ ['name','NAME', ''], ['cpu','CPU', fmtPct(SNAP.cpu)], ['mem','MEMORY', Math.round(SNAP.mem / memTotal * 100) + '%'], ['gpu','GPU', fmtPct(SNAP.gpu)] ];
+  $('p-head').innerHTML = cols.map(([k, l, t]) => `<th class="${SORT.key === k ? 'sorted' : ''}" onclick="sortBy('${k}')">${k === 'name' ? '' : `<span class="tot">${t}</span>`}<span class="lbl">${l}${SORT.key === k ? (SORT.dir > 0 ? ' ▲' : ' ▼') : ''}</span></th>`).join('');
+
+  const q = $('q').value.trim().toLowerCase();
+  const match = g => !q || g.name.toLowerCase().includes(q) || g.exe.toLowerCase().includes(q) || g.procs.some(p => String(p.pid) === q || p.title.toLowerCase().includes(q));
+  const cmp = (a, b) => (SORT.key === 'name' ? a.name.localeCompare(b.name) : (a[SORT.key] || 0) - (b[SORT.key] || 0)) * SORT.dir;
+  // Processes inside a group: same column, by PID when sorting by name
+  const pcmp = (a, b) => (SORT.key === 'name' ? a.pid - b.pid : (a[SORT.key] || 0) - (b[SORT.key] || 0)) * SORT.dir;
+  const icon = exe => ICONS[exe] ? `<img class="ico" src="${ICONS[exe]}" alt="">` : '<span class="ico none"></span>';
+
+  let html = '';
+  for (const [type, title] of SECTIONS) {
+    if (FILTER !== 'all' && FILTER !== type) continue;
+    const list = SNAP.groups.filter(g => g.type === type && match(g)).sort(cmp);
+    if (!list.length) continue;
+    html += `<tr class="sec"><td colspan="4">${title} (${list.length})</td></tr>`;
+    for (const g of list) {
+      const open = OPEN.has(g.key) || (q && g.count > 1 && g.procs.some(p => String(p.pid) === q));
+      const sel = SEL && SEL.key === g.key && SEL.pid == null;
+      html += `<tr class="prow${sel ? ' sel' : ''}" onclick="select('${esc(g.key)}')" ondblclick="toggle('${esc(g.key)}')" title="${esc(g.exe)}">
+        <td>${g.count > 1 ? `<span class="caret" onclick="event.stopPropagation();toggle('${esc(g.key)}')">${open ? '▾' : '▸'}</span>` : '<span class="caret"></span>'}${icon(g.key)}${esc(g.name)}${g.count > 1 ? `<span class="cnt">(${g.count})</span>` : ''}${g.name.toLowerCase() !== g.key.toLowerCase() ? `<span class="sub">${esc(g.exe)}</span>` : ''}${g.canEnd ? '' : '<span class="lock" title="Windows needs this process — it can\'t be ended here">&#x1F512;</span>'}</td>
+        <td style="${shade(g.cpu, 50)}">${fmtPct(g.cpu)}</td><td style="${shade(g.mem, memTotal * 0.25)}">${fmtMem(g.mem)}</td><td style="${shade(g.gpu, 50)}">${fmtPct(g.gpu)}</td></tr>`;
+      if (open && g.count > 1)
+        for (const p of g.procs.slice().sort(pcmp)) {
+          const psel = SEL && SEL.key === g.key && SEL.pid === p.pid;
+          html += `<tr class="prow child${psel ? ' sel' : ''}" onclick="select('${esc(g.key)}',${p.pid})">
+            <td>${esc(p.title || g.exe)}<span class="sub">PID ${p.pid}</span></td>
+            <td style="${shade(p.cpu, 50)}">${fmtPct(p.cpu)}</td><td style="${shade(p.mem, memTotal * 0.25)}">${fmtMem(p.mem)}</td><td style="${shade(p.gpu, 50)}">${fmtPct(p.gpu)}</td></tr>`;
+        }
+    }
+  }
+  $('p-body').innerHTML = html || '<tr><td colspan="4" style="color:var(--label-dim);padding:20px">No processes match.</td></tr>';
+  updateEndBtn();
+}
+
+// ── End task ────────────────────────────────────────────────────────────────
+function selectedGroup() { return SEL && SNAP ? SNAP.groups.find(g => g.key === SEL.key) : null; }
+function updateEndBtn() {
+  const g = selectedGroup(), b = $('end-btn');
+  b.disabled = !g || !g.canEnd;
+  b.title = !g ? 'Select a process first' : g.canEnd ? 'End the selected process' : 'Windows needs this process — it can\'t be ended here';
+}
+function askEnd() {
+  const g = selectedGroup(); if (!g || !g.canEnd) return;
+  const one = SEL.pid != null ? g.procs.find(p => p.pid === SEL.pid) : null;
+  $('c-title').textContent = 'END ' + (one ? `${g.exe} (PID ${one.pid})` : g.name).toUpperCase() + '?';
+  $('c-text').textContent = (one ? 'This process will be closed immediately.' : `All ${g.count} process${g.count > 1 ? 'es' : ''} of ${g.name} will be closed immediately.`) +
+    ' Unsaved work in it will be lost.' + (g.type === 'win' ? ' This is part of Windows — ending it may make Windows unstable.' : '');
+  $('confirm').style.display = 'flex';
+  $('c-ok').onclick = () => { closeConfirm(); sendToHost(one ? { type:'endTask', pid:one.pid } : { type:'endTask', file:g.key }); };
+}
+function closeConfirm() { $('confirm').style.display = 'none'; }
+document.addEventListener('keydown', e => {
+  if (e.key === 'Delete' && document.activeElement !== $('q')) askEnd();
+  if (e.key === 'Escape') closeConfirm();
+});
+let _toastT = null;
+function toast(text, err) { const t = $('toast'); t.textContent = text; t.className = err ? 'err' : ''; t.style.display = 'block'; clearTimeout(_toastT); _toastT = setTimeout(() => t.style.display = 'none', 3500); }
+
+function receiveData(d) {}
+function onConfigReceived(cfg) { navOnConfig(cfg); }
+if (IS_WEBVIEW) {
+  window.chrome.webview.addEventListener('message', e => {
+    try { const m = JSON.parse(e.data); if (m.type === 'config') onConfigReceived(m); } catch {}
+  });
+  sendToHost({ type:'requestConfig' });
+}
+poll();
+</script>
+</body>
+</html>

@@ -25,6 +25,8 @@ public class PopoutForm : Form
         ["home"]        = ("home.html",     "HOME",          new(500, 700)),
         ["performance"] = ("index.html",    "PERFORMANCE",   new(420, 900)),
         ["gpu"]         = ("gpu.html",      "GPU",           new(520, 800)),
+        ["threads"]     = ("threads.html",  "THREAD VIEWER", new(720, 860)),
+        ["processes"]   = ("processes.html","PROCESSES",     new(760, 860)),
         ["memory"]      = ("memory.html",   "MEMORY",        new(420, 700)),
         ["temps"]       = ("temps.html",    "TEMPERATURES",  new(600, 700)),
         ["fans"]        = ("fans.html",     "FAN CONTROL",   new(500, 700)),

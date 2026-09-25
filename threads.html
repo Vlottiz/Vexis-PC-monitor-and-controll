@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store">
+<title>PC Monitor — Thread Viewer</title>
+<link rel="stylesheet" href="/ui.css?v=12">
+<style>
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; }
+  .tile { text-align:center; padding:12px 8px; }
+  .tile .stat-value { font-family:monospace; white-space:nowrap; font-size:calc(var(--fs-xl)*var(--data-scale,1)); }
+  .tile .stat-sub { font-size:calc(9px*var(--fs-base,1)); margin-top:4px; }
+
+  /* Thread map: one box per core, one cell per thread coloured by load */
+  .map-group { margin-bottom:12px; }
+  .map-title { font-size:calc(9px*var(--fs-base,1)); color:var(--label-dim); letter-spacing:.16em; margin:0 0 6px; }
+  .map { display:grid; grid-template-columns:repeat(auto-fill,minmax(calc(92px*var(--fs-base,1)),1fr)); gap:8px; }
+  .core { border:1px solid var(--border); border-radius:4px; padding:6px 7px; background:var(--bar-bg); cursor:default; }
+  .core.busy { border-color:var(--border-bright); }
+  .core-head { display:flex; justify-content:space-between; align-items:baseline; font-family:monospace; margin-bottom:5px; }
+  .core-name { font-size:calc(11px*var(--fs-base,1)); color:var(--header-title); font-weight:700; }
+  .core-clk { font-size:calc(9px*var(--fs-base,1)*var(--data-scale,1)); color:var(--label); }
+  .cells { display:flex; gap:3px; }
+  .cell { flex:1; height:calc(26px*var(--fs-base,1)); border-radius:3px; border:1px solid var(--border); position:relative; overflow:hidden; background:var(--surface); }
+  .cell .fill { position:absolute; left:0; right:0; bottom:0; background:var(--avg-col); transition:height .35s, opacity .35s; }
+  .cell .pct { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:monospace;
+               font-size:calc(9px*var(--fs-base,1)*var(--data-scale,1)); color:var(--text); text-shadow:0 0 3px #000, 0 0 2px #000; }
+  .cell.on { border-color:var(--avg-col); box-shadow:0 0 5px color-mix(in srgb, var(--avg-col) 50%, transparent); }
+  .core-foot { display:flex; justify-content:space-between; font-family:monospace; font-size:calc(8px*var(--fs-base,1)); color:var(--label-dim); margin-top:4px; }
+
+  .legend { display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:calc(9px*var(--fs-base,1)); color:var(--label-dim); letter-spacing:.08em; }
+  .legend input { width:calc(44px*var(--fs-base,1)); background:var(--bar-bg); color:var(--avg-col); border:1px solid var(--border); border-radius:3px;
+                  font-family:monospace; text-align:right; font-size:calc(10px*var(--fs-base,1)); }
+  .grad { width:90px; height:8px; border-radius:4px; border:1px solid var(--border);
+          background:linear-gradient(90deg, var(--surface), color-mix(in srgb, var(--avg-col) 50%, var(--surface)), var(--avg-col)); }
+
+  #timeline { width:100%; display:block; border:1px solid var(--border); border-radius:4px; background:var(--bar-bg); image-rendering:pixelated; }
+  .tl-cap { display:flex; justify-content:space-between; font-family:monospace; font-size:calc(8px*var(--fs-base,1)); color:var(--label-dim); margin-top:4px; }
+
+  .dt { width:100%; border-collapse:collapse; font-family:monospace; font-size:calc(10px*var(--fs-base,1)*var(--data-scale,1)); }
+  .dt th { color:var(--label-dim); font-weight:400; font-size:calc(9px*var(--fs-base,1)); letter-spacing:.1em; text-align:right; padding:5px 8px;
+           border-bottom:1px solid var(--border); white-space:nowrap; cursor:pointer; user-select:none; }
+  .dt th:first-child, .dt td:first-child { text-align:left; }
+  .dt th.sorted { color:var(--header-title); }
+  .dt td { padding:5px 8px; text-align:right; border-bottom:1px solid rgba(68,51,0,.2); color:var(--text); white-space:nowrap; }
+  .dt td.lbl { color:var(--header-title); font-weight:700; }
+  .tbars { display:inline-flex; gap:3px; vertical-align:middle; }
+  .tbar { width:calc(34px*var(--fs-base,1)); height:8px; background:var(--surface); border:1px solid var(--border); border-radius:2px; overflow:hidden; }
+  .tbar i { display:block; height:100%; background:var(--avg-col); }
+  .muted { color:var(--label-dim); }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title">&#x25A4; Thread Viewer</div>
+      <div class="page-subtitle" id="tv-sub">Loading...</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:calc(11px*var(--fs-base,1));color:var(--label-dim)" id="tv-time">--:--:--</div>
+      <div id="tv-badge" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--avg-col);font-weight:700;margin-top:2px;white-space:nowrap">--</div>
+    </div>
+  </div>
+  <div class="page-body">
+    <div id="tv-empty" class="empty-state">Waiting for CPU data...</div>
+    <div id="tv-main" style="display:none;flex-direction:column;gap:12px">
+
+      <div class="tiles">
+        <div class="card tile"><div class="stat-label">CPU LOAD</div><div class="stat-value" id="t-load" style="color:var(--avg-col)">--</div><div class="stat-sub" id="t-load-s"></div></div>
+        <div class="card tile"><div class="stat-label">THREADS IN USE</div><div class="stat-value" id="t-busy" style="color:var(--avg-col)">--</div><div class="stat-sub" id="t-busy-s"></div></div>
+        <div class="card tile"><div class="stat-label">BUSIEST THREAD</div><div class="stat-value" id="t-top" style="color:var(--peak-col)">--</div><div class="stat-sub" id="t-top-s"></div></div>
+        <div class="card tile"><div class="stat-label">AVG CLOCK</div><div class="stat-value" id="t-clk" style="color:var(--peak-col)">--</div><div class="stat-sub" id="t-clk-s"></div></div>
+        <div class="card tile"><div class="stat-label">CPU TEMP</div><div class="stat-value" id="t-temp">--</div><div class="stat-sub" id="t-temp-s"></div></div>
+        <div class="card tile"><div class="stat-label">CPU POWER</div><div class="stat-value" id="t-pwr" style="color:var(--pwr-col)">--</div><div class="stat-sub" id="t-pwr-s"></div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">THREAD MAP</span>
+          <div class="legend">
+            <span>0%</span><span class="grad"></span><span>100%</span>
+            <span>· BUSY &#x2265; <input type="number" id="busy-in" min="1" max="100" step="5" value="10" onchange="setBusy(this.value)">%</span>
+          </div>
+        </div>
+        <div id="map"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">THREAD ACTIVITY</span><span class="muted" style="font-size:calc(9px*var(--fs-base,1))" id="tl-span"></span></div>
+        <canvas id="timeline" height="160"></canvas>
+        <div class="tl-cap"><span id="tl-old">older</span><span>one row per thread · brighter = busier</span><span>now</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">CORE DETAILS</span><span class="muted" style="font-size:calc(9px*var(--fs-base,1))">click a column to sort · peaks and averages since this page opened</span></div>
+        <div style="overflow-x:auto"><table class="dt"><thead id="dt-head"></thead><tbody id="dt-body"></tbody></table></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="/nav.js?v=18" data-page="threads"></script>
+<script>
+function $(id) { return document.getElementById(id); }
+function setText(id, v) { const e = $(id); if (e) e.textContent = v; }
+function tempCol(t) { return t < 60 ? 'var(--temp-low)' : t < 80 ? 'var(--temp-warn)' : 'var(--temp-hot)'; }
+
+// Shared with the Performance page (setting "threadBusy", 10% by default)
+let BUSY = 10;
+try { BUSY = parseInt(localStorage.getItem('pcm-thread-busy')) || 10; } catch {}
+function setBusy(v, noSave) {
+  BUSY = Math.max(1, Math.min(100, parseInt(v) || 10));
+  $('busy-in').value = BUSY;
+  try { localStorage.setItem('pcm-thread-busy', BUSY); } catch {}
+  if (!noSave && typeof navSaveSetting === 'function') navSaveSetting('threadBusy', BUSY);
+  if (_last) render(_last);
+}
+
+// ── Core layout (same grouping rules as the Performance page) ────────────────
+let META = null;   // [{id, label, group}]
+function buildMeta(cores, info) {
+  const keys = Object.keys(cores).map(Number).sort((a, b) => a - b);
+  const isAmd = info?.vendor === 'amd', ccds = info?.ccdCount || 0;
+  const twoCcd = isAmd && ccds === 2 && keys.length >= 4 && keys.length % 2 === 0;
+  const kindIdx = {};
+  META = keys.map((id, i) => {
+    const kind = cores[id]?.kind || '';
+    const n = kind ? (kindIdx[kind] = (kindIdx[kind] ?? -1) + 1) : id;
+    const group = kind === 'P' ? 'PERFORMANCE CORES' : kind === 'E' ? 'EFFICIENCY CORES'
+      : twoCcd ? (i < keys.length / 2 ? 'CCD0' + (info?.x3d ? ' · V-CACHE' : '') : 'CCD1' + (info?.x3d ? ' · COMPUTE' : '')) : 'CORES';
+    return { id, label: (kind || 'C') + n, group };
+  });
+}
+
+// ── Session stats + history ──────────────────────────────────────────────────
+const STAT = {};        // id -> {peakClk, loadSum, n, peakTemp}
+const HIST_LEN = 150;
+const HIST = [];        // array of snapshots: [thread loads in META order]
+let _last = null, _lastT = 0, _dt = 0;
+let SORT = { key:'id', dir:1 };
+
+function receiveData(d) {
+  if (!d || !d.cores || !Object.keys(d.cores).length) return;
+  if (!META || META.length !== Object.keys(d.cores).length) { buildMeta(d.cores, d.info); $('map').innerHTML = ''; }
+  $('tv-empty').style.display = 'none'; $('tv-main').style.display = 'flex';
+  const now = performance.now();
+  if (_lastT) _dt = _dt ? _dt * 0.9 + (now - _lastT) * 0.1 : now - _lastT;
+  _lastT = now;
+  META.forEach(m => {
+    const c = d.cores[m.id]; if (!c) return;
+    const s = STAT[m.id] || (STAT[m.id] = { peakClk:0, loadSum:0, n:0, peakTemp:null });
+    s.peakClk = Math.max(s.peakClk, c.clk || 0);
+    if (c.load != null) { s.loadSum += c.load; s.n++; }
+    if (c.temp != null) s.peakTemp = Math.max(s.peakTemp ?? 0, c.temp);
+  });
+  HIST.push(META.flatMap(m => d.cores[m.id]?.threads || [d.cores[m.id]?.load ?? 0]));
+  if (HIST.length > HIST_LEN) HIST.shift();
+  _last = d;
+  render(d);
+}
+
+function render(d) {
+  const info = d.info || {};
+  setText('tv-sub', [info.cpu, info.cores && info.threads ? `${info.cores} cores · ${info.threads} threads` : null].filter(Boolean).join(' · ') || 'CPU');
+  setText('tv-time', new Date().toLocaleTimeString());
+
+  // Every thread with its core, for the tiles
+  const all = [];
+  META.forEach(m => (d.cores[m.id]?.threads || []).forEach((l, i) => all.push({ core: m.label, t: i + 1, l })));
+  const busy = all.filter(x => x.l >= BUSY).length;
+  const top = all.reduce((a, x) => (!a || x.l > a.l ? x : a), null);
+  const clks = META.map(m => d.cores[m.id]?.clk || 0).filter(v => v > 0);
+
+  setText('t-load', d.cpu_load != null ? Math.round(d.cpu_load) + '%' : '--');
+  setText('t-load-s', 'whole CPU');
+  setText('t-busy', all.length ? `${busy}/${all.length}` : '--');
+  setText('t-busy-s', `at or above ${BUSY}%`);
+  setText('t-top', top ? Math.round(top.l) + '%' : '--');
+  setText('t-top-s', top ? `${top.core} · thread ${top.t}` : '');
+  setText('t-clk', clks.length ? Math.round(clks.reduce((a, b) => a + b, 0) / clks.length) + ' MHz' : '--');
+  setText('t-clk-s', clks.length ? 'peak core ' + Math.round(Math.max(...clks)) + ' MHz' : '');
+  const tt = $('t-temp'); tt.textContent = d.cpu_temp != null ? d.cpu_temp.toFixed(1) + '°C' : '--';
+  if (d.cpu_temp != null) tt.style.color = tempCol(d.cpu_temp);
+  setText('t-temp-s', [d.ccd0_temp != null ? 'CCD0 ' + d.ccd0_temp.toFixed(0) + '°' : null, d.ccd1_temp != null ? 'CCD1 ' + d.ccd1_temp.toFixed(0) + '°' : null].filter(Boolean).join(' · '));
+  setText('t-pwr', d.pkg_power != null ? d.pkg_power.toFixed(1) + ' W' : '--');
+  setText('t-pwr-s', 'package');
+  setText('tv-badge', all.length ? `${busy}/${all.length} threads busy` : '--');
+
+  renderMap(d); renderTimeline(); renderTable(d);
+}
+
+// ── Thread map ───────────────────────────────────────────────────────────────
+function renderMap(d) {
+  const box = $('map');
+  if (!box.childElementCount) {
+    const groups = [...new Set(META.map(m => m.group))];
+    box.innerHTML = groups.map(g => `<div class="map-group"><div class="map-title">${g}</div><div class="map">` +
+      META.filter(m => m.group === g).map(m => `<div class="core" id="mc-${m.id}"><div class="core-head"><span class="core-name">${m.label}</span><span class="core-clk" id="mk-${m.id}"></span></div>
+        <div class="cells" id="mt-${m.id}"></div><div class="core-foot"><span id="mf-${m.id}"></span><span id="mg-${m.id}"></span></div></div>`).join('') +
+      `</div></div>`).join('');
+  }
+  META.forEach(m => {
+    const c = d.cores[m.id]; if (!c) return;
+    const th = c.threads && c.threads.length ? c.threads : [c.load ?? 0];
+    const cells = $('mt-' + m.id);
+    if (cells.childElementCount !== th.length) cells.innerHTML = th.map(() => '<div class="cell"><div class="fill"></div><div class="pct"></div></div>').join('');
+    let busy = 0;
+    th.forEach((l, i) => {
+      const cell = cells.children[i], on = l >= BUSY; if (on) busy++;
+      cell.classList.toggle('on', on);
+      cell.firstChild.style.height = Math.min(100, l) + '%';
+      cell.firstChild.style.opacity = String(0.35 + Math.min(l, 100) / 100 * 0.65);
+      cell.lastChild.textContent = Math.round(l);
+      cell.title = `${m.label} · thread ${i + 1}: ${l.toFixed(1)}%`;
+    });
+    $('mc-' + m.id).classList.toggle('busy', busy > 0);
+    setText('mk-' + m.id, c.clk ? Math.round(c.clk) + ' MHz' : '');
+    setText('mf-' + m.id, `${busy}/${th.length} busy`);
+    const g = $('mg-' + m.id);
+    g.textContent = c.temp != null ? c.temp.toFixed(0) + '°C' : '';
+    if (c.temp != null) g.style.color = tempCol(c.temp);
+  });
+}
+
+// ── Activity timeline (rows = threads, columns = time) ───────────────────────
+function renderTimeline() {
+  const cv = $('timeline'); if (!HIST.length) return;
+  const rows = HIST[HIST.length - 1].length;
+  const rowH = Math.max(3, Math.min(8, Math.floor(320 / rows)));
+  cv.width = HIST_LEN; cv.height = rows * rowH;
+  cv.style.height = Math.min(320, rows * rowH * 1.6) + 'px';
+  const ctx = cv.getContext('2d');
+  const acc = getComputedStyle(document.documentElement).getPropertyValue('--avg-col').trim() || '#00ffcc';
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bar-bg').trim() || '#0a0600';
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  const off = HIST_LEN - HIST.length;
+  HIST.forEach((snap, x) => snap.forEach((l, r) => {
+    if (l < 1) return;
+    ctx.globalAlpha = Math.min(1, 0.12 + l / 100 * 0.88);
+    ctx.fillStyle = l >= BUSY ? acc : '#665500';
+    ctx.fillRect(off + x, r * rowH, 1, rowH - (rowH > 4 ? 1 : 0));
+  }));
+  ctx.globalAlpha = 1;
+  if (_dt) setText('tl-span', 'last ' + Math.round(_dt * HIST.length / 1000) + ' s');
+  setText('tl-old', _dt ? Math.round(_dt * HIST_LEN / 1000) + ' s ago' : 'older');
+}
+
+// ── Core details table ───────────────────────────────────────────────────────
+const COLS = [
+  { key:'id',    name:'CORE' },
+  { key:'group', name:'GROUP' },
+  { key:'clk',   name:'CLOCK' },
+  { key:'peak',  name:'PEAK CLOCK' },
+  { key:'load',  name:'LOAD' },
+  { key:'avg',   name:'AVG LOAD' },
+  { key:'temp',  name:'TEMP' },
+  { key:'busy',  name:'BUSY' },
+  { key:'thr',   name:'THREADS' },
+];
+function sortBy(k) { SORT = { key:k, dir: SORT.key === k ? -SORT.dir : (k === 'id' || k === 'group' ? 1 : -1) }; if (_last) renderTable(_last); }
+function renderTable(d) {
+  $('dt-head').innerHTML = '<tr>' + COLS.map(c => `<th class="${SORT.key === c.key ? 'sorted' : ''}" onclick="sortBy('${c.key}')">${c.name}${SORT.key === c.key ? (SORT.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('') + '</tr>';
+  const rows = META.map(m => {
+    const c = d.cores[m.id] || {}, s = STAT[m.id] || {};
+    const th = c.threads && c.threads.length ? c.threads : (c.load != null ? [c.load] : []);
+    return { m, c, th, id:m.id, group:m.group, clk:c.clk || 0, peak:s.peakClk || 0, load:c.load ?? -1,
+             avg: s.n ? s.loadSum / s.n : -1, temp:c.temp ?? -1, busy: th.filter(l => l >= BUSY).length, thr: Math.max(0, ...th) };
+  });
+  rows.sort((a, b) => (typeof a[SORT.key] === 'string' ? a[SORT.key].localeCompare(b[SORT.key]) : a[SORT.key] - b[SORT.key]) * SORT.dir);
+  $('dt-body').innerHTML = rows.map(r => `<tr>
+    <td class="lbl">${r.m.label}</td><td class="muted">${r.group.split(' · ')[0]}</td>
+    <td>${r.clk ? Math.round(r.clk) : '–'}</td><td class="muted">${r.peak ? Math.round(r.peak) : '–'}</td>
+    <td>${r.load >= 0 ? Math.round(r.load) + '%' : '–'}</td><td class="muted">${r.avg >= 0 ? Math.round(r.avg) + '%' : '–'}</td>
+    <td style="color:${r.temp >= 0 ? tempCol(r.temp) : 'inherit'}">${r.temp >= 0 ? r.temp.toFixed(1) + '°' : '–'}</td>
+    <td style="color:${r.busy ? 'var(--avg-col)' : 'var(--label-dim)'}">${r.th.length ? r.busy + '/' + r.th.length : '–'}</td>
+    <td><span class="tbars">${r.th.map(l => `<span class="tbar" title="${l.toFixed(1)}%"><i style="width:${Math.min(100, l)}%;opacity:${l >= BUSY ? 1 : .4}"></i></span>`).join('')}</span>
+      <span class="muted">${r.th.map(l => Math.round(l)).join(' / ')}</span></td></tr>`).join('');
+}
+
+function onConfigReceived(cfg) {
+  navOnConfig(cfg);
+  if (cfg.settings && cfg.settings.threadBusy) setBusy(cfg.settings.threadBusy, true);
+}
+if (IS_WEBVIEW) {
+  window.chrome.webview.addEventListener('message', e => {
+    try { const m = JSON.parse(e.data); if (m.type === 'config') onConfigReceived(m); else receiveData(m); } catch {}
+  });
+  sendToHost({ type:'requestConfig' });
+}
+setBusy(BUSY, true);
+</script>
+</body>
+</html>
