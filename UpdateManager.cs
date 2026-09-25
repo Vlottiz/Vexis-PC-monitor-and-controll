@@ -9,7 +9,7 @@ using System.Text.Json;
 /// </summary>
 public static class UpdateManager
 {
-    public const string Repo       = "Vlottiz/pc-monitor";
+    public const string Repo       = "Vlottiz/Vexis-PC-monitor-and-controll";
     public const string ReleasesUrl = "https://github.com/" + Repo + "/releases/latest";
     private const string ApiLatest = "https://api.github.com/repos/" + Repo + "/releases/latest";
 

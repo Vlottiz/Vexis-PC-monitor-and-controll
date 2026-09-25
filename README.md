@@ -24,7 +24,7 @@ Unlike traditional monitoring tools, Vexis offers:
 
 | Feature | Details |
 |---|---|
-| **CPU Monitoring** | Per-core clock speeds, temperatures, CCD temps (AMD), package power |
+| **CPU Monitoring** | Per-core clock speeds, threads in use per core, temperatures, CCD temps (AMD), package power |
 | **GPU Monitoring** | Dedicated GPU tab: load (core, memory controller, video, bus), core / hot-spot / memory temps, clocks, power, VRAM, fans, PCIe traffic, FPS, history charts and every raw sensor |
 | **Fan Control** | Auto / Manual / Custom curve editor for motherboard **and GPU fans** (NVIDIA / AMD), with a GPU over-temperature guard |
 | **Temperature History** | Min / Max / Avg for every thermal sensor on the system |
@@ -37,9 +37,9 @@ Unlike traditional monitoring tools, Vexis offers:
 | **Intel Support** | All-core clock via Windows Performance Counters |
 | **One-click updates** | Checks GitHub Releases; *Update now* downloads the installer, installs silently and restarts Vexis |
 | **Driver check** | Every launch: repairs the PawnIO sensor driver and reports missing / broken drivers (graphics driver, Device Manager problems) |
-| **CSV Recording** | REC button saves every reading to `Documents\Vexis Logs` — written row by row, so logs survive crashes |
+| **CSV Recording** | Own tab: pick what to record (CPU, per-core clocks/load, memory, GPU, fans), raw CSV or pretty aligned text, row interval; built-in viewer with summary, chart and table. Written row by row, so logs survive crashes |
 | **Start with Windows** | Optional — launches minimized to the tray at sign-in (no UAC prompt) |
-| **Temperature Alerts** | Tray notification when CPU, GPU, GPU hot spot or GPU memory passes a limit you set |
+| **Temperature Alerts** | Tray notification when CPU, GPU, GPU hot spot or GPU memory passes a limit you set; the tray icon blinks and the app lists what triggered until you clear it |
 | **Collapsible Sections** | Click any section header to fold it away — remembered per page |
 
 ---

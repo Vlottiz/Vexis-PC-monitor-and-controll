@@ -33,6 +33,10 @@ body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;backgr
 .card-title{font-size:calc(9px*var(--fs-base,1));color:var(--card-title);letter-spacing:.12em;margin-bottom:6px;text-align:center;}
 #hcpu,#hpwr,#peakclk,#avgclk,#pkgpwr,#sgpuT,#sgpuV,#sgpuP,#sgpuC{text-shadow:0 0 14px var(--glow-col),0 0 5px var(--glow-col);}
 .accent-line{height:1px;background:linear-gradient(90deg,transparent,var(--line-col1),var(--line-col2),var(--line-col1),transparent);}
+/* Per-core thread dots (lit = thread busy) */
+.thr{display:flex;flex-direction:column;gap:2px;flex-shrink:0;width:calc(7px*var(--fs-base,1));align-items:center;cursor:help;}
+.thr i{display:block;width:calc(6px*var(--fs-base,1));height:calc(6px*var(--fs-base,1));border-radius:50%;border:1px solid var(--border);background:transparent;}
+.thr i.on{background:var(--avg-col);border-color:var(--avg-col);box-shadow:0 0 4px var(--avg-col);}
 #status{position:fixed;bottom:6px;right:10px;font-size:calc(8px*var(--fs-base,1));letter-spacing:.08em;color:var(--label-dim,#2a0a3a);opacity:.5;}
 #status.ok{color:var(--label-dim,#2a0a3a);}
 #update-pulse{text-align:center;font-size:calc(7px*var(--fs-base,1));font-family:monospace;color:var(--label-dim,#3a1540);letter-spacing:.12em;margin:-1px 0 3px;opacity:0.18;transition:opacity 0.6s ease;flex-shrink:0;}
@@ -82,6 +86,7 @@ body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;backgr
       <span class="nv-switch-track"><span class="nv-switch-knob"></span></span>
       <span class="nv-switch-text">SPARKLINES</span>
     </label>
+    <span title="Dots next to each core: one per hardware thread, lit while that thread is busy (≥10% load). Hover a core's dots for per-thread load." style="font-size:calc(8px*var(--fs-base,1));color:var(--divider-lbl);letter-spacing:.12em;white-space:nowrap;cursor:help;opacity:.8"><span style="color:var(--avg-col)">●</span> THREAD IN USE</span>
     <div style="flex:1;height:1px;background:var(--divider-line)"></div>
   </div>
   <div id="update-pulse" style="flex-shrink:0">···</div>
@@ -229,7 +234,7 @@ body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;backgr
 
 <div id="status">LIVE</div>
 
-<script src="/nav.js?v=16" data-page="performance"></script>
+<script src="/nav.js?v=17" data-page="performance"></script>
 <script>
 // ══════════════════════════════════════════════════════════════════════════════
 // WEBVIEW2 IPC — IS_WEBVIEW and sendToHost defined in nav.js
@@ -428,6 +433,7 @@ function buildDynamicBars(coresObj, hwInfo) {
 
   buildBars();
 }
+const THREAD_BUSY=10; // % load at which a thread counts as "in use"
 function setText(id,v){const e=document.getElementById(id);if(e)e.textContent=v;}
 function setCol(id,c){const e=document.getElementById(id);if(e)e.style.color=c;}
 function updateClock(){setText('htime',new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}));}
@@ -508,6 +514,7 @@ function buildBars(){
       wrap.style.cssText='margin-bottom:7px;display:flex;align-items:center;gap:8px';
       wrap.innerHTML=`
         <div style="width:calc(30px*var(--fs-base,1)*var(--data-scale,1));text-align:right;font-size:calc(13px*var(--fs-base,1));color:var(--core-lbl);flex-shrink:0;font-weight:600;line-height:1">${c.rank===1?'★':''}${c.label||'C'+c.id}</div>
+        <div class="thr" id="thr${c.id}"></div>
         <div style="flex:1;display:flex;flex-direction:column;gap:1px">
           <div style="height:14px;background:var(--bar-bg);border-radius:2px;overflow:hidden;border:1px solid var(--border);position:relative">
             <div id="bar${c.id}" style="position:absolute;inset:0;transition:background .4s,clip-path .4s,opacity .4s;opacity:0.15"></div>
@@ -560,6 +567,16 @@ function applyData(data){
   setText('sgpuV',data.gpu_voltage!=null?parseFloat(data.gpu_voltage).toFixed(3)+'V':'--');setText('sgpuP',data.gpu_power!=null?Math.round(data.gpu_power)+'W':'--');setText('sgpuC',data.gpu_clock!=null?Math.round(data.gpu_clock)+'MHz':'--');
   const cores=data.cores||{};let peak=0,tot=0,cnt=0;
   CORES_META.forEach(c=>{const cd=cores[String(c.id)]||cores[c.id],clk=cd?cd.clk:0;trackMaxClock(clk);const bar=document.getElementById('bar'+c.id),clkEl=document.getElementById('clk'+c.id);if(clk>peak)peak=clk;if(clk>0){tot+=clk;cnt++;}const pct=clk<=0?0:clk<=STOCK?(clk/STOCK)*50:50+((clk-STOCK)/(MAX-STOCK))*50;if(bar){bar._lastClk=clk;bar.style.background=barGrad(clk);bar.style.opacity=pct<3?'0.2':String(0.65+pct/100*0.35);bar.style.clipPath=`inset(0 ${100-pct}% 0 0)`;}if(clkEl){clkEl.textContent=clk>0?Math.round(clk)+'MHz':'--';clkEl.style.color=clk>=STOCK*1.05?clkEnd(clk):COLORS.coreLbl;const tip=[];if(cd&&cd.load!=null)tip.push('Load '+Math.round(cd.load)+'%');if(cd&&cd.temp!=null)tip.push('Temp '+cd.temp.toFixed(1)+'°C');clkEl.title=tip.join(' · ');}});
+  // Threads in use per core: one dot per hardware thread, lit by its load
+  CORES_META.forEach(c=>{
+    const cd=cores[String(c.id)]||cores[c.id], box=document.getElementById('thr'+c.id);
+    if(!box||!cd||!cd.threads||!cd.threads.length)return;
+    if(box.childElementCount!==cd.threads.length)box.innerHTML=cd.threads.map(()=>'<i></i>').join('');
+    let busy=0;
+    cd.threads.forEach((l,i)=>{const d=box.children[i],on=l>=THREAD_BUSY;if(on)busy++;
+      d.className=on?'on':'';d.style.opacity=on?String(0.55+Math.min(l,100)/100*0.45):'';});
+    box.title=`${busy} of ${cd.threads.length} thread${cd.threads.length>1?'s':''} in use\n`+cd.threads.map((l,i)=>`Thread ${i+1}: ${Math.round(l)}%`).join('\n');
+  });
   // Push sparkline data and redraw visible ones
   CORES_META.forEach(c=>{
     const cd=cores[String(c.id)]||cores[c.id];

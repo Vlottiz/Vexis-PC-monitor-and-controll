@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store">
+<title>PC Monitor — CSV Recording</title>
+<link rel="stylesheet" href="/ui.css?v=12">
+<style>
+  .rec-btn { width:100%; justify-content:center; padding:12px; font-size:calc(12px*var(--fs-base,1)); letter-spacing:.18em; }
+  .rec-btn.stop { color:#ff6666 !important; border-color:rgba(255,80,80,.6) !important; background:rgba(200,40,40,.12) !important; }
+  .rec-live { display:flex; align-items:center; justify-content:center; gap:10px; margin-top:10px; font-family:monospace;
+              font-size:calc(11px*var(--fs-base,1)*var(--data-scale,1)); color:var(--label); min-height:18px; }
+  .rec-dot-big { width:10px; height:10px; border-radius:50%; background:#ff3333; box-shadow:0 0 8px #ff3333; animation:blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity:.25; } }
+
+  .opt-label { font-size:calc(9px*var(--fs-base,1)); color:var(--label-dim); letter-spacing:.16em; margin:14px 0 8px; }
+  .grp-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:8px; }
+  .grp { display:flex; gap:8px; align-items:flex-start; padding:8px 10px; border:1px solid var(--border); border-radius:4px; cursor:pointer; background:var(--bar-bg); }
+  .grp:hover { border-color:var(--border-bright); }
+  .grp input { margin-top:2px; accent-color:var(--header-title); }
+  .grp b { display:block; font-size:calc(10px*var(--fs-base,1)); color:var(--text); letter-spacing:.06em; }
+  .grp span { font-size:calc(9px*var(--fs-base,1)); color:var(--label-dim); }
+  .fmt-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .fmt { padding:10px 12px; border:1px solid var(--border); border-radius:4px; cursor:pointer; background:var(--bar-bg); }
+  .fmt.sel { border-color:var(--header-title); box-shadow:0 0 0 1px var(--header-title) inset; }
+  .fmt b { display:block; font-size:calc(10px*var(--fs-base,1)); color:var(--header-title); letter-spacing:.12em; margin-bottom:4px; }
+  .fmt span { font-size:calc(9px*var(--fs-base,1)); color:var(--label); line-height:1.5; }
+  .locked { opacity:.45; pointer-events:none; }
+  .row-opts { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+
+  .files { width:100%; border-collapse:collapse; }
+  .files td { padding:7px 6px; border-bottom:1px solid rgba(68,51,0,.25); font-size:calc(10px*var(--fs-base,1)); color:var(--text); }
+  .files td.m { color:var(--label-dim); font-family:monospace; white-space:nowrap; }
+  .files td.a { text-align:right; white-space:nowrap; }
+  .files tr.cur td { background:rgba(255,204,0,.06); }
+  .mini { padding:3px 9px !important; font-size:calc(9px*var(--fs-base,1)) !important; }
+
+  #viewer { display:none; }
+  .v-tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+  .chip { padding:3px 10px; border:1px solid var(--border); border-radius:12px; font-size:calc(9px*var(--fs-base,1)); color:var(--label-dim);
+          cursor:pointer; letter-spacing:.08em; background:transparent; font-family:inherit; }
+  .chip.on { color:var(--header-title); border-color:var(--border-bright); background:rgba(255,204,0,.08); }
+  .sum { width:100%; border-collapse:collapse; font-family:monospace; }
+  .sum th, .sum td { padding:5px 8px; font-size:calc(10px*var(--fs-base,1)*var(--data-scale,1)); border-bottom:1px solid rgba(68,51,0,.25); text-align:right; }
+  .sum th { color:var(--label-dim); font-weight:400; letter-spacing:.12em; font-size:calc(9px*var(--fs-base,1)); }
+  .sum td:first-child, .sum th:first-child { text-align:left; color:var(--label); }
+  .sum tr { cursor:pointer; }
+  .sum tr:hover td { background:rgba(255,204,0,.05); }
+  .sum tr.sel td { background:rgba(0,255,204,.08); }
+  .sum td.mx { color:var(--peak-col); } .sum td.av { color:var(--avg-col); } .sum td.mn { color:var(--text); }
+  #chart { width:100%; height:150px; display:block; background:var(--bar-bg); border:1px solid var(--border); border-radius:4px; }
+  .chart-cap { display:flex; justify-content:space-between; font-family:monospace; font-size:calc(9px*var(--fs-base,1)); color:var(--label-dim); margin:4px 2px 12px; }
+  .tbl-wrap { overflow:auto; max-height:60vh; border:1px solid var(--border); border-radius:4px; }
+  .dt { border-collapse:separate; border-spacing:0; font-family:monospace; font-size:calc(10px*var(--fs-base,1)*var(--data-scale,1)); }
+  .dt th { position:sticky; top:0; background:var(--surface2); color:var(--label); font-weight:600; padding:6px 10px; text-align:right;
+           white-space:nowrap; border-bottom:1px solid var(--border-bright); z-index:1; font-size:calc(9px*var(--fs-base,1)); letter-spacing:.04em; }
+  .dt td { padding:4px 10px; text-align:right; white-space:nowrap; color:var(--text); border-bottom:1px solid rgba(68,51,0,.18); }
+  .dt tr:nth-child(even) td { background:rgba(255,255,255,.015); }
+  .dt th:first-child, .dt td:first-child { position:sticky; left:0; text-align:left; background:var(--surface); z-index:2; color:var(--label); }
+  .dt th:first-child { z-index:3; background:var(--surface2); }
+  .dt td.e { color:var(--label-dim); }
+  .pager { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:8px; font-size:calc(9px*var(--fs-base,1)); color:var(--label-dim); }
+  #pretty-pre { white-space:pre; overflow:auto; max-height:70vh; font-family:monospace; font-size:calc(10px*var(--fs-base,1)); color:var(--text);
+                background:var(--bar-bg); border:1px solid var(--border); border-radius:4px; padding:10px; margin:0; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title">&#x23FA; CSV Recording</div>
+      <div class="page-subtitle" id="rec-sub">Record sensor data to a file · Documents\Vexis Logs</div>
+    </div>
+  </div>
+  <div class="page-body">
+
+    <!-- ── Recorder ─────────────────────────────────────────────────────────── -->
+    <div class="card">
+      <div class="card-header"><span class="card-title">RECORDER</span><span class="badge badge-dim" id="rec-badge">IDLE</span></div>
+      <button class="btn btn-primary rec-btn" id="rec-btn" onclick="toggleRecording()">&#x23FA; START RECORDING</button>
+      <div class="rec-live" id="rec-live"></div>
+
+      <div id="rec-opts">
+        <div class="opt-label">WHAT TO RECORD</div>
+        <div class="grp-grid" id="grp-grid"></div>
+
+        <div class="opt-label">FORMAT</div>
+        <div class="fmt-grid">
+          <div class="fmt" data-fmt="csv" onclick="setFormat('csv')">
+            <b>RAW CSV</b>
+            <span>Comma-separated, one row per reading. Opens in Excel / Google Sheets and in the viewer below.</span>
+          </div>
+          <div class="fmt" data-fmt="pretty" onclick="setFormat('pretty')">
+            <b>PRETTY TEXT</b>
+            <span>Aligned rows and columns in a .txt file, with a MIN / AVG / MAX summary at the end. Easy to read in Notepad.</span>
+          </div>
+        </div>
+
+        <div class="opt-label">ONE ROW EVERY</div>
+        <div class="row-opts">
+          <select class="select" id="rec-interval" onchange="saveOpts()">
+            <option value="0">Reading (fastest, ~4 per second)</option>
+            <option value="1">1 second</option>
+            <option value="2">2 seconds</option>
+            <option value="5">5 seconds</option>
+            <option value="10">10 seconds</option>
+            <option value="30">30 seconds</option>
+            <option value="60">1 minute</option>
+          </select>
+          <span id="rec-estimate" style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim)"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Saved recordings ─────────────────────────────────────────────────── -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">RECORDINGS</span>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-ghost mini" onclick="document.getElementById('file-in').click()" title="Open a CSV or text recording from anywhere">OPEN FILE…</button>
+          <button class="btn btn-ghost mini" onclick="sendToHost({type:'openLogFolder'})">FOLDER</button>
+        </div>
+      </div>
+      <input type="file" id="file-in" accept=".csv,.txt" style="display:none" onchange="openLocalFile(this)">
+      <table class="files"><tbody id="file-list"><tr><td class="m">No recordings yet.</td></tr></tbody></table>
+    </div>
+
+    <!-- ── Viewer ───────────────────────────────────────────────────────────── -->
+    <div class="card" id="viewer">
+      <div class="card-header">
+        <span class="card-title" id="v-title">VIEWER</span>
+        <button class="btn btn-ghost mini" onclick="closeViewer()">CLOSE</button>
+      </div>
+      <div id="v-info" style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);margin:-6px 0 10px"></div>
+
+      <div id="v-csv">
+        <div class="v-tabs" id="v-groups"></div>
+        <div class="opt-label" style="margin-top:4px">SUMMARY <span style="letter-spacing:.04em">— click a row to chart it</span></div>
+        <table class="sum"><thead><tr><th>COLUMN</th><th>MIN</th><th>AVG</th><th>MAX</th></tr></thead><tbody id="v-sum"></tbody></table>
+        <div class="opt-label" id="v-chart-lbl">CHART</div>
+        <svg id="chart" viewBox="0 0 600 150" preserveAspectRatio="none"></svg>
+        <div class="chart-cap"><span id="c-lo"></span><span id="c-span"></span><span id="c-hi"></span></div>
+        <div class="opt-label">DATA
+          <label style="float:right;letter-spacing:.06em;cursor:pointer"><input type="checkbox" id="hide-empty" checked onchange="renderTable()"> hide empty columns</label>
+        </div>
+        <div class="tbl-wrap"><table class="dt" id="v-table"></table></div>
+        <div class="pager">
+          <button class="btn btn-ghost mini" onclick="page(-1)">&#x25C0; PREV</button>
+          <span id="v-page"></span>
+          <button class="btn btn-ghost mini" onclick="page(1)">NEXT &#x25B6;</button>
+        </div>
+      </div>
+      <pre id="pretty-pre" style="display:none"></pre>
+    </div>
+
+  </div>
+</div>
+
+<script src="/nav.js?v=17" data-page="record"></script>
+<script>
+// ── Recorder options ─────────────────────────────────────────────────────────
+const GROUPS = [
+  { id:'cpu',      name:'CPU',             desc:'Temperature, CCD temps, power, load, average clock' },
+  { id:'cores',    name:'Per-core clocks', desc:'Clock speed of every core' },
+  { id:'coreload', name:'Per-core load',   desc:'Load % of every core' },
+  { id:'ram',      name:'Memory',          desc:'RAM load and GB used' },
+  { id:'gpu',      name:'GPU',             desc:'Temps, load, clocks, power, voltage, VRAM, FPS' },
+  { id:'fans',     name:'Fans',            desc:'RPM of every fan' },
+];
+let OPTS = { groups:['cpu','cores','ram','gpu','fans'], format:'csv', interval:1 };
+try { Object.assign(OPTS, JSON.parse(localStorage.getItem('pcm-record-opts') || '{}')); } catch {}
+let REC = { active:false };
+
+function $(id) { return document.getElementById(id); }
+function esc(t) { return String(t).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c])); }
+
+function buildOpts() {
+  $('grp-grid').innerHTML = GROUPS.map(g => `<label class="grp"><input type="checkbox" value="${g.id}" ${OPTS.groups.includes(g.id) ? 'checked' : ''} onchange="saveOpts()">
+    <div><b>${g.name}</b><span>${g.desc}</span></div></label>`).join('');
+  $('rec-interval').value = String(OPTS.interval);
+  setFormat(OPTS.format, true);
+}
+function setFormat(f, quiet) {
+  OPTS.format = f === 'pretty' ? 'pretty' : 'csv';
+  document.querySelectorAll('.fmt').forEach(el => el.classList.toggle('sel', el.dataset.fmt === OPTS.format));
+  if (!quiet) saveOpts();
+}
+function saveOpts() {
+  OPTS.groups = [...document.querySelectorAll('#grp-grid input:checked')].map(i => i.value);
+  OPTS.interval = parseFloat($('rec-interval').value) || 0;
+  try { localStorage.setItem('pcm-record-opts', JSON.stringify(OPTS)); } catch {}
+  const perHour = OPTS.interval > 0 ? 3600 / OPTS.interval : 14400;
+  $('rec-estimate').textContent = `≈ ${Math.round(perHour).toLocaleString()} rows per hour`;
+  $('rec-btn').disabled = !REC.active && OPTS.groups.length === 0;
+}
+
+function toggleRecording() {
+  if (REC.active) sendToHost({ type:'recordStop' });
+  else {
+    saveOpts();
+    if (!OPTS.groups.length) return;
+    sendToHost({ type:'recordStart', record:{ groups:OPTS.groups, format:OPTS.format, interval:OPTS.interval } });
+  }
+}
+
+// Live state from every reading (data.recording)
+function showRecState(r) {
+  REC = r || { active:false };
+  const btn = $('rec-btn');
+  btn.classList.toggle('stop', !!REC.active);
+  btn.innerHTML = REC.active ? '&#x25A0; STOP RECORDING' : '&#x23FA; START RECORDING';
+  $('rec-opts').classList.toggle('locked', !!REC.active);
+  $('rec-badge').textContent = REC.active ? 'RECORDING' : 'IDLE';
+  $('rec-badge').className = 'badge ' + (REC.active ? 'badge-hot' : 'badge-dim');
+  if (REC.active) {
+    const m = Math.floor(REC.seconds / 60), s = String(REC.seconds % 60).padStart(2, '0');
+    $('rec-live').innerHTML = `<span class="rec-dot-big"></span><span>${m}:${s}</span><span>·</span><span>${REC.rows.toLocaleString()} rows</span><span>·</span><span>${esc(REC.file)}</span>`;
+  } else $('rec-live').textContent = REC.file ? 'Last recording: ' + REC.file : '';
+  document.querySelectorAll('#file-list tr').forEach(tr => tr.classList.toggle('cur', REC.active && tr.dataset.name === REC.file));
+}
+
+// ── Recordings list (from the host) ──────────────────────────────────────────
+function fmtSize(b) { return b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB'; }
+window.onRecordings = function(list) {
+  const body = $('file-list');
+  if (!list || !list.length) { body.innerHTML = '<tr><td class="m">No recordings yet — press START RECORDING.</td></tr>'; return; }
+  body.innerHTML = list.map(f => `<tr data-name="${esc(f.name)}">
+      <td>${esc(f.name)}</td><td class="m">${esc(f.modified)}</td><td class="m">${fmtSize(f.size)}</td>
+      <td class="a"><button class="btn btn-primary mini" onclick="viewFile('${esc(f.name)}')">VIEW</button>
+        <button class="btn btn-ghost mini" onclick="sendToHost({type:'showRecording',file:'${esc(f.name)}'})">SHOW</button>
+        <button class="btn btn-ghost mini" onclick="delFile('${esc(f.name)}')" title="Delete">&#x2715;</button></td></tr>`).join('');
+  showRecState(REC);
+};
+function viewFile(name) { $('v-info').textContent = 'Loading…'; sendToHost({ type:'readRecording', file:name }); }
+function delFile(name) { if (confirm('Delete ' + name + '?')) sendToHost({ type:'deleteRecording', file:name }); }
+window.onRecordingData = function(d) { openText(d.name, d.text, d.truncated); };
+function openLocalFile(input) {
+  const f = input.files && input.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => openText(f.name, String(rd.result).replace(/^﻿/, ''), false);
+  rd.readAsText(f);
+  input.value = '';
+}
+
+// ── Viewer ───────────────────────────────────────────────────────────────────
+let V = null;            // { name, head:[], rows:[[...]], nums:[[...]], stats:[] }
+let vSel = -1, vPage = 0, vGroup = 'all';
+const PAGE_ROWS = 250;
+
+function parseCsvLine(line) {
+  const out = []; let cur = '', q = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (q) { if (c === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; }
+    else if (c === '"') q = true;
+    else if (c === ',') { out.push(cur); cur = ''; }
+    else cur += c;
+  }
+  out.push(cur);
+  return out;
+}
+function groupOf(name) {
+  if (/^Core \d+ Load/i.test(name)) return 'Core load';
+  if (/^Core \d+/i.test(name)) return 'Core clocks';
+  if (/^(CPU|CCD)/i.test(name)) return 'CPU';
+  if (/^RAM/i.test(name)) return 'Memory';
+  if (/^(GPU|VRAM|FPS)/i.test(name)) return 'GPU';
+  if (/RPM/i.test(name)) return 'Fans';
+  return 'Other';
+}
+
+function openText(name, text, truncated) {
+  $('viewer').style.display = 'block';
+  $('v-title').textContent = 'VIEWER — ' + name.toUpperCase();
+  const isCsv = /\.csv$/i.test(name) || /^[^\n]*,[^\n]*,/.test(text.slice(0, 500));
+  $('v-csv').style.display = isCsv ? 'block' : 'none';
+  $('pretty-pre').style.display = isCsv ? 'none' : 'block';
+  if (!isCsv) {
+    $('pretty-pre').textContent = text;
+    $('v-info').textContent = (truncated ? 'Showing the first 25 MB · ' : '') + text.split('\n').length.toLocaleString() + ' lines';
+    V = null; $('viewer').scrollIntoView({ behavior:'smooth' }); return;
+  }
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  const head = parseCsvLine(lines[0] || '');
+  const rows = lines.slice(1).map(parseCsvLine);
+  const cols = head.map((h, i) => {
+    let mn = Infinity, mx = -Infinity, sum = 0, n = 0, nonzero = false;
+    const vals = rows.map(r => { const v = r[i] === '' || r[i] == null ? null : Number(r[i]); return Number.isFinite(v) ? v : null; });
+    vals.forEach(v => { if (v == null) return; mn = Math.min(mn, v); mx = Math.max(mx, v); sum += v; n++; if (v !== 0) nonzero = true; });
+    return { name:h, group: i < 2 ? 'Time' : groupOf(h), vals, min: n ? mn : null, max: n ? mx : null, avg: n ? sum / n : null, n, empty: !nonzero };
+  });
+  V = { name, head, rows, cols, elapsed: cols[1] ? cols[1].vals : [] };
+  const dur = V.elapsed.length ? V.elapsed[V.elapsed.length - 1] : 0;
+  $('v-info').textContent = `${rows.length.toLocaleString()} rows · ${head.length - 2} columns · ${fmtDur(dur)}` +
+    (rows.length ? ` · ${rows[0][0]} → ${rows[rows.length - 1][0]}` : '') + (truncated ? ' · showing the first 25 MB' : '');
+  const groups = [...new Set(cols.slice(2).map(c => c.group))];
+  vGroup = 'all'; vPage = 0;
+  $('v-groups').innerHTML = ['all', ...groups].map(g => `<button class="chip${g === 'all' ? ' on' : ''}" data-g="${esc(g)}" onclick="setGroup(this.dataset.g)">${g === 'all' ? 'ALL' : esc(g.toUpperCase())}</button>`).join('');
+  vSel = cols.findIndex((c, i) => i >= 2 && !c.empty);
+  renderSummary(); renderChart(); renderTable();
+  $('viewer').scrollIntoView({ behavior:'smooth' });
+}
+function closeViewer() { $('viewer').style.display = 'none'; V = null; }
+function fmtDur(s) { s = Math.round(s || 0); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return (h ? h + 'h ' : '') + m + 'm ' + x + 's'; }
+function fmtNum(v) { if (v == null) return '–'; const a = Math.abs(v); return a >= 1000 ? Math.round(v).toLocaleString() : a >= 100 ? v.toFixed(0) : a >= 10 ? v.toFixed(1) : v.toFixed(2); }
+function visibleCols() {
+  if (!V) return [];
+  const hide = $('hide-empty').checked;
+  return V.cols.map((c, i) => i).filter(i => i >= 2 && (vGroup === 'all' || V.cols[i].group === vGroup) && !(hide && V.cols[i].empty));
+}
+function setGroup(g) {
+  vGroup = g; vPage = 0;
+  document.querySelectorAll('#v-groups .chip').forEach(c => c.classList.toggle('on', c.dataset.g === g));
+  const vis = visibleCols(); if (!vis.includes(vSel) && vis.length) vSel = vis[0];
+  renderSummary(); renderChart(); renderTable();
+}
+function renderSummary() {
+  $('v-sum').innerHTML = visibleCols().map(i => { const c = V.cols[i];
+    return `<tr class="${i === vSel ? 'sel' : ''}" onclick="vSel=${i};renderSummary();renderChart()"><td>${esc(c.name)}</td>
+      <td class="mn">${fmtNum(c.min)}</td><td class="av">${fmtNum(c.avg)}</td><td class="mx">${fmtNum(c.max)}</td></tr>`; }).join('') ||
+    '<tr><td colspan="4" style="color:var(--label-dim)">No columns with data in this group.</td></tr>';
+}
+function renderChart() {
+  const svg = $('chart'); svg.innerHTML = '';
+  if (!V || vSel < 2) { $('v-chart-lbl').textContent = 'CHART'; return; }
+  const c = V.cols[vSel], xs = V.elapsed, W = 600, H = 150;
+  $('v-chart-lbl').textContent = 'CHART — ' + c.name.toUpperCase();
+  const pts = []; const step = Math.max(1, Math.floor(c.vals.length / 600));
+  // Keep a sensible minimum range so tiny wobbles (46.0–46.3 °C) don't fill the chart
+  let lo = c.min ?? 0, hi = c.max ?? 1;
+  const minSpan = Math.max(1, Math.abs(c.avg ?? 0) * 0.1);
+  if (hi - lo < minSpan) { const mid = (hi + lo) / 2; lo = mid - minSpan / 2; hi = mid + minSpan / 2; }
+  const pad = (hi - lo) * 0.08; lo -= pad; hi += pad;
+  const x0 = xs[0] || 0, x1 = xs[xs.length - 1] || 1;
+  for (let i = 0; i < c.vals.length; i += step) {
+    const v = c.vals[i]; if (v == null) continue;
+    const x = (x1 > x0 ? ((xs[i] ?? i) - x0) / (x1 - x0) : i / Math.max(1, c.vals.length - 1)) * W;
+    pts.push(x.toFixed(1) + ',' + (H - (v - lo) / (hi - lo) * H).toFixed(1));
+  }
+  if (!pts.length) return;
+  const avgY = (H - ((c.avg ?? 0) - lo) / (hi - lo) * H).toFixed(1);
+  svg.innerHTML = `<defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--avg-col)" stop-opacity=".3"/><stop offset="100%" stop-color="var(--avg-col)" stop-opacity="0"/></linearGradient></defs>
+    <line x1="0" y1="${avgY}" x2="${W}" y2="${avgY}" stroke="var(--label-dim)" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/>
+    <polygon points="${pts[0].split(',')[0]},${H} ${pts.join(' ')} ${pts[pts.length - 1].split(',')[0]},${H}" fill="url(#cg)"/>
+    <polyline points="${pts.join(' ')}" fill="none" stroke="var(--avg-col)" stroke-width="1.5" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>`;
+  $('c-lo').textContent = 'min ' + fmtNum(c.min);
+  $('c-hi').textContent = 'max ' + fmtNum(c.max);
+  $('c-span').textContent = 'avg ' + fmtNum(c.avg) + ' (dashed) · ' + fmtDur(x1 - x0);
+}
+function renderTable() {
+  if (!V) return;
+  const vis = [0, 1, ...visibleCols()];
+  const pages = Math.max(1, Math.ceil(V.rows.length / PAGE_ROWS));
+  vPage = Math.max(0, Math.min(vPage, pages - 1));
+  const slice = V.rows.slice(vPage * PAGE_ROWS, (vPage + 1) * PAGE_ROWS);
+  const th = vis.map(i => `<th>${esc(i === 0 ? 'Time' : V.cols[i].name)}</th>`).join('');
+  const body = slice.map(r => '<tr>' + vis.map(i => {
+    if (i === 0) return `<td>${esc((r[0] || '').replace(/^\d{4}-\d\d-\d\d /, ''))}</td>`;
+    const raw = r[i] ?? ''; const n = Number(raw);
+    return raw === '' ? '<td class="e">–</td>' : `<td${n === 0 ? ' class="e"' : ''}>${esc(Number.isFinite(n) && i > 1 ? fmtNum(n) : raw)}</td>`;
+  }).join('') + '</tr>').join('');
+  $('v-table').innerHTML = `<thead><tr>${th}</tr></thead><tbody>${body}</tbody>`;
+  $('v-page').textContent = `Rows ${(vPage * PAGE_ROWS + 1).toLocaleString()}–${Math.min(V.rows.length, (vPage + 1) * PAGE_ROWS).toLocaleString()} of ${V.rows.length.toLocaleString()} · page ${vPage + 1}/${pages}`;
+  renderSummary();
+}
+function page(d) { vPage += d; renderTable(); }
+
+// ── Host wiring ──────────────────────────────────────────────────────────────
+function receiveData(d) { if (d && d.recording) showRecState(d.recording); }
+function onConfigReceived(cfg) { navOnConfig(cfg); }
+if (IS_WEBVIEW) {
+  window.chrome.webview.addEventListener('message', e => {
+    try { const m = JSON.parse(e.data); if (m.type === 'config') onConfigReceived(m); else receiveData(m); } catch {}
+  });
+  sendToHost({ type:'requestConfig' });
+  sendToHost({ type:'listRecordings' });
+}
+buildOpts(); saveOpts(); showRecState(REC);
+</script>
+</body>
+</html>
