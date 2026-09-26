@@ -36,6 +36,17 @@ public class MainForm : Form
     public static readonly Version AppVersion =
         typeof(MainForm).Assembly.GetName().Version ?? new Version(0, 0, 0);
     public static string AppVersionText => $"{AppVersion.Major}.{AppVersion.Minor}.{AppVersion.Build}";
+    // Git commit this build came from ("2.11.0+<sha>" in the informational version; the
+    // release workflow sets it), shown on Info so a download can be matched to its source
+    public static readonly string? BuildCommit = ReadBuildCommit();
+    private static string? ReadBuildCommit()
+    {
+        string? iv = System.Reflection.CustomAttributeExtensions.GetCustomAttribute<
+            System.Reflection.AssemblyInformationalVersionAttribute>(typeof(MainForm).Assembly)?.InformationalVersion;
+        int plus = iv?.IndexOf('+') ?? -1;
+        string? sha = plus >= 0 ? iv![(plus + 1)..] : null;
+        return sha != null && sha.Length >= 7 && sha.All(Uri.IsHexDigit) ? sha : null;
+    }
 
     private readonly bool _startMinimized;
 
@@ -342,7 +353,7 @@ public class MainForm : Form
                 type = "config", colors = _config.Colors, settings = _config.Settings,
                 colorProfiles = _config.ColorProfiles, fanCurves = _config.FanCurves,
                 fanProfile = FanProfiles.Normalize(_config.FanProfile), fanPresets = FanProfiles.Describe(),
-                lastPresetIdx = _config.LastPresetIdx, appVersion = AppVersionText,
+                lastPresetIdx = _config.LastPresetIdx, appVersion = AppVersionText, buildCommit = BuildCommit,
                 startWithWindows = StartWithWindowsEnabled, zoom = Math.Round(_webView.ZoomFactor * 100)
             };
             string json = JsonSerializer.Serialize(payload, _json);

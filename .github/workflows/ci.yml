@@ -1,0 +1,41 @@
+# Builds Vexis and runs the unit tests on every push and pull request, so a change
+# that breaks fan-curve maths, sensor mapping, update handling etc. shows up red
+# before it is merged. Tests are in tests/Vexis.Tests (run locally: dotnet test tests/Vexis.Tests).
+name: CI
+
+on:
+  push:
+    branches: ['**']
+    tags-ignore: ['v*']          # tagged builds are covered by the Release workflow
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build the app
+        run: dotnet build Pcmonitor2_0.csproj -c Release
+
+      - name: Run the unit tests
+        run: dotnet test tests/Vexis.Tests -c Release --logger "trx;LogFileName=results.trx" --logger "console;verbosity=normal"
+
+      - name: Keep the test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: tests/Vexis.Tests/TestResults/*.trx

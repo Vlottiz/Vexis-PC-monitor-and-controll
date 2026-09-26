@@ -1,0 +1,21 @@
+name: Feature request
+description: An idea for something new or a change to how Vexis works
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like to do?
+      description: Describe the problem or use case first, then your idea for solving it.
+    validations:
+      required: true
+  - type: textarea
+    id: behaviour
+    attributes:
+      label: How should it behave?
+      description: Including edge cases, e.g. what should happen if a sensor is missing, or on hardware without that feature.
+  - type: input
+    id: hardware
+    attributes:
+      label: Your hardware (if it's hardware-specific)
+      placeholder: "CPU / GPU / motherboard / RGB devices"

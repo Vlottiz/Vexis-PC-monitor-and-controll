@@ -90,7 +90,7 @@ Most PCs end up with three or four vendor apps just to see temperatures, set fan
 |---|---|
 | **Fan Profiles** | **Silent**, **Balanced** and **Performance** presets for every fan at once, or **Custom** — switch on the Fan Control page or straight from the tray icon |
 | **Fan Control** | Auto / Manual / Curve for motherboard and GPU fans (NVIDIA & AMD). Curves follow CPU, CCD, GPU core, GPU hot spot or VRAM temperature, with **hysteresis** (no revving up and down) and a **minimum speed**. GPU fans are forced to 100% if the GPU overheats, and every fan goes back to BIOS / driver control when Vexis closes. Health check per fan. |
-| **RGB Control** | OpenRGB integration: quick colours for all devices, master and per-device brightness, hardware modes (rainbow, breathing…), per-LED painting, RAM stick sync, and **saved looks** you can bring back with one click |
+| **RGB Control** | OpenRGB integration: quick colours for all devices, master and per-device brightness, hardware modes (rainbow, breathing…), per-LED painting, RAM stick sync, **saved looks** you can bring back with one click, and **release** any device (e.g. a keyboard run by its own software) so Vexis leaves it alone |
 
 ### Tools
 | | |
@@ -128,10 +128,11 @@ The installer:
 - adds Vexis to *Apps & features* for a clean uninstall.
 
 > **"Windows protected your PC"?** Vexis isn't code-signed yet, so SmartScreen warns about new downloads. Click **More info → Run anyway**.
+> To make sure your download is the real thing, compare `Get-FileHash .\VexisHM-Setup.exe` (PowerShell) with the **SHA-256** in the release notes. Every release lists it together with the exact source commit it was built from.
 
 ### Updating
 
-Vexis checks GitHub for a new release when it starts. When one is out, an **UPDATE** badge appears at the top right — click it, then **Update now**. Your settings are kept.
+Vexis checks GitHub for a new release when it starts. When one is out, an **UPDATE** badge appears at the top right — click it, then **Update now**. Your settings are kept, and the download is checked against the release's SHA-256 checksum before it's installed.
 Prefer hands-off? **Settings → System → Install updates automatically** installs new versions at launch.
 
 ---
@@ -172,9 +173,11 @@ Not supported: Windows on ARM, Windows 7 / 8.1, 32-bit Windows, Linux and macOS.
 
 Vexis reads sensors through [PawnIO](https://pawnio.eu), the signed driver used by LibreHardwareMonitor. It works with **Memory Integrity, VBS and the Vulnerable Driver Blocklist left on** — Vexis does not change any Windows security settings. (Very early Vexis builds did; if you used one, open **Security → Restore Windows Protections** and restart.)
 
-### Privacy
+### Security & privacy
 
-Vexis has no telemetry and no accounts. The only internet access is checking and downloading releases from this GitHub repository. Everything else stays on your PC.
+Vexis has no telemetry, no analytics and no accounts. The only internet access is checking and downloading releases from this GitHub repository. Everything else stays on your PC.
+
+**[SECURITY.md](SECURITY.md)** explains exactly why Vexis needs administrator rights, what it does and doesn't do with them, every network connection it makes, what it stores, and how to check a download. Found a security problem? Please report it privately, as described there.
 
 ---
 
@@ -185,8 +188,11 @@ Prerequisites: [.NET 8 SDK](https://dotnet.microsoft.com/download) and [NSIS](ht
 ```powershell
 git clone https://github.com/Vlottiz/Vexis-PC-monitor-and-controll.git
 cd Vexis-PC-monitor-and-controll
-dotnet run          # run from an administrator terminal
+dotnet run                      # run from an administrator terminal
+dotnet test tests/Vexis.Tests   # unit tests (fan curves, sensor mapping, updates, duplicate finder...)
 ```
+
+The tests also run automatically on every push and pull request (**Actions → CI**). How the code is organised, and why, is in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
 ### Making a release
 
@@ -194,7 +200,8 @@ Releases are built automatically by GitHub Actions (`.github/workflows/release.y
 
 1. Set `<Version>` in `Pcmonitor2_0.csproj` (e.g. `2.9.0`), add a `## 2.9.0 — <date>` section with `- ` lines at the top of **`CHANGELOG.md`**, and merge into `main`. The app shows those lines on Info → Version, and the workflow uses them as the release notes (unless you write your own on the website).
 2. On GitHub: **Releases → Draft a new release**, create the tag **`v2.9.0`** (a `v` plus the exact version), write the notes and **Publish**.
-3. Within a few minutes the **Release** workflow builds `VexisHM-Setup.exe` and attaches it to that release (watch it under the **Actions** tab).
+3. Within a few minutes the **Release** workflow runs the tests, builds `VexisHM-Setup.exe` and attaches it to that release with a `.sha256` checksum file. It also adds a **Build information** table (commit, date, toolchain, checksum) to the notes. Watch it under the **Actions** tab.
+4. **Code signing (optional):** add the repository secrets `SIGN_PFX_BASE64` (your `.pfx` certificate, base64) and `SIGN_PFX_PASSWORD`, and every release is signed automatically. See [SECURITY.md](SECURITY.md#code-signing).
 
 The workflow stops with a clear error if the tag doesn't match `<Version>`, because installed copies compare the tag with their own version — a tag like `1.0.1` or `Vexis` would never be seen as an update. You can also run it by hand from the **Actions** tab (**Run workflow**) to get a test build as a download, without releasing.
 
@@ -207,11 +214,26 @@ The workflow stops with a clear error if the tag doesn't match `<Version>`, beca
 
 ---
 
+## How Vexis is made
+
+Vexis is designed, tested and maintained by me, [Vlottiz](https://github.com/Vlottiz). I use Claude as a development tool
+for writing and debugging code, and I'm open about that.
+
+- **I decide what gets built** and how it behaves, including the safety rules for anything touching fans or hardware.
+- **Every change goes through a pull request.** It says what was designed, what was AI-assisted, how it was tested and what's still unknown.
+- **Automated tests** cover the logic that doesn't need real hardware (fan curves, sensor mapping, updates, the duplicate finder). They must pass before a release is built.
+- **Real hardware testing** on AMD and Intel PCs for anything that touches sensors, fans or RGB.
+- **Releases are built publicly by GitHub Actions**, never on a personal PC, with a checksum and the exact source commit.
+
+The whole process is in **[CONTRIBUTING.md](CONTRIBUTING.md)**, and how the code fits together is in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
+
+---
+
 ## Credits & Attributions
 
 | Project | Use | License |
 |---|---|---|
-| [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) | All hardware sensor reading | MIT |
+| [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) | All hardware sensor reading | MPL-2.0 |
 | [PawnIO](https://pawnio.eu) | Signed sensor driver (installed unmodified) | — |
 | [OpenRGB](https://gitlab.com/CalcProgrammer1/OpenRGB) | RGB device control (external, not bundled) | GPL-2.0 |
 | [HIDAPI](https://github.com/libusb/hidapi) | HID device communication | MIT/BSD |

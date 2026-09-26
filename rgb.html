@@ -32,6 +32,19 @@
   .fx-off .fx-body *{cursor:not-allowed;}
   .fx-note{font-size:calc(10px*var(--fs-base,1));line-height:1.6;color:var(--label);background:rgba(80,60,0,.15);border:1px solid rgba(180,120,0,.3);border-radius:4px;padding:8px 12px;margin:8px 0 6px;}
   .fx-note b{color:var(--header-title);}
+  .rel-btn{background:none;border:1px solid var(--border);color:var(--label-dim);border-radius:3px;padding:2px 8px;font-family:inherit;font-size:calc(9px*var(--fs-base,1));letter-spacing:.08em;cursor:pointer;}
+  .rel-btn:hover{color:var(--label);border-color:var(--header-title);}
+  .rel-hint{font-size:calc(10px*var(--fs-base,1));color:var(--label-dim);margin:2px 0 6px;}
+  .rel-hint a{color:var(--gpu-acc);cursor:pointer;text-decoration:underline;}
+  .device-card.released{opacity:.75;border-style:dashed;}
+  .rel-body{font-size:calc(10px*var(--fs-base,1));color:var(--label);line-height:1.6;}
+  .rel-body b{color:var(--header-title);}
+  #rel-dlg{position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:16px;}
+  #rel-dlg .box{background:var(--surface,#111);border:1px solid var(--border);border-radius:8px;padding:18px 20px;max-width:480px;width:100%;}
+  #rel-dlg .t{font-size:calc(12px*var(--fs-base,1));font-weight:700;letter-spacing:.1em;color:var(--header-title);margin-bottom:10px;}
+  #rel-dlg p{font-size:calc(11px*var(--fs-base,1));color:var(--label);line-height:1.55;margin:6px 0;}
+  #rel-dlg select{width:100%;margin:4px 0 8px;background:var(--surface2);border:1px solid var(--border);color:var(--label);padding:5px 8px;border-radius:3px;font-family:inherit;}
+  #rel-dlg .btns{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;}
   .look-hint{font-size:calc(10px*var(--fs-base,1));color:var(--label-dim);line-height:1.5;margin:2px 0 8px;}
   .look-name{flex:1;min-width:0;background:var(--surface2);border:1px solid var(--border);color:var(--label);padding:5px 8px;border-radius:3px;font-family:inherit;font-size:calc(11px*var(--fs-base,1));}
   .look-list{display:flex;flex-direction:column;gap:6px;margin-top:8px;}
@@ -179,6 +192,7 @@ function effB(i){return Math.round(_bright*devB(i)/100);}              // effect
 function dim(c,i){const k=effB(i)/100;return{r:Math.round((c.r||0)*k),g:Math.round((c.g||0)*k),b:Math.round((c.b||0)*k)};}
 async function orgbPut(p,b){
   const m=/^\/devices\/(\d+)\/(leds|mode)$/.exec(p);
+  if(m&&isReleasedDev(_devices[+m[1]]))return;                // released: never touch it
   if(m&&m[2]==='leds'&&Array.isArray(b)){const i=+m[1];_last[i]={p,b};b=b.map(c=>dim(c,i));}
   else if(m&&m[2]==='mode'&&b&&b.r!=null){const i=+m[1];_last[i]={p,b};b={...b,...dim(b,i)};}
   await orgbCall('PUT',p,JSON.stringify(b));
@@ -189,7 +203,7 @@ function hwModeBright(i,mi){return _devices[i]?.modes?.[mi]?.has_brightness?effB
 // Re-apply brightness to one device: re-send its last colours, or set the hardware
 // mode's own brightness when a built-in animation is running.
 function applyBright(i){
-  if(!_connected||_devAnim[i])return;
+  if(!_connected||_devAnim[i]||isReleasedDev(_devices[i]))return;
   const mi=_hwMode[i];
   if(mi!=null){const br=hwModeBright(i,mi);if(br!=null)orgbPut('/devices/'+i+'/mode',{mode:mi,brightness:br}).catch(()=>{});return;}
   const l=_last[i];if(l)orgbPut(l.p,l.b).catch(()=>{});
@@ -207,7 +221,7 @@ const _devBrightT={};
 function setDevBrightness(i,v){
   v=Math.max(0,Math.min(100,parseInt(v)||0));
   // Synced RAM sticks share one brightness
-  const group=(isRam(i)&&_ramSync)?_devices.map((_,j)=>j).filter(j=>isRam(j)):[i];
+  const group=(isRam(i)&&_ramSync)?_devices.map((_,j)=>j).filter(j=>isRam(j)&&!isReleasedDev(_devices[j])):[i];
   group.forEach(j=>{
     _devBright[devKey(j)]=v;
     const s=document.getElementById('dev-bright-'+j);if(s)s.value=v;
@@ -245,7 +259,9 @@ function colorModeIdx(d){                 // mode that takes a single colour
   if(i<0)i=ms.findIndex(m=>m.color_mode===2);
   return i;
 }
-function canColor(d){return !!d&&!d.skip&&((d.per_led&&d.num_leds>0)||colorModeIdx(d)>=0);}
+function supportsColor(d){return !!d&&!d.skip&&((d.per_led&&d.num_leds>0)||colorModeIdx(d)>=0);}
+// Released devices are left alone by everything: apply-all, looks, effects, brightness, RAM sync
+function canColor(d){return supportsColor(d)&&!isReleasedDev(d);}
 async function ensureDirect(devIdx){
   const d=_devices[devIdx];
   if(!d||!d.per_led||_modeReady[devIdx])return;
@@ -284,7 +300,7 @@ const _hold={};
 function startHold(devIdx,leds){
   clearHold(devIdx);
   const tick=()=>{
-    if(!_connected||_devAnim[devIdx]){clearHold(devIdx);return;}
+    if(!_connected||_devAnim[devIdx]||isReleasedDev(_devices[devIdx])){clearHold(devIdx);return;}
     orgbPut('/devices/'+devIdx+'/leds',leds).catch(()=>{});
     _hold[devIdx]=setTimeout(tick,2000);
   };
@@ -465,6 +481,71 @@ function buildFx(){
 }
 function resumeFx(){if(!FX_ENABLED){_fx.type=null;return;}if(_fx.type&&!Object.keys(_devAnim).length){const t=_fx.type;_fx.type=null;startFx(t);}}
 
+// ── Released devices ─────────────────────────────────────────────────────────
+// Some devices (often keyboards and mice) are meant to be run by their own software
+// or their onboard lighting. Releasing one makes Vexis stop sending it anything,
+// optionally puts it back on one of its own hardware modes first, and remembers the
+// choice (shared settings) until "Take control again". Identified by name + OpenRGB
+// location/serial, so it survives device order changes and restarts.
+const OWN_SW_TYPES=[5,6,7,8,9];                    // OpenRGB: keyboard, mouse, mousemat, headset, headset stand
+function typeName(t){return({5:'keyboard',6:'mouse',7:'mouse mat',8:'headset',9:'headset stand'})[t]||'device';}
+function devUid(d){return d?[d.name||'',d.location||'',d.serial||''].join('|'):'';}
+function releasedList(){try{const a=JSON.parse(lookSetting('rgbReleased')||'[]');return Array.isArray(a)?a:[];}catch{return[];}}
+function isReleasedDev(d){if(!d)return false;const u=devUid(d);return releasedList().some(r=>r.uid===u);}
+function originals(){try{return JSON.parse(lookSetting('rgbOriginal')||'{}')||{};}catch{return{};}}
+function isSoftwareMode(m){return !m||/^(direct|custom|static direct)$/i.test((m.name||'').trim());}
+// The first mode Vexis ever saw a device in (if it was one of its own modes, not
+// software control) — that's the state to hand it back in. Recorded once, never overwritten.
+function recordOriginals(){
+  const o=originals();let changed=false;
+  _devices.forEach(d=>{const u=devUid(d),m=d.modes?.[d.active_mode];if(u&&!(u in o)&&m&&!isSoftwareMode(m)){o[u]=m.name;changed=true;}});
+  if(changed)navSaveSetting('rgbOriginal',JSON.stringify(o));
+}
+function handBackModes(d){return (d.modes||[]).map((m,mi)=>({m,mi})).filter(x=>!isSoftwareMode(x.m));}
+function askRelease(i){
+  const d=_devices[i];if(!d||document.getElementById('rel-dlg'))return;
+  const modes=handBackModes(d),orig=originals()[devUid(d)];
+  const def=modes.find(x=>x.m.name===orig)||modes.find(x=>!/^off$/i.test(x.m.name))||modes[0];
+  const opts=modes.map(x=>`<option value="${x.mi}"${def&&x.mi===def.mi?' selected':''}>${escH(cleanMode(x.m.name,x.mi))}${x.m.name===orig?' (how Vexis first found it)':''}</option>`).join('');
+  const dlg=document.createElement('div');dlg.id='rel-dlg';
+  dlg.innerHTML=`<div class="box">
+    <div class="t">RELEASE ${escH((d.name||'DEVICE').toUpperCase())}?</div>
+    <p>Vexis will stop sending this device anything: no colours, looks, brightness or effects. Your other RGB devices, fans and everything else keep working as normal.</p>
+    <p>Put it back on one of its own lighting modes:</p>
+    <select id="rel-mode">${opts}<option value="-1"${def?'':' selected'}>Leave it as it is</option></select>
+    <p style="opacity:.8">If its own software (iCUE, Synapse, G HUB, Armoury Crate…) still can't take it over afterwards, OpenRGB is holding on to it: press <b>⚙ GUI</b> above, untick it under <b>Settings → Supported Devices</b>, and restart OpenRGB.</p>
+    <div class="btns"><button class="btn btn-ghost" onclick="document.getElementById('rel-dlg').remove()">Cancel</button>
+      <button class="btn btn-primary" id="rel-go">&#x23CF; Release</button></div></div>`;
+  dlg.addEventListener('click',e=>{if(e.target===dlg)dlg.remove();});
+  document.body.appendChild(dlg);
+  document.getElementById('rel-go').onclick=()=>{const mi=parseInt(document.getElementById('rel-mode').value);dlg.remove();releaseDev(i,mi);};
+}
+async function releaseDev(i,modeIdx){
+  const d=_devices[i];if(!d)return;
+  if(_devAnim[i])stopDevAnim(i);
+  clearHold(i);delete _last[i];_modeReady[i]=false;
+  // Hand it back before marking it released (orgbPut would still allow it now)
+  if(modeIdx>=0&&_connected){try{await orgbCall('PUT','/devices/'+i+'/mode',JSON.stringify({mode:modeIdx}));_hwMode[i]=modeIdx;}catch(e){}}
+  const list=releasedList().filter(r=>r.uid!==devUid(d));
+  list.push({uid:devUid(d),name:d.name||'',mode:modeIdx>=0?(d.modes?.[modeIdx]?.name||''):''});
+  navSaveSetting('rgbReleased',JSON.stringify(list));
+  renderDevices();lookMsg('Released '+(d.name||'device'));
+}
+function takeControl(i){
+  const d=_devices[i];if(!d)return;
+  navSaveSetting('rgbReleased',JSON.stringify(releasedList().filter(r=>r.uid!==devUid(d))));
+  renderDevices();lookMsg('Vexis controls '+(d.name||'device')+' again');
+}
+function releasedCard(d,i){
+  const r=releasedList().find(x=>x.uid===devUid(d))||{};
+  return`<div class="card device-card released" id="dev-${i}">
+    <div class="card-header"><span class="card-title">${escH(d.name||'Device '+i)}</span>
+      <span class="badge badge-dim">RELEASED</span></div>
+    <div class="rel-body">Vexis isn't controlling this device${r.mode?`. It was put back on <b>${escH(r.mode)}</b>`:''}. Its own lighting or software is in charge.</div>
+    <div class="cprow" style="justify-content:flex-end"><button class="btn btn-ghost" onclick="takeControl(${i})" style="padding:4px 12px">&#x21BA; TAKE CONTROL AGAIN</button></div>
+  </div>`;
+}
+
 // ── Saved looks ──────────────────────────────────────────────────────────────
 // Stored in the shared settings (config.json), so every window sees the same list
 // and "Reset to factory settings" clears them. Each device is kept by position +
@@ -572,10 +653,13 @@ function autoApplyLook(){
 // ── Render ───────────────────────────────────────────────────────────────────
 function buildQC(){document.getElementById('quick-colors').innerHTML=QCOLS.map(({c,l})=>`<div class="qcol" style="background:${c}" title="${l}" onclick="applyAllColor('${c}');document.getElementById('custom-color').value='${c}'"></div>`).join('');}
 
+function updateDevCount(){const sub=document.getElementById('rgb-sub');if(!sub||!_connected)return;const a=_devices.filter(canColor).length,r=_devices.filter(isReleasedDev).length;sub.textContent=`${a} active${r?` · ${r} released`:''} (${_devices.length} total)`;}
 function renderDevices(){
   const list=document.getElementById('device-list');if(!_devices.length){list.innerHTML='';return;}
+  updateDevCount();
   list.innerHTML=_devices.map((d,i)=>{
-    if(!canColor(d))return`<div class="card device-card" id="dev-${i}" style="opacity:.4"><div class="card-header"><span class="card-title">${d.name||'Device '+i}</span><span class="badge badge-warn">UNSUPPORTED</span></div></div>`;
+    if(isReleasedDev(d))return releasedCard(d,i);
+    if(!supportsColor(d))return`<div class="card device-card" id="dev-${i}" style="opacity:.4"><div class="card-header"><span class="card-title">${d.name||'Device '+i}</span><span class="badge badge-warn">UNSUPPORTED</span></div></div>`;
     const cnt=ledCnt(i),isR=isRam(i);
     const cHex=d.colors?.[0]?rgbHex(d.colors[0].r||0,d.colors[0].g||0,d.colors[0].b||0):'#ff0000';
     const modeChips=(d.modes||[]).map((m,mi)=>`<button class="mode-chip${d.active_mode===mi?' active':''}" onclick="pickMode(${i},${mi})">${cleanMode(m.name,mi)}</button>`).join('');
@@ -584,8 +668,10 @@ function renderDevices(){
         <span class="card-title">${d.name||'Device '+i}</span>
         <div style="display:flex;align-items:center;gap:6px">
           <span class="badge badge-dim">${cnt} LED${cnt!==1?'s':''}</span>
+          <button class="rel-btn" onclick="askRelease(${i})" title="Stop Vexis controlling this device and hand it back to its own lighting (or its own software)">&#x23CF; RELEASE</button>
         </div>
       </div>
+      ${OWN_SW_TYPES.includes(d.type)?`<div class="rel-hint">Use this ${typeName(d.type)} with its own software (iCUE, Synapse, G HUB…)? <a onclick="askRelease(${i})">Release it</a> so Vexis leaves it alone.</div>`:''}
       ${isR?`<div class="rsbar"><div class="rsd${_ramSync?'':' off'}"></div><span class="rsl" style="flex:1;color:var(--label)">${_ramSync?'RAM STICKS SYNCED':'RAM STICKS UNLINKED'}</span><button class="rst" onclick="toggleSync()">TOGGLE SYNC</button></div>`:''}
       ${modeChips?`<div class="mode-row" id="dev-modes-${i}">${modeChips}</div>`:''}
       <div class="cprow">
@@ -615,7 +701,7 @@ function renderDevices(){
 // Mode chip click; synced RAM sticks follow when they have a mode of the same name
 function pickMode(i,mi){
   const name=_devices[i]?.modes?.[mi]?.name;
-  const group=(isRam(i)&&_ramSync)?_devices.map((_,j)=>j).filter(j=>isRam(j)):[i];
+  const group=(isRam(i)&&_ramSync)?_devices.map((_,j)=>j).filter(j=>isRam(j)&&!isReleasedDev(_devices[j])):[i];
   group.forEach(j=>{const mj=j===i?mi:(_devices[j]?.modes||[]).findIndex(m=>m.name===name);if(mj>=0){setDevMode(j,mj);updateModeChips(j,mj);}});
 }
 function updateModeChips(devIdx,am){document.querySelectorAll('#dev-modes-'+devIdx+' .mode-chip').forEach((c,mi)=>c.classList.toggle('active',mi===am));}
@@ -657,7 +743,7 @@ function sL(id,on,col){const e=document.getElementById(id);if(!e)return;e.style.
 function updLights(s){if(s==='connected'){sL('sl-notopen',true);sL('sl-noserver',true);sL('sl-connected',true);}else if(s==='process_up'){sL('sl-notopen',true);sL('sl-noserver',false);sL('sl-connected',false);}else{sL('sl-notopen',false);sL('sl-noserver',false);sL('sl-connected',false);}}
 function setStatus(state,msg){
   const dot=document.getElementById('rgb-dot'),txt=document.getElementById('rgb-status-txt'),sub=document.getElementById('rgb-sub'),off=document.getElementById('rgb-offline'),on=document.getElementById('rgb-online');
-  if(state==='online'){_connected=true;dot.className='rgb-dot on';txt.textContent='CONNECTED';const a=_devices.filter(canColor).length;sub.textContent=`${a} active (${_devices.length} total)`;off.style.display='none';on.style.display='block';buildQC();updLights('connected');}
+  if(state==='online'){_connected=true;dot.className='rgb-dot on';txt.textContent='CONNECTED';updateDevCount();off.style.display='none';on.style.display='block';buildQC();updLights('connected');}
   else if(state==='offline'){_connected=false;dot.className='rgb-dot err';txt.textContent='OFFLINE';sub.textContent=msg||'OpenRGB not running';off.style.display='block';on.style.display='none';updLights('none');chkProc();}
   else{dot.className='rgb-dot';txt.textContent='CONNECTING...';sub.textContent='Trying localhost:6742...';updLights('none');}
 }
@@ -705,7 +791,7 @@ async function connSilent(){
     if(_devices.length===0){setStatus('offline','Detecting devices...');_lastDevCount=-1;return;}
     if(_devices.length!==_lastDevCount){_lastDevCount=_devices.length;setStatus('offline','Detecting devices...');return;}
     _lastDevCount=-1;
-    setStatus('online');renderDevices();buildFx();resumeFx();renderLooks();autoApplyLook();stopRetryLoop();
+    recordOriginals();setStatus('online');renderDevices();buildFx();resumeFx();renderLooks();autoApplyLook();stopRetryLoop();
   }catch(e){if(!_retryLoop)setStatus('offline',e.message);}
 }
 function receiveData(){}

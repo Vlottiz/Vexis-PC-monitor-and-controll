@@ -91,6 +91,9 @@
       <div class="info-row"><span class="info-key">Author</span><span class="info-val">Vlottiz</span></div>
       <div class="info-row"><span class="info-key">License</span><span class="info-val">MIT</span></div>
       <div class="info-row"><span class="info-key">Platform</span><span class="info-val">Windows 10/11 · .NET 8</span></div>
+      <div class="info-row" title="The exact source code commit this copy was built from">
+        <span class="info-key">Build</span><span class="info-val" id="build-commit">--</span>
+      </div>
       <div class="info-row">
         <span class="info-key">GitHub</span>
         <span class="info-val" style="color:var(--gpu-acc);cursor:pointer"
@@ -110,7 +113,7 @@
           <div class="credit-role">Hardware sensor reading — CPU, GPU, fans, temperatures</div>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;margin-left:8px">
-          <span class="credit-badge">MIT</span>
+          <span class="credit-badge">MPL-2.0</span>
           <span class="credit-badge" style="cursor:pointer;color:var(--gpu-acc)"
             onclick="sendToHost({type:'openUrl',url:'https://github.com/LibreHardwareMonitor/LibreHardwareMonitor'})">GitHub ↗</span>
         </div>
@@ -274,6 +277,12 @@ function receiveData(d) {}
 function onConfigReceived(cfg) {
   navOnConfig(cfg);
   if (cfg.appVersion) ['ver-current', 'ver-badge', 'ver-sub'].forEach(id => document.getElementById(id).textContent = 'v' + cfg.appVersion);
+  const bc = document.getElementById('build-commit');
+  if (bc && /^[0-9a-f]{7,40}$/i.test(cfg.buildCommit || '')) {
+    bc.textContent = 'commit ' + cfg.buildCommit.slice(0, 7) + ' ↗';
+    bc.style.cssText = 'color:var(--gpu-acc);cursor:pointer';
+    bc.onclick = () => sendToHost({ type:'openUrl', url:'https://github.com/Vlottiz/Vexis-PC-monitor-and-controll/commit/' + cfg.buildCommit });
+  } else if (bc) bc.textContent = 'local build';
   renderChangelog();
 }
 if (IS_WEBVIEW) {
