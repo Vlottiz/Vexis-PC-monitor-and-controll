@@ -90,7 +90,7 @@ Most PCs end up with three or four vendor apps just to see temperatures, set fan
 |---|---|
 | **Fan Profiles** | **Silent**, **Balanced** and **Performance** presets for every fan at once, or **Custom** — switch on the Fan Control page or straight from the tray icon |
 | **Fan Control** | Auto / Manual / Curve for motherboard and GPU fans (NVIDIA & AMD). Curves follow CPU, CCD, GPU core, GPU hot spot or VRAM temperature, with **hysteresis** (no revving up and down) and a **minimum speed**. GPU fans are forced to 100% if the GPU overheats, and every fan goes back to BIOS / driver control when Vexis closes. Health check per fan. |
-| **RGB Control** | OpenRGB integration: quick colours for all devices, master and per-device brightness, hardware modes (rainbow, breathing…), per-LED painting, RAM stick sync, and **saved looks** you can bring back with one click |
+| **RGB Control** | OpenRGB integration: quick colours for all devices, master and per-device brightness, hardware modes (rainbow, breathing…), per-LED painting, RAM stick sync, **saved looks** you can bring back with one click, and **release** any device (e.g. a keyboard run by its own software) so Vexis leaves it alone |
 
 ### Tools
 | | |

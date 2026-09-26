@@ -3,6 +3,7 @@
 <!--
 How to use: before a release, add a section at the top:
   ## 2.12.0 — 2026-09-26
+- RGB: release a device (e.g. a keyboard or mouse run by iCUE, Synapse or G HUB). Vexis stops touching it, can put it back on its own lighting mode, and remembers it; fans, RAM and your other RGB keep working. "Take control again" undoes it
 - Updates are checked against the release's SHA-256 checksum before they're installed; a download that doesn't match is deleted, not run
 - Info → About shows the exact source commit your copy was built from
 - Every release now lists its SHA-256, source commit, build date and toolchain, and is only built if the automated tests pass

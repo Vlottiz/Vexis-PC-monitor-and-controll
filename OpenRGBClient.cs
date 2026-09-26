@@ -320,7 +320,7 @@ public class OpenRGBClient : IDisposable
 
     private JsonObject ParseDevice(int idx, byte[] d)
     {
-        string name = $"Device {idx}", vendor = "";
+        string name = $"Device {idx}", vendor = "", serial = "", location = "";
         int devType = 0, activeMode = 0, zoneLeds = 0, numLeds = 0;
         var modes = new List<ModeInfo>();
         var colors = new JsonArray();
@@ -335,8 +335,8 @@ public class OpenRGBClient : IDisposable
             if (_proto >= 1) vendor = ReadStr(d, ref p);
             ReadStr(d, ref p);                                  // description
             ReadStr(d, ref p);                                  // version
-            ReadStr(d, ref p);                                  // serial
-            ReadStr(d, ref p);                                  // location
+            serial   = ReadStr(d, ref p);
+            location = ReadStr(d, ref p);                       // e.g. "HID: \\?\hid#vid_1b1c..." — stable per port
 
             int numModes = ReadU16(d, ref p);
             activeMode   = (int)Read32(d, ref p);
@@ -419,6 +419,8 @@ public class OpenRGBClient : IDisposable
         {
             ["name"]        = name.Length > 0 ? name : $"Device {idx}",
             ["vendor"]      = vendor,
+            ["serial"]      = serial,
+            ["location"]    = location,
             ["type"]        = devType,
             ["active_mode"] = activeMode,
             ["modes"]       = modeArr,
