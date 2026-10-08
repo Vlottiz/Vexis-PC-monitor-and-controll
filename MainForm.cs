@@ -5,7 +5,7 @@ using System.Text.Json.Serialization;
 
 public class MainForm : Form
 {
-    private readonly WebView2         _webView  = new();
+    private WebView2                  _webView  = new() { DefaultBackgroundColor = System.Drawing.Color.Black };
     private readonly NotifyIcon       _tray     = new();
     private readonly ContextMenuStrip _trayMenu = new();
 
@@ -129,18 +129,73 @@ public class MainForm : Form
         _fans.ApplyProfile(_config);   // saved curves / fan profile take effect at launch
         Application.ApplicationExit += (_, _) => { try { _fans.RestoreAll(); } catch { } };
         SetupTray();
-        SplashForm.SetStatus("Loading interface…");
 
+        // Fans, alerts and recording run from the poll timer, independent of the interface,
+        // so they keep working even if the page is slow, closed or being rebuilt.
+        _sensor.Start();
+        _pollTimer.Tick += OnPollTick;
+        _pollTimer.Start();
+
+        if (_startMinimized)
+        {
+            // Started with Windows: right after sign-in the desktop, graphics driver and
+            // WebView2 runtime may still be starting, and a WebView2 created inside a window
+            // that has never been shown can come back blank and unresponsive. So only the
+            // monitoring runs now; the interface is built the first time the window is opened.
+            Console.WriteLine("[startup] Running in the tray — the interface loads when Vexis is opened.");
+            await RevealWindow();   // driver-problem notification only; the window stays hidden
+            // Pages normally ask for the update check; nothing is open yet, so ask once here
+            _ = Task.Delay(TimeSpan.FromSeconds(30)).ContinueWith(_ => { try { BeginInvoke(() => PushUpdateInfo(force: false)); } catch { } });
+            return;
+        }
+
+        SplashForm.SetStatus("Loading interface…");
+        await StartUiAsync();
+    }
+
+    // ── Interface (WebView2) ───────────────────────────────────────────────────
+    // Built once on demand (at launch, or on first open after starting in the tray) and
+    // rebuilt automatically if WebView2's browser process dies.
+    private Task? _uiTask;
+    private bool  _uiReady;
+    private int   _uiRebuilds;
+    private DateTime _uiRebuildWindow = DateTime.MinValue;
+
+    private Task StartUiAsync() => _uiTask ??= InitWebViewAsync();
+
+    private async Task InitWebViewAsync()
+    {
         var webViewOpts = new Microsoft.Web.WebView2.Core.CoreWebView2EnvironmentOptions(
             additionalBrowserArguments: "--disable-web-security --allow-running-insecure-content --allow-file-access-from-files");
 
-        var webViewEnv = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync(
-            browserExecutableFolder: null,
-            userDataFolder: Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "Vexis", "WebView2Cache"),
-            options: webViewOpts);
-        await _webView.EnsureCoreWebView2Async(webViewEnv);
+        // Creating the environment can fail briefly (runtime updating, profile still in use
+        // by a closing instance) — retry a few times before giving up.
+        for (int attempt = 1; ; attempt++)
+        {
+            try
+            {
+                var webViewEnv = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync(
+                    browserExecutableFolder: null,
+                    userDataFolder: Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                        "Vexis", "WebView2Cache"),
+                    options: webViewOpts);
+                await _webView.EnsureCoreWebView2Async(webViewEnv);
+                break;
+            }
+            catch (Exception ex) when (attempt < 5)
+            {
+                Console.WriteLine($"[webview] Start attempt {attempt} failed: {ex.Message} — retrying");
+                await Task.Delay(1500 * attempt);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[webview] Could not start the interface: {ex}");
+                _uiTask = null;   // let the next open try again
+                await RevealWindow();
+                return;
+            }
+        }
 
         // Page zoom (− / + buttons, Ctrl+scroll): restore last level, remember changes
         _webView.ZoomFactor = ZoomHelper.Parse(_config.Settings);
@@ -181,8 +236,7 @@ public class MainForm : Form
         _webView.CoreWebView2.Settings.AreDevToolsEnabled            = true;
         _webView.CoreWebView2.Settings.AreHostObjectsAllowed         = true;
         _webView.CoreWebView2.WebMessageReceived += OnWebMessage;
-
-        _sensor.Start();
+        _webView.CoreWebView2.ProcessFailed      += OnWebViewProcessFailed;
 
         // Update check: requested by nav.js when a page loads (cached after the first check)
 
@@ -202,15 +256,51 @@ public class MainForm : Form
                 {
                     Console.WriteLine("[startup] ready");
                     await SendConfigViaScript();
-                    _pollTimer.Tick += OnPollTick;
-                    _pollTimer.Start();
+                    _uiReady = true;
                     await RevealWindow();
                     return;
                 }
             }
             catch (Exception ex) { Console.WriteLine($"[startup] {ex.Message}"); }
         }
-        await RevealWindow(); // page never reported ready — show the window anyway
+        _uiReady = true;      // page never reported ready — keep pushing data, it may catch up
+        await RevealWindow(); // and show the window anyway
+    }
+
+    // WebView2 runs the page in separate processes. If one dies (graphics driver reset,
+    // out of memory, a crash at sign-in) the view goes blank and stops responding unless
+    // it is reloaded or, when the browser process itself is gone, rebuilt.
+    private void OnWebViewProcessFailed(object? sender, CoreWebView2ProcessFailedEventArgs e)
+    {
+        Console.WriteLine($"[webview] Process failed: {e.ProcessFailedKind} (reason {e.Reason}, exit code {e.ExitCode})");
+        switch (e.ProcessFailedKind)
+        {
+            case CoreWebView2ProcessFailedKind.BrowserProcessExited:
+                BeginInvoke(async () => await RebuildWebViewAsync());
+                break;
+            case CoreWebView2ProcessFailedKind.RenderProcessExited:
+            case CoreWebView2ProcessFailedKind.RenderProcessUnresponsive:
+            case CoreWebView2ProcessFailedKind.FrameRenderProcessExited:
+                BeginInvoke(() => { try { _webView.CoreWebView2?.Reload(); } catch { } });
+                break;
+            // GPU and utility processes are restarted by WebView2 itself
+        }
+    }
+
+    private async Task RebuildWebViewAsync()
+    {
+        // At most 3 rebuilds in 5 minutes, so a broken runtime can't loop forever
+        if (DateTime.Now - _uiRebuildWindow > TimeSpan.FromMinutes(5)) { _uiRebuildWindow = DateTime.Now; _uiRebuilds = 0; }
+        if (++_uiRebuilds > 3) { Console.WriteLine("[webview] Too many restarts — leaving the interface closed. Restart Vexis."); return; }
+        Console.WriteLine("[webview] Rebuilding the interface");
+        _uiReady = false;
+        _uiTask  = null;
+        var old = _webView;
+        _webView = new WebView2 { Dock = DockStyle.Fill, DefaultBackgroundColor = System.Drawing.Color.Black };
+        Controls.Add(_webView);
+        Controls.Remove(old);
+        try { old.Dispose(); } catch { }
+        await StartUiAsync();
     }
 
     // Swap the loading screen for the main window, and report driver problems
@@ -368,7 +458,6 @@ public class MainForm : Form
     {
         try
         {
-            if (_webView.CoreWebView2 == null) return;
             var data = _sensor.GetLatestData();
             _fans.Update(data, _config);
             CheckTempAlerts(data);
@@ -381,10 +470,12 @@ public class MainForm : Form
             data.recording = _recorder.Status;
             lock (_inbox) data.alerts = _inbox.Count > 0 ? _inbox.ToList() : null;
 
+            if (!_uiReady && _popouts.Count == 0) return;   // nothing open to show it in
             string json = JsonSerializer.Serialize(data, _json);
 
-            await _webView.CoreWebView2.ExecuteScriptAsync(
-                $"typeof receiveData==='function'&&receiveData({json})");
+            if (_uiReady && _webView.CoreWebView2 != null)
+                await _webView.CoreWebView2.ExecuteScriptAsync(
+                    $"typeof receiveData==='function'&&receiveData({json})");
 
             foreach (var kv in _popouts.ToList())
             {
@@ -1024,7 +1115,11 @@ public class MainForm : Form
         foreach (ToolStripMenuItem i in _trayProfileMenu.DropDownItems) i.Checked = (string?)i.Tag == cur;
     }
 
-    private void ShowDashboard() { Show(); WindowState = FormWindowState.Normal; Activate(); StopBlink(); }
+    private void ShowDashboard()
+    {
+        Show(); WindowState = FormWindowState.Normal; Activate(); StopBlink();
+        if (_webView.CoreWebView2 == null) _ = StartUiAsync();   // started in the tray: build the interface now
+    }
 
     // ── Alert inbox: what triggered a notification, shown in the app until cleared ──
     private readonly List<AlertEntry> _inbox = new();
