@@ -2,7 +2,12 @@
 
 <!--
 How to use: before a release, add a section at the top:
-  ## 2.12.0 — 2026-09-26
+  ## 2.12.1 — 2026-10-08
+- Fixed: when started with Windows, Vexis could open as a grey window that didn't respond until it was restarted. It now runs only the monitoring, fans and alerts in the tray after sign-in, and builds the interface the first time you open it
+- If the interface's browser process crashes (e.g. a graphics driver reset), Vexis reloads or rebuilds it by itself instead of leaving a dead window
+- Fans, alerts and recording keep running even while the interface is loading or closed
+
+## 2.12.0 — 2026-09-26
 - RGB: release a device (e.g. a keyboard or mouse run by iCUE, Synapse or G HUB). Vexis stops touching it, can put it back on its own lighting mode, and remembers it; fans, RAM and your other RGB keep working. "Take control again" undoes it
 - Updates are checked against the release's SHA-256 checksum before they're installed; a download that doesn't match is deleted, not run
 - Info → About shows the exact source commit your copy was built from

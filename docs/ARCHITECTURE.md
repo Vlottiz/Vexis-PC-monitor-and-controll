@@ -43,6 +43,13 @@ are made.
 so pages never get out of sync with each other, and a pop-out window is only a second WebView fed
 the same JSON.
 
+**Startup order.** Sensors, fans, alerts and recording start first and run from the poll timer
+on their own; the interface is only a viewer. When Vexis starts with Windows (`--minimized`) the
+interface isn't built at all until the window is first opened. Right after sign-in the desktop,
+graphics driver and WebView2 runtime may still be starting, and a WebView2 created in a window that
+has never been shown can come back blank and unresponsive. If a WebView2 process dies later on, the
+page is reloaded (renderer) or the whole control rebuilt (browser process), at most 3 times in 5 minutes.
+
 `HandleMessage` runs on the UI thread, so anything slow (process list, update download, duplicate
 scan, driver repair) is started with `Task.Run` and reports back with `RunScriptEverywhere(...)`.
 That keeps the window responsive.
