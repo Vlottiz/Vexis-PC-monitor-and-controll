@@ -50,6 +50,18 @@ VIAddVersionKey   "LegalCopyright"   "MIT License"
 
 !insertmacro MUI_LANGUAGE "English"
 
+; Ask a running Vexis to close by itself first (it watches for exit.request and then
+; hands the fans back to the BIOS and closes cleanly), then force-close anything left.
+; Older versions don't watch for the file and are simply force-closed as before.
+!macro CloseVexis
+  CreateDirectory "$APPDATA\Vexis"
+  FileOpen $9 "$APPDATA\Vexis\exit.request" w
+  FileClose $9
+  Sleep 3000
+  nsExec::ExecToLog 'taskkill /IM Vexis.exe /F'
+  Delete "$APPDATA\Vexis\exit.request"
+!macroend
+
 ; ── Install ───────────────────────────────────────────────────────────────────
 Section "Vexis Hardware Monitoring" SecMain
   SectionIn RO  ; required, can't deselect
@@ -57,7 +69,7 @@ Section "Vexis Hardware Monitoring" SecMain
   SetOutPath "$INSTDIR"
 
   ; Close a running copy so files can be replaced when updating
-  nsExec::ExecToLog 'taskkill /IM Vexis.exe /F'
+  !insertmacro CloseVexis
 
   ; Copy all published files
   File /r "publish\*.*"
@@ -168,7 +180,7 @@ FunctionEnd
 ; ── Uninstall ─────────────────────────────────────────────────────────────────
 Section "Uninstall"
   ; Stop running instance
-  nsExec::ExecToLog 'taskkill /IM Vexis.exe /F'
+  !insertmacro CloseVexis
 
   ; Remove the "Start with Windows" logon task, if the user turned it on
   nsExec::ExecToLog 'schtasks /Delete /TN "Vexis" /F'

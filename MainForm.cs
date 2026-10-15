@@ -107,6 +107,7 @@ public class MainForm : Form
         });
 
         _config = AppConfig.Load();
+        try { File.Delete(ExitRequestPath); } catch { }   // a leftover request must not close this launch
         RestorePlacement();
         if (_startMinimized)
             BeginInvoke(() =>
@@ -458,6 +459,7 @@ public class MainForm : Form
     {
         try
         {
+            if (++_exitCheck % 4 == 0 && File.Exists(ExitRequestPath)) { ExitForInstaller(); return; }
             var data = _sensor.GetLatestData();
             _fans.Update(data, _config);
             CheckTempAlerts(data);
@@ -549,8 +551,8 @@ public class MainForm : Form
                     {
                         var logJson = System.Text.Json.JsonSerializer.Serialize(
                             new { lines = logLines, seq = newSeq });
-                        Invoke(() => _webView.CoreWebView2?.ExecuteScriptAsync(
-                            $"typeof updateLogs==='function'&&updateLogs({logJson})"));
+                        Invoke(() => { _ = _webView.CoreWebView2?.ExecuteScriptAsync(
+                            $"typeof updateLogs==='function'&&updateLogs({logJson})"); });
                     }
                     break;
 
@@ -732,8 +734,8 @@ public class MainForm : Form
                             var snap = _sensor.GetLatestData();
                             snap.fans = _fans.GetSnapshot();
                             string snapJson = JsonSerializer.Serialize(snap, _json);
-                            Invoke(() => _webView.CoreWebView2?.ExecuteScriptAsync(
-                                $"typeof receiveData==='function'&&receiveData({snapJson})"));
+                            Invoke(() => { _ = _webView.CoreWebView2?.ExecuteScriptAsync(
+                                $"typeof receiveData==='function'&&receiveData({snapJson})"); });
                         }
                         catch { }
                     });
@@ -773,8 +775,8 @@ public class MainForm : Form
                         string cid2 = msg.callId ?? "0";
                         var (ok, json) = await OpenRgbProxyAsync(msg);
                         string payload = System.Text.Json.JsonSerializer.Serialize(json);
-                        Invoke(() => _webView.CoreWebView2?.ExecuteScriptAsync(
-                            $"typeof orgbProxyResult==='function'&&orgbProxyResult('{cid2}',{(ok ? "true" : "false")},{payload})"));
+                        Invoke(() => { _ = _webView.CoreWebView2?.ExecuteScriptAsync(
+                            $"typeof orgbProxyResult==='function'&&orgbProxyResult('{cid2}',{(ok ? "true" : "false")},{payload})"); });
                     });
                     break;
 
@@ -791,8 +793,8 @@ public class MainForm : Form
                     string cid3 = msg.callId ?? "0";
                     string runJson = isRunning ? "{\"running\":true}" : "{\"running\":false}";
                     string runEsc  = System.Text.Json.JsonSerializer.Serialize(runJson);
-                    Invoke(() => _webView.CoreWebView2?.ExecuteScriptAsync(
-                        $"typeof orgbProxyResult==='function'&&orgbProxyResult('{cid3}',true,{runEsc})"));
+                    Invoke(() => { _ = _webView.CoreWebView2?.ExecuteScriptAsync(
+                        $"typeof orgbProxyResult==='function'&&orgbProxyResult('{cid3}',true,{runEsc})"); });
                     break;
                 }
 
@@ -854,7 +856,7 @@ public class MainForm : Form
                     if (orgbGuiExe != null)
                     {
                         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                        { FileName = orgbGuiExe, UseShellExecute = true });
+                        { FileName = orgbGuiExe, Arguments = "--server", UseShellExecute = true });   // window + SDK server, so Vexis stays connected
                         Console.WriteLine($"[rgb] Launched OpenRGB GUI from {orgbGuiExe}");
                     }
                     break;
@@ -1191,6 +1193,22 @@ public class MainForm : Form
             });
         }
         catch (Exception ex) { Console.WriteLine($"[reset] relaunch: {ex.Message}"); }
+        _tray.Visible = false;
+        Application.Exit();
+    }
+
+    // ── Closing for the installer ──────────────────────────────────────────────
+    // The installer writes this file and gives Vexis a few seconds to close by itself
+    // (fans handed back, recording closed, no "didn't close properly" banner next time)
+    // before it force-closes anything still running.
+    private static string ExitRequestPath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Vexis", "exit.request");
+    private int _exitCheck;
+
+    private void ExitForInstaller()
+    {
+        try { File.Delete(ExitRequestPath); } catch { }
+        Console.WriteLine("[exit] Closing for the installer");
         _tray.Visible = false;
         Application.Exit();
     }

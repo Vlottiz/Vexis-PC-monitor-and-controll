@@ -36,7 +36,7 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Read version and check the tag
         id: ver
@@ -52,7 +52,7 @@ jobs:
           "version=$version" >> $env:GITHUB_OUTPUT
           "tag=v$version"   >> $env:GITHUB_OUTPUT
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '8.0.x'
 
@@ -180,7 +180,7 @@ jobs:
 
       - name: Attach to the release
         if: github.event_name != 'workflow_dispatch'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
           name: ${{ github.event_name == 'release' && github.event.release.name || format('Vexis {0}', steps.ver.outputs.version) }}
@@ -195,7 +195,7 @@ jobs:
 
       - name: Keep the test build
         if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: VexisHM-Setup-${{ steps.ver.outputs.version }}
           path: |
