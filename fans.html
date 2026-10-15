@@ -383,8 +383,9 @@ function buildCard(fan) {
         <span class="control-label">Fan Speed</span>
         <span class="control-value" id="sv-${id}">${s.pct}%</span>
       </div>
-      <input type="range" class="range-slider" id="sl-${id}" min="0" max="100" value="${s.pct}"
+      <input type="range" class="range-slider" id="sl-${id}" min="${fan.minPct||0}" max="100" value="${Math.max(s.pct, fan.minPct||0)}"
         oninput="document.getElementById('sv-${id}').textContent=this.value+'%'">
+      ${fan.minPct?`<div class="stat-sub" style="margin-top:4px">Pumps stay at ${fan.minPct}% or more: a slow pump heats the CPU quickly.</div>`:''}
       <div style="margin-top:10px">
         <button class="btn btn-primary" onclick="applyManual('${fan.name}')"
           style="width:100%;justify-content:center">APPLY</button>

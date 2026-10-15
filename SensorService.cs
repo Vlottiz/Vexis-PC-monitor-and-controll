@@ -696,6 +696,7 @@ public class SensorService : IDisposable
         var coreLoads = new Dictionary<int, float>();
         var threadLoads = new Dictionary<int, SortedDictionary<int, float>>();
         var loadSensors = new List<(string Name, float Value)>();
+        var cpuTempCandidates = new List<(string Name, float Value)>();
 
         foreach (var s in hw.Sensors)
         {
@@ -719,14 +720,9 @@ public class SensorService : IDisposable
                     if (tkey >= 0 && _coreMap.TryGetValue(tkey, out var ti))
                         coreTemps[ti.displayId] = v;
 
-                    // CPU package/die temp — AMD and Intel variants
-                    if (!isCcd && (n.Contains("Tctl") || n.Contains("Tdie") || n.Contains("Package") ||
-                                   n.Contains("Average") || n == "CPU Core" || n == "Core Average"))
-                        data.cpu_temp ??= v;
-
-                    // Intel per-core temps as fallback
-                    if (data.cpu_temp == null && !isCcd && v > 20 && v < 115)
-                        data.cpu_temp ??= v;
+                    // CPU package/die temp: chosen after the loop (PickCpuTemp), so a per-core
+                    // sensor listed before "CPU Package" can't win just by coming first
+                    if (!isCcd) cpuTempCandidates.Add((n, v));
 
                     // CCD temps (AMD)
                     if (isCcd)
@@ -756,6 +752,7 @@ public class SensorService : IDisposable
             }
         }
 
+        data.cpu_temp ??= PickCpuTemp(cpuTempCandidates);
         AssignThreadLoads(loadSensors, _coreMap, _hybrid, CpuTopology.LogicalToCore, coreLoads, threadLoads);
 
         foreach (var (id, core) in data.cores)
@@ -764,6 +761,29 @@ public class SensorService : IDisposable
             if (coreLoads.TryGetValue(id, out float l)) core.load = l;
             if (threadLoads.TryGetValue(id, out var tl)) core.threads = tl.Values.Select(x => (float)Math.Round(x, 1)).ToList();
         }
+    }
+
+    /// <summary>
+    /// The one CPU temperature shown everywhere (and used by fan curves and alerts). The
+    /// whole-chip sensor wins, in this order: AMD die (Tctl/Tdie), Intel "CPU Package",
+    /// then a core average. Only if none of those exist, the first plausible reading
+    /// (20–115 °C) from any other CPU sensor. CCD sensors are left out by the caller.
+    /// </summary>
+    internal static float? PickCpuTemp(IReadOnlyList<(string Name, float Value)> temps)
+    {
+        static bool Ok(float v) => v > 1f && v < 150f;
+        foreach (var match in new Func<string, bool>[]
+        {
+            n => n.Contains("Tctl") || n.Contains("Tdie"),
+            n => n.Contains("Package"),
+            n => n.Contains("Average"),
+            n => n == "CPU Core",
+        })
+            foreach (var (n, v) in temps)
+                if (match(n) && Ok(v)) return v;
+        foreach (var (_, v) in temps)
+            if (v > 20 && v < 115) return v;
+        return null;
     }
 
     // "CPU Core #3" or "CPU Core #3 Thread #2" → (3, 2); thread 0 = no suffix
