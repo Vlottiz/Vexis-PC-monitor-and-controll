@@ -13,6 +13,7 @@ public class FanInfo
     public string? healthStatus { get; set; }
     public bool    isGpu      { get; set; }     // graphics-card fan (driver control)
     public bool    failsafe   { get; set; }     // forced to 100% by the GPU over-temperature guard
+    public int     minPct     { get; set; }     // lowest speed Vexis will set (pumps: FanController.PumpMinPct)
 }
 
 // ─── Internal fan state ────────────────────────────────────────────────────────
@@ -235,9 +236,24 @@ public class FanController
         return Math.Clamp(Math.Max(fan.CurveSpeed, curve.MinSpeed), 0, 100);
     }
 
-    // Only talk to the hardware when the speed actually changes
+    /// <summary>Lowest speed Vexis will ever set a pump to. A slowed pump heats the CPU quickly.</summary>
+    public const int PumpMinPct = 50;
+
+    /// <summary>
+    /// The speed that is actually safe to send: 0–100, never below <see cref="PumpMinPct"/> for a
+    /// pump, and a reading that isn't a number becomes 100 (full speed is the safe failure).
+    /// </summary>
+    internal static int SafeSpeed(float pct, bool isPump)
+    {
+        if (float.IsNaN(pct)) return 100;
+        int p = (int)Math.Round(Math.Clamp(pct, 0f, 100f));
+        return isPump ? Math.Max(p, PumpMinPct) : p;
+    }
+
+    // Every speed Vexis sets goes through here: made safe, and only sent when it changes
     private static void Send(FanEntry fan, int pct)
     {
+        pct = SafeSpeed(pct, fan.IsPump);
         if (pct == fan.LastSent) return;
         fan.CtrlSensor?.Control?.SetSoftware(pct);
         fan.LastSent = pct;
@@ -327,9 +343,9 @@ public class FanController
         var fan = Find(fanName);
         if (fan == null) return;
         fan.Mode = "manual";
-        fan.ManualPct = pct;
-        fan.CtrlSensor?.Control?.SetSoftware(pct);
-        fan.LastSent = (int)pct;
+        fan.ManualPct = SafeSpeed(pct, fan.IsPump);
+        fan.LastSent = -1;                      // always send, even if the value is unchanged
+        Send(fan, (int)fan.ManualPct);
     }
 
     public void SetAuto(string fanName)
@@ -428,6 +444,7 @@ public class FanController
             hasControl  = f.CtrlSensor?.Control != null &&
                           f.RpmSensor.Hardware.HardwareType != HardwareType.GpuIntel,
             isGpu       = f.IsGpu,
+            minPct      = f.IsPump ? PumpMinPct : 0,
             failsafe    = f.IsGpu && _gpuGuard && f.Mode != "auto",
             curveActive = f.Mode == "curve",
             mode        = f.Mode,

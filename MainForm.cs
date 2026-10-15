@@ -757,9 +757,13 @@ public class MainForm : Form
                     break;
 
                 case "openUrl":
-                    if (msg.url != null)
+                    // Shell-execute opens whatever it's given — a web page, but also a program
+                    // or a file. Only hand it https:// links so a page can never start anything else.
+                    if (SafeLinks.IsWebLink(msg.url, out var link))
                         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                        { FileName = msg.url, UseShellExecute = true });
+                        { FileName = link, UseShellExecute = true });
+                    else
+                        Console.WriteLine($"[msg] openUrl refused (not an https link): {msg.url}");
                     break;
 
                 case "openrgbProxy":
