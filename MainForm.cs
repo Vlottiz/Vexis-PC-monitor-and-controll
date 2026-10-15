@@ -107,6 +107,7 @@ public class MainForm : Form
         });
 
         _config = AppConfig.Load();
+        try { File.Delete(ExitRequestPath); } catch { }   // a leftover request must not close this launch
         RestorePlacement();
         if (_startMinimized)
             BeginInvoke(() =>
@@ -458,6 +459,7 @@ public class MainForm : Form
     {
         try
         {
+            if (++_exitCheck % 4 == 0 && File.Exists(ExitRequestPath)) { ExitForInstaller(); return; }
             var data = _sensor.GetLatestData();
             _fans.Update(data, _config);
             CheckTempAlerts(data);
@@ -854,7 +856,7 @@ public class MainForm : Form
                     if (orgbGuiExe != null)
                     {
                         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                        { FileName = orgbGuiExe, UseShellExecute = true });
+                        { FileName = orgbGuiExe, Arguments = "--server", UseShellExecute = true });   // window + SDK server, so Vexis stays connected
                         Console.WriteLine($"[rgb] Launched OpenRGB GUI from {orgbGuiExe}");
                     }
                     break;
@@ -1191,6 +1193,22 @@ public class MainForm : Form
             });
         }
         catch (Exception ex) { Console.WriteLine($"[reset] relaunch: {ex.Message}"); }
+        _tray.Visible = false;
+        Application.Exit();
+    }
+
+    // ── Closing for the installer ──────────────────────────────────────────────
+    // The installer writes this file and gives Vexis a few seconds to close by itself
+    // (fans handed back, recording closed, no "didn't close properly" banner next time)
+    // before it force-closes anything still running.
+    private static string ExitRequestPath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Vexis", "exit.request");
+    private int _exitCheck;
+
+    private void ExitForInstaller()
+    {
+        try { File.Delete(ExitRequestPath); } catch { }
+        Console.WriteLine("[exit] Closing for the installer");
         _tray.Visible = false;
         Application.Exit();
     }

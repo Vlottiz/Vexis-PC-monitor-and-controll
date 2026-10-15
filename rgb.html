@@ -559,7 +559,7 @@ function captureDev(i){
   const d=_devices[i];if(!canColor(d))return null;
   const e={name:d.name||'',bright:devB(i)};
   const mi=_hwMode[i];
-  if(mi!=null&&d.modes?.[mi]){e.mode=d.modes[mi].name;return e;}
+  if(mi!=null&&d.modes?.[mi]&&!isSoftwareMode(d.modes[mi])){e.mode=d.modes[mi].name;return e;}   // Direct/Custom: save the colours
   const l=_last[i];
   if(l&&Array.isArray(l.b))e.leds=l.b.map(c=>({r:c.r|0,g:c.g|0,b:c.b|0}));
   else if(l&&l.b&&l.b.r!=null)e.leds=[{r:l.b.r|0,g:l.b.g|0,b:l.b.b|0}];
@@ -607,9 +607,12 @@ async function applyLook(idx){
       const s=document.getElementById('dev-bright-'+i);if(s)s.value=_devBright[devKey(i)];
       const v=document.getElementById('dev-bright-val-'+i);if(v)v.textContent=_devBright[devKey(i)]+'%';
       try{
-        if(e.mode){const mi=(d.modes||[]).findIndex(m=>m.name===e.mode);if(mi>=0){await setDevMode(i,mi);updateModeChips(i,mi);}}
-        else if(e.leds?.length){
-          const leds=fitLeds(e.leds,ledCnt(i)),c=leds[0],same=leds.every(x=>x.r===c.r&&x.g===c.g&&x.b===c.b);
+        // Looks saved before this fix may hold "Direct" as a mode: treat it as colours
+        const hwMode=e.mode&&!isSoftwareMode({name:e.mode})?e.mode:null;
+        const want=e.leds?.length?e.leds:(e.mode&&!hwMode?bestColours(i):null);
+        if(hwMode){const mi=(d.modes||[]).findIndex(m=>m.name===hwMode);if(mi>=0){await setDevMode(i,mi);updateModeChips(i,mi);}}
+        else if(want?.length){
+          const leds=fitLeds(want,ledCnt(i)),c=leds[0],same=leds.every(x=>x.r===c.r&&x.g===c.g&&x.b===c.b);
           _lc[i]=leds.map(x=>({...x}));
           await setDC(i,leds,same?rgbHex(c.r,c.g,c.b):null);
           const p=document.getElementById('dev-col-'+i);if(p)p.value=rgbHex(c.r,c.g,c.b);
@@ -702,7 +705,21 @@ function renderDevices(){
 function pickMode(i,mi){
   const name=_devices[i]?.modes?.[mi]?.name;
   const group=(isRam(i)&&_ramSync)?_devices.map((_,j)=>j).filter(j=>isRam(j)&&!isReleasedDev(_devices[j])):[i];
-  group.forEach(j=>{const mj=j===i?mi:(_devices[j]?.modes||[]).findIndex(m=>m.name===name);if(mj>=0){setDevMode(j,mj);updateModeChips(j,mj);}});
+  group.forEach(j=>{const mj=j===i?mi:(_devices[j]?.modes||[]).findIndex(m=>m.name===name);if(mj<0)return;
+    // "Direct"/"Custom" only means "Vexis sends the colours". Switching to it with no
+    // colours leaves the LEDs blank or frozen, so send the device's colours instead.
+    if(isSoftwareMode(_devices[j].modes[mj]))setDC(j,fitLeds(bestColours(j),ledCnt(j)),null).catch(()=>{});
+    else setDevMode(j,mj);
+    updateModeChips(j,mj);});
+}
+// The colours a device should show when Vexis takes it back: what Vexis last sent,
+// the per-LED painting, what the device reports, or white if all of those are blank.
+function bestColours(i){
+  const l=_last[i],d=_devices[i]||{};
+  if(l&&Array.isArray(l.b)&&l.b.length)return l.b.map(c=>({r:c.r|0,g:c.g|0,b:c.b|0}));
+  if(_lc[i]?.length)return _lc[i].map(c=>({...c}));
+  const dc=(d.colors||[]).map(c=>({r:c.r|0,g:c.g|0,b:c.b|0}));
+  return dc.some(c=>c.r||c.g||c.b)?dc:[{r:255,g:255,b:255}];
 }
 function updateModeChips(devIdx,am){document.querySelectorAll('#dev-modes-'+devIdx+' .mode-chip').forEach((c,mi)=>c.classList.toggle('active',mi===am));}
 
@@ -729,7 +746,9 @@ function openRgbGui(){
   sendToHost({type:'killOpenRGB'});
   setTimeout(()=>{
     sendToHost({type:'launchOpenRGBGui'});
-    if(sub)sub.textContent='OpenRGB GUI is open — configure devices & plugins, then click CLOSE GUI';
+    if(sub)sub.textContent='OpenRGB window is open. Vexis reconnects in a few seconds; click CLOSE GUI when you\'re done';
+    // The window is started with its SDK server on, so Vexis can keep working alongside it
+    beginRetryWithWait(5);
   },700);
 }
 function closeRgbGui(){

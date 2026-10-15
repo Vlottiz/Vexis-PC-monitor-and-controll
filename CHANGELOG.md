@@ -2,13 +2,24 @@
 
 <!--
 How to use: before a release, add a section at the top:
-  ## 2.12.1 — 2026-10-08
+  ## x.y.z — YYYY-MM-DD
+  - What changed, one line each
+The version must match <Version> in Pcmonitor2_0.csproj. Vexis shows the section
+for the installed version on Info → Version, and the release workflow uses it as
+the GitHub release notes.
+-->
+
+## 2.12.1 — 2026-10-08
 - Fixed: when started with Windows, Vexis could open as a grey window that didn't respond until it was restarted. It now runs only the monitoring, fans and alerts in the tray after sign-in, and builds the interface the first time you open it
 - If the interface's browser process crashes (e.g. a graphics driver reset), Vexis reloads or rebuilds it by itself instead of leaving a dead window
 - Fans, alerts and recording keep running even while the interface is loading or closed
 - Safety: links from the interface only open if they're https:// web pages, so nothing else can be started through them
 - Safety: every fan speed is kept between 0 and 100 %, and pumps never go below 50 % (manual, curve or profile)
 - Intel: the main CPU temperature now uses the CPU Package sensor instead of the first core it found
+- RGB: picking "Direct" on a device (or a saved look that stored "Direct") now sends its colours, instead of leaving the LEDs blank or frozen
+- RGB: the ⚙ GUI button opens OpenRGB with its SDK server on, so Vexis reconnects by itself instead of losing control until CLOSE GUI
+- Installing or uninstalling now asks Vexis to close by itself first, so fans are handed back properly and there's no "didn't close properly" warning afterwards
+- The update log on Info → Version shows 2.12.0 and 2.12.1 again (they were hidden by a mistake in this file)
 
 ## 2.12.0 — 2026-09-26
 - RGB: release a device (e.g. a keyboard or mouse run by iCUE, Synapse or G HUB). Vexis stops touching it, can put it back on its own lighting mode, and remembers it; fans, RAM and your other RGB keep working. "Take control again" undoes it
@@ -19,13 +30,6 @@ How to use: before a release, add a section at the top:
 - New SECURITY.md (why admin rights are needed, every network connection, what's stored), CONTRIBUTING.md and docs/ARCHITECTURE.md
 - Bug report and feature request forms on GitHub
 - LibreHardwareMonitor's license is shown correctly (MPL-2.0)
-
-## 2.11.0 — 2026-10-01
-  - What changed, one line each
-The version must match <Version> in Pcmonitor2_0.csproj. Vexis shows the section
-for the installed version on Info → Version, and the release workflow uses it as
-the GitHub release notes.
--->
 
 ## 2.11.0 — 2026-09-26
 - Saved RGB looks: save your colours, per-LED painting, built-in modes and brightness under a name and put them back with one click; can reapply your last look automatically when Vexis connects to OpenRGB
