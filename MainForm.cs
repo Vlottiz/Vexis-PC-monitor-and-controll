@@ -549,8 +549,8 @@ public class MainForm : Form
                     {
                         var logJson = System.Text.Json.JsonSerializer.Serialize(
                             new { lines = logLines, seq = newSeq });
-                        Invoke(() => _webView.CoreWebView2?.ExecuteScriptAsync(
-                            $"typeof updateLogs==='function'&&updateLogs({logJson})"));
+                        Invoke(() => { _ = _webView.CoreWebView2?.ExecuteScriptAsync(
+                            $"typeof updateLogs==='function'&&updateLogs({logJson})"); });
                     }
                     break;
 
@@ -732,8 +732,8 @@ public class MainForm : Form
                             var snap = _sensor.GetLatestData();
                             snap.fans = _fans.GetSnapshot();
                             string snapJson = JsonSerializer.Serialize(snap, _json);
-                            Invoke(() => _webView.CoreWebView2?.ExecuteScriptAsync(
-                                $"typeof receiveData==='function'&&receiveData({snapJson})"));
+                            Invoke(() => { _ = _webView.CoreWebView2?.ExecuteScriptAsync(
+                                $"typeof receiveData==='function'&&receiveData({snapJson})"); });
                         }
                         catch { }
                     });
@@ -773,8 +773,8 @@ public class MainForm : Form
                         string cid2 = msg.callId ?? "0";
                         var (ok, json) = await OpenRgbProxyAsync(msg);
                         string payload = System.Text.Json.JsonSerializer.Serialize(json);
-                        Invoke(() => _webView.CoreWebView2?.ExecuteScriptAsync(
-                            $"typeof orgbProxyResult==='function'&&orgbProxyResult('{cid2}',{(ok ? "true" : "false")},{payload})"));
+                        Invoke(() => { _ = _webView.CoreWebView2?.ExecuteScriptAsync(
+                            $"typeof orgbProxyResult==='function'&&orgbProxyResult('{cid2}',{(ok ? "true" : "false")},{payload})"); });
                     });
                     break;
 
@@ -791,8 +791,8 @@ public class MainForm : Form
                     string cid3 = msg.callId ?? "0";
                     string runJson = isRunning ? "{\"running\":true}" : "{\"running\":false}";
                     string runEsc  = System.Text.Json.JsonSerializer.Serialize(runJson);
-                    Invoke(() => _webView.CoreWebView2?.ExecuteScriptAsync(
-                        $"typeof orgbProxyResult==='function'&&orgbProxyResult('{cid3}',true,{runEsc})"));
+                    Invoke(() => { _ = _webView.CoreWebView2?.ExecuteScriptAsync(
+                        $"typeof orgbProxyResult==='function'&&orgbProxyResult('{cid3}',true,{runEsc})"); });
                     break;
                 }
 
