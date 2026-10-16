@@ -227,7 +227,7 @@ window.onRecordings = function(list) {
   body.innerHTML = list.map(f => `<tr data-name="${esc(f.name)}">
       <td>${esc(f.name)}</td><td class="m">${esc(f.modified)}</td><td class="m">${fmtSize(f.size)}</td>
       <td class="a"><button class="btn btn-primary mini" onclick="viewFile(this.closest('tr').dataset.name)">VIEW</button>
-        <button class="btn btn-ghost mini" onclick="sendToHost({type:'showRecording',file:'${esc(f.name)}'})">SHOW</button>
+        <button class="btn btn-ghost mini" onclick="sendToHost({type:'showRecording',file:this.closest('tr').dataset.name})">SHOW</button>
         <button class="btn btn-ghost mini" onclick="delFile(this.closest('tr').dataset.name)" title="Delete">&#x2715;</button></td></tr>`).join('');
   showRecState(REC);
 };

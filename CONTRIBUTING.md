@@ -50,6 +50,7 @@ The tests cover the logic that doesn't need real hardware:
 - update version handling and SHA-256 checksum files
 - the duplicate finder (only truly identical files are grouped)
 - refusing path tricks when opening recordings
+- pages never build inline `onclick="…"` code from outside text (each `${…}` in a handler must be on a reviewed list)
 
 If you change any of these areas, add or update a test.
 
