@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- V was here ✌  As of 2.13.0, 71% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame. -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -256,6 +257,7 @@ body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;backgr
 // ══════════════════════════════════════════════════════════════════════════════
 // WEBVIEW2 IPC — IS_WEBVIEW and sendToHost defined in nav.js
 // ══════════════════════════════════════════════════════════════════════════════
+// ✌ V was here — 100% of this section is still my original code
 
 // Set up message listener (nav.js already defined IS_WEBVIEW + sendToHost)
 if (IS_WEBVIEW) {
@@ -299,7 +301,9 @@ function persistSettings() {
 // ══════════════════════════════════════════════════════════════════════════════
 // HW INFO AUTO-FILL
 // ══════════════════════════════════════════════════════════════════════════════
+// ✌ V was here — 96% of this section is still my original code
 let _hwApplied = false;
+// Static CPU details (name, cores, socket...) — only changes once, so not redrawn every tick
 function applyHwInfo(info) {
   if (!info) return;
   setClockScale(info.baseMhz);
@@ -358,6 +362,7 @@ function applyHwInfo(info) {
 // ══════════════════════════════════════════════════════════════════════════════
 // COLOR SYSTEM
 // ══════════════════════════════════════════════════════════════════════════════
+// ✌ V was here — 92% of this section is still my original code
 const COLOR_DEFAULTS={bg:'#0a0808',cardBg:'#120e08',border:'#443300',label:'#aa7700',dividerLine:'#443300',dividerLbl:'#ffcc00',headerTitle:'#ffcc00',headerSub:'#aa8800',headerAcc:'#00ffcc',headerTime:'#776600',titleGlow:'#ffcc00',glowCol:'#ffcc00',lineCol1:'#ffcc00',lineCol2:'#00ffcc',ccdLbl:'#ffcc00',coreLbl:'#aa8800',barBg:'#120a00',barStart:'#221100',barLow:'#443300',barMid:'#886600',barHigh:'#ffaa00',barBoost:'#ffcc00',tempCold:'#007799',tempMid:'#00ccaa',tempHot:'#00ffcc',tempVal:'#00ddaa',tempLow:'#00aacc',tempWarn:'#00ffcc',sumLbl:'#aa7700',peakCol:'#ffcc00',avgCol:'#00ffcc',pwrCol:'#ff6600',gpuAcc:'#00ffcc',memAcc:'#ffaa00',cardTitle:'#aa7700'};
 const VAR_MAP={bg:'--bg',cardBg:'--card-bg',border:'--border',label:'--label',dividerLine:'--divider-line',dividerLbl:'--divider-lbl',headerTitle:'--header-title',headerSub:'--header-sub',headerAcc:'--header-acc',headerTime:'--header-time',titleGlow:'--title-glow',glowCol:'--glow-col',lineCol1:'--line-col1',lineCol2:'--line-col2',ccdLbl:'--ccd-lbl',coreLbl:'--core-lbl',barBg:'--bar-bg',tempVal:'--temp-val',tempLow:'--temp-low',tempWarn:'--temp-warn',sumLbl:'--sum-lbl',peakCol:'--peak-col',avgCol:'--avg-col',pwrCol:'--pwr-col',gpuAcc:'--gpu-acc',memAcc:'--mem-acc',cardTitle:'--card-title'};
 let COLORS={...COLOR_DEFAULTS};
@@ -398,6 +403,8 @@ function tempCol(t){if(t==null)return COLORS.tempVal;return t<60?COLORS.tempLow:
 let CORES_META = [];
 let _barsBuilt = false;
 
+// One bar per core, built from whatever cores the app reported (works for 6 to 32+ cores,
+// P/E cores, AMD CCDs). Rebuilt only when the core list changes
 function buildDynamicBars(coresObj, hwInfo) {
   if (_barsBuilt) return;
   const keys = Object.keys(coresObj).map(Number).sort((a,b)=>a-b);
@@ -471,6 +478,7 @@ document.addEventListener('DOMContentLoaded', () => {
   applySideLayout();
 });
 
+// Wide window: move the side info next to the core bars instead of under them
 function applySideLayout() {
   const on = SPARKLINES_VISIBLE;
   // Spark rows
@@ -501,6 +509,7 @@ window.setSparklines = function(on) {
 };
 function toggleSparklines() { setSparklines(!SPARKLINES_VISIBLE); }
 
+// Keeps a short history per value and redraws its little line graph
 function pushSparkline(id, val) {
   if (!SPARKLINE_HISTORY[id]) SPARKLINE_HISTORY[id] = [];
   const h = SPARKLINE_HISTORY[id];
@@ -568,12 +577,16 @@ function showInfoTab(tab) {
 }
 
 let pendingData=null,_applyTimer=null;
+// "Update interval" setting: above 250 ms, data that arrives is held in pendingData and
+// only the newest is drawn on this slower timer. At 250 ms every update is drawn directly
 function startApplyTimer(){if(_applyTimer)clearInterval(_applyTimer);if(SETTINGS.updateInterval<=250){_applyTimer=null;}else{_applyTimer=setInterval(()=>{if(pendingData){applyData(pendingData);pendingData=null;}},SETTINGS.updateInterval);}}
 function receiveData(data){if(!_applyTimer){applyData(data);}else{pendingData=data;}}
 
 const avgHistory=[];
+// Rolling average over the "avg window" setting (in ms, or one update interval for 'sync')
 function pushAvg(val){const now=Date.now();avgHistory.push({val,t:now});const ms=SETTINGS.avgWindow==='sync'?SETTINGS.updateInterval:parseInt(SETTINGS.avgWindow);const cutoff=now-ms;while(avgHistory.length>1&&avgHistory[0].t<cutoff)avgHistory.shift();return Math.round(avgHistory.reduce((s,x)=>s+x.val,0)/avgHistory.length);}
 
+// Draws one snapshot from the app: clocks, temps, power, bars, sparklines
 function applyData(data){
   applyHwInfo(data.info);
   // Build bars dynamically on first data with cores
@@ -652,6 +665,7 @@ function applyData(data){
 }
 
 // ── Boot ───────────────────────────────────────────────────────────────────
+// ✌ V was here — 80% of this section is still my original code
 applyAllColors();updateTempBars();updateAvgLabel();
 buildBars();startApplyTimer();setInterval(updateClock,1000);updateClock();
 </script>

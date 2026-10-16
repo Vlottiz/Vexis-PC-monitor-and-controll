@@ -1,8 +1,14 @@
+// V was here ✌  As of 2.13.0, 31% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame.
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+// ─── Main window ────────────────────────────────────────────────────────────────
+// The hub of the app: owns the sensor service, fan controller, tray icon and the WebView2
+// that shows the pages. Every 250 ms OnPollTick sends one JSON snapshot to every open page;
+// pages send commands back through HandleMessage (one switch on msg.type).
+// docs/ARCHITECTURE.md has the bigger picture.
 public class MainForm : Form
 {
     private WebView2                  _webView  = new() { DefaultBackgroundColor = System.Drawing.Color.Black };
@@ -13,16 +19,20 @@ public class MainForm : Form
     private FanController _fans   = null!;
     private AppConfig     _config = null!;
 
+    // A WinForms timer ticks on the UI thread, which WebView2 calls must run on.
+    // The sensor reads themselves happen on SensorService's own background timer.
     private System.Windows.Forms.Timer _pollTimer = new() { Interval = 250 };
     private int   _pollCount      = 0;
     private readonly CsvRecorder _recorder = new();
     private readonly ProcessMonitor _procs = new();
     private readonly DuplicateFinder _dupes = new();
     private SensorData? _lastData;   // last reading sent to the pages (includes fans)
-    private float _lastLoggedTemp = 0;
+    private float _lastLoggedTemp = 0;   // stops the high-temperature log line repeating every tick
 
-    private readonly Dictionary<string, PopoutForm> _popouts = new();
+    private readonly Dictionary<string, PopoutForm> _popouts = new();   // page id → open pop-out window
 
+    // Keep the C# property names as the JSON keys, leave out nulls (pages treat a missing
+    // key as "no sensor"), and allow NaN / Infinity from odd sensors instead of throwing
     private static readonly JsonSerializerOptions _json = new()
     {
         PropertyNamingPolicy   = null,
@@ -212,6 +222,7 @@ public class MainForm : Form
             _webView.CoreWebView2?.ExecuteScriptAsync(ZoomHelper.Script(_webView.ZoomFactor));
         };
 
+        // F11 = fullscreen. Caught here because the browser would otherwise swallow the key
         _webView.PreviewKeyDown += (s, e) =>
         {
             if (e.KeyCode == System.Windows.Forms.Keys.F11)
@@ -221,6 +232,9 @@ public class MainForm : Form
             }
         };
 
+        // Clear WebView2's cached page files so pages from a new version always load fresh
+        // (otherwise an update can show the old HTML/JS until the cache expires).
+        // Page storage (settings, menu order) lives elsewhere and is kept.
         try
         {
             string wv2Root = System.IO.Path.Combine(
@@ -242,10 +256,14 @@ public class MainForm : Form
 
         // Update check: requested by nav.js when a page loads (cached after the first check)
 
+        // https://vexis.local/ is a made-up address that WebView2 maps to the install folder;
+        // nothing goes over the network
         _webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
             "vexis.local", AppDir, CoreWebView2HostResourceAccessKind.Allow);
         _webView.CoreWebView2.Navigate("https://vexis.local/home.html");
 
+        // Wait until the page's script has defined receiveData (up to 10 s), then send it
+        // the saved settings. Sending earlier would call a function that doesn't exist yet.
         Console.WriteLine("[startup] waiting for page...");
         for (int i = 0; i < 40; i++)
         {
@@ -486,6 +504,8 @@ public class MainForm : Form
                 else _popouts.Remove(kv.Key);
             }
 
+            // Once a minute (240 × 250 ms) write a one-line summary to debug.log, so a log
+            // from a user shows what the hardware was doing
             _pollCount++;
             if (_pollCount % 240 == 0)
             {
@@ -507,6 +527,8 @@ public class MainForm : Form
                 }
             }
 
+            // Log-only warnings (the user-facing alerts are CheckTempAlerts). Logs again only
+            // after a 2 °C change, and says "normal" once it's back under 85 °C
             float cpuTemp = data.cpu_temp ?? 0;
             if (cpuTemp > 90 && Math.Abs(cpuTemp - _lastLoggedTemp) > 2)
             {
@@ -541,7 +563,7 @@ public class MainForm : Form
     {
         try
         {
-            Console.WriteLine($"[msg] {raw[..Math.Min(80,raw.Length)]}");
+            Console.WriteLine($"[msg] {raw[..Math.Min(80,raw.Length)]}");   // first 80 chars, enough to see the type
             var msg = JsonSerializer.Deserialize<IncomingMessage>(raw, _json);
             if (msg == null) return;
 
@@ -688,6 +710,7 @@ public class MainForm : Form
                     _ = Task.Run(() => { DriverSetup.RestoreWindowsSecurity(); PushSecurityStatus(); });
                     break;
 
+                // ── Settings from the pages, merged into config.json ──
                 case "saveSettings":
                     if (msg.settings != null)
                     {
@@ -744,6 +767,8 @@ public class MainForm : Form
                     });
                     break;
 
+                // Page change from the side menu. Navigation is locked to vexis.local
+                // (WebViewSecurity), so a path here can only open one of the app's own files
                 case "navigate":
                     if (msg.file != null)
                         _webView.CoreWebView2.Navigate($"https://vexis.local/{msg.file}");
@@ -771,6 +796,9 @@ public class MainForm : Form
                         Console.WriteLine($"[msg] openUrl refused (not an https link): {msg.url}");
                     break;
 
+                // ── RGB ──
+                // The RGB page can't open a TCP socket itself, so it sends OpenRGB requests here;
+                // the reply comes back through orgbProxyResult(callId, ...) matched by callId
                 case "openrgbProxy":
                     Console.WriteLine($"[rgb] proxy: {msg.method} {msg.path}");
                     _ = Task.Run(async () =>
@@ -879,6 +907,7 @@ public class MainForm : Form
                     SetFanProfile(msg.profile);
                     break;
 
+                // Takes ~8 s, so it runs on a worker thread; the result goes back as a web message
                 case "fanHealthCheck":
                     if (msg.fanName != null)
                     {
@@ -897,7 +926,7 @@ public class MainForm : Form
                     break;
 
                 case "minimize": Invoke(() => { WindowState = FormWindowState.Minimized; }); break;
-                case "close":    Invoke(() => Hide()); break;
+                case "close":    Invoke(() => Hide()); break;   // to the tray; Vexis keeps running
                 case "toggleFullscreen": Invoke(() => ToggleFullscreen()); break;
                 case "exit":
                     Invoke(() => { _tray.Visible = false; Application.Exit(); });
@@ -918,10 +947,13 @@ public class MainForm : Form
         WindowState     = _isFullscreen ? FormWindowState.Maximized : FormWindowState.Normal;
     }
 
+    // One pop-out per page: asking again brings the open one to the front
     private void OpenPopout(string page)
     {
         if (_popouts.TryGetValue(page, out var existing) && !existing.IsDisposed)
         { existing.Activate(); return; }
+        // Messages from the pop-out arrive on its own UI thread. OpenRGB checks are answered
+        // straight back to that window; everything else is handed to HandleMessage
         PopoutForm? form = null;
         form = new PopoutForm(page, _config, raw =>
         {
@@ -1026,6 +1058,7 @@ public class MainForm : Form
         finally { _orgbLock.Release(); }
     }
 
+    // Tray icon and its right-click menu (Show, fan profiles, Exit). Double-click opens the window
     private void SetupTray()
     {
         _trayMenu.Items.Clear();
@@ -1331,6 +1364,7 @@ public class MainForm : Form
         if (t < limit - 5) _alertActive.Remove(name);
         return _alertActive.Contains(name) ? $"{state} cooling" : $"{state} ok";
     }
+    // Minimising hides the window to the tray instead of the taskbar
     private void OnResize(object? s, EventArgs e) { if (WindowState==FormWindowState.Minimized) Hide(); }
 
     protected override void Dispose(bool disposing)
@@ -1347,6 +1381,8 @@ public class MainForm : Form
     }
 }
 
+// The shape of every sendToHost({...}) message from the pages. One class for all of them:
+// each message type only fills the fields it needs and the rest stay null.
 public class IncomingMessage
 {
     public string?                     type     { get; set; }

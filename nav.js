@@ -1,3 +1,4 @@
+// V was here ✌  As of 2.13.0, 55% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame.
 // nav.js v5 — Vexis shared navigation
 // IS_WEBVIEW + sendToHost defined here — do NOT redeclare in pages
 
@@ -192,6 +193,7 @@ let NAV_CURRENT_COLORS = {};
 let NAV_PROFILES       = {};
 
 // ── Color groups for picker UI ────────────────────────────────────────────────
+// ✌ V was here — 100% of this section is still my original code
 const NAV_COLOR_GROUPS = [
   { label: 'BACKGROUNDS', keys: ['bg','cardBg','surface','surface2','barBg'] },
   { label: 'BORDERS',     keys: ['border','borderBright','dividerLine'] },
@@ -220,6 +222,7 @@ const NAV_COLOR_LABELS = {
 };
 
 // ── Presets ───────────────────────────────────────────────────────────────────
+// ✌ V was here — 100% of this section is still my original code
 const NAV_PRESETS = [
   { name:'CYBERPUNK', colors:{bg:'#0a0808',cardBg:'#120e08',surface:'#140f08',surface2:'#1e1608',borderBright:'#886600',text:'#e8d080',textDim:'#886600',border:'#443300',label:'#aa7700',dividerLine:'#443300',dividerLbl:'#ffcc00',headerTitle:'#ffcc00',headerSub:'#aa8800',headerAcc:'#00ffcc',headerTime:'#776600',titleGlow:'#ffcc00',glowCol:'#ffcc00',lineCol1:'#ffcc00',lineCol2:'#00ffcc',ccdLbl:'#ffcc00',coreLbl:'#aa8800',barBg:'#120a00',barStart:'#221100',barLow:'#443300',barMid:'#886600',barHigh:'#ffaa00',barBoost:'#ffcc00',tempCold:'#007799',tempMid:'#00ccaa',tempHot:'#00ffcc',tempVal:'#00ddaa',tempLow:'#00aacc',tempWarn:'#ffaa00',sumLbl:'#aa7700',peakCol:'#ffcc00',avgCol:'#00ffcc',pwrCol:'#ff6600',gpuAcc:'#00ffcc',memAcc:'#ffaa00',cardTitle:'#aa7700'} },
   { name:'PURPLE',    colors:{bg:'#000000',cardBg:'#0a0612',border:'#5c2278',label:'#cc88aa',dividerLine:'#5c2278',dividerLbl:'#dd88cc',headerTitle:'#ff2266',headerSub:'#cc99bb',headerAcc:'#aa44ee',headerTime:'#8855aa',titleGlow:'#ff1e64',glowCol:'#ff50c8',lineCol1:'#9900ff',lineCol2:'#ff0044',ccdLbl:'#ff2266',coreLbl:'#cc77aa',barBg:'#0e0820',barStart:'#2a1050',barLow:'#5511aa',barMid:'#8833dd',barHigh:'#cc2266',barBoost:'#ff1a44',tempCold:'#6600cc',tempMid:'#cc1188',tempHot:'#ff1133',tempVal:'#dd77ee',tempLow:'#aa33ff',tempWarn:'#ee2277',sumLbl:'#dd88cc',peakCol:'#ff2255',avgCol:'#bb44ff',pwrCol:'#dd33cc',gpuAcc:'#ff4488',memAcc:'#aa55ff',cardTitle:'#dd88cc',surface:'#0d0818',surface2:'#180d28',text:'#ddaacc',textDim:'#9966aa'} },
@@ -278,12 +281,14 @@ window.navApplyPreset = function(idx) {
 };
 
 // ── Light mode ─────────────────────────────────────────────────────────────────
+// ✌ V was here — 100% of this section is still my original code
 function toggleLightMode() {
   const on = document.body.classList.toggle('nav-light-mode');
   localStorage.setItem('pcm-light-mode', on ? '1' : '0');
   const btn = document.getElementById('nv-light-toggle');
   if (btn) btn.classList.toggle('nv-light-on', on);
 }
+// Light mode is a per-PC choice kept in this browser's storage, not in config.json
 function applyStoredLightMode() {
   if (localStorage.getItem('pcm-light-mode') === '1') {
     document.body.classList.add('nav-light-mode');
@@ -293,6 +298,7 @@ function applyStoredLightMode() {
 }
 
 // ── Profile management ─────────────────────────────────────────────────────────
+// ✌ V was here — 84% of this section is still my original code
 function navSaveProfile(slot) {
   if (!Object.keys(NAV_CURRENT_COLORS).length) {
     alert('Apply a theme first before saving a profile.'); return;
@@ -301,6 +307,8 @@ function navSaveProfile(slot) {
   sendToHost({ type:'saveProfile', slot, colors: NAV_CURRENT_COLORS });
   updateProfileUI();
 }
+// Colour profiles: three saved slots (1-3). Loading one saves it as the current colours,
+// then reloads the page so every element picks the new values up
 function navLoadProfile(slot) {
   const colors = NAV_PROFILES[slot];
   if (!colors) { alert('No profile saved in slot ' + slot); return; }
@@ -308,11 +316,13 @@ function navLoadProfile(slot) {
   closeNav();
   showPageTransition(NAV_PAGE_FILES[NAV_CURRENT_PAGE] || 'home.html');
 }
+// Empties a slot here and in config.json
 function navClearProfile(slot) {
   NAV_PROFILES[slot] = null;
   sendToHost({ type:'deleteProfile', slot });
   updateProfileUI();
 }
+// Redraws the three slot buttons: coloured dot + LOAD when a slot has a profile, grey when empty
 function updateProfileUI() {
   for (let s = 1; s <= 3; s++) {
     const saved = NAV_PROFILES[s];
@@ -345,6 +355,7 @@ window.navOnConfig = function(cfg) {
     NAV_SETTINGS = cfg.settings;
     if (orderChanged) { try { localStorage.setItem('pcm-nav-order', cfg.settings.navOrder || ''); } catch {} navRenderPageList(); }
     navSyncPerfSettings();
+    // Old security-bypass switch (see navToggleSecurityBypass): its checkbox no longer exists, so this finds nothing
     const bypassDisabled = cfg.settings['disableSecurityBypass'] === 'true';
     const cb = document.getElementById('nv-sec-bypass');
     if (cb) {
@@ -367,6 +378,7 @@ window.navOnConfig = function(cfg) {
 };
 
 // ── Color picker logic ─────────────────────────────────────────────────────────
+// ✌ V was here — 100% of this section is still my original code
 function buildColorPickerHTML() {
   // Get defaults from CYBERPUNK preset (index 0) for reset targets
   const defaults = NAV_PRESETS[0].colors;
@@ -391,6 +403,7 @@ function buildColorPickerHTML() {
   }).join('');
 }
 
+// After a preset or profile changes the colours, move every picker and swatch to match
 function syncColorPickers() {
   // Update all picker input values and swatches to match current colors
   for (const key of Object.keys(NAV_COLOR_LABELS)) {
@@ -403,6 +416,8 @@ function syncColorPickers() {
   }
 }
 
+// Live preview while dragging a colour picker: sets the CSS variable on this page and
+// saves the colour so other pages and pop-outs get it too
 function navColorChange(key, val) {
   const cssVar = NAV_VAR_MAP[key];
   if (cssVar) document.documentElement.style.setProperty(cssVar, val);
@@ -426,6 +441,7 @@ function navColorChange(key, val) {
   }, 400);
 }
 
+// ↺ next to one colour: back to the default (first) preset's value
 function navColorReset(key) {
   const defaults = NAV_PRESETS[0].colors; // CYBERPUNK defaults
   const val = defaults[key];
@@ -435,6 +451,7 @@ function navColorReset(key) {
   navColorChange(key, val);
 }
 
+// RESET ALL: back to whichever preset was picked last (or the default preset)
 function navColorResetAll() {
   const savedIdx = parseInt(
     sessionStorage.getItem('pcm-last-preset-idx') ||
@@ -448,9 +465,11 @@ function navColorResetAll() {
 }
 
 // ── Page transition ────────────────────────────────────────────────────────────
+// ✌ V was here — 100% of this section is still my original code
 window.navView   = function(file)   { closeNav(); showPageTransition(file); };
 window.navPopOut = function(pageId) { closeNav(); sendToHost({ type:'popOut', page:pageId }); };
 
+// The "LOADING" ring shown while changing page, so a slow page load doesn't look frozen
 function showPageTransition(file) {
   // Create or reuse overlay
   let ov = document.getElementById('nav-transition');
@@ -535,6 +554,8 @@ function initNav() {
 
 }
 
+// Builds the whole side panel (Pages / Colors / Themes / System tabs) as one HTML string.
+// Only Vexis's own values go into it (page names, preset names, colour keys)
 function buildPanelHTML() {
   const pageItems = navPageItemsHtml();
 
@@ -781,6 +802,8 @@ function buildPanelHTML() {
 `;
 }
 
+// Text size slider: every page sizes its text as calc(Npx * var(--fs-base)), so one
+// CSS variable scales the whole UI. Saved per PC in localStorage
 function navSetFontScale(pct) {
   const scale = parseFloat(pct) / 100;
   document.documentElement.style.setProperty('--fs-base', scale);
@@ -809,6 +832,7 @@ window.navSetNavScale = function(pct) {
   if (val) val.textContent = pct + '%';
 };
 
+// On page load: put both text sliders (UI text and data numbers) back where they were
 function navApplyStoredFontScale() {
   // Page UI font
   const stored = localStorage.getItem('pcm-font-scale') || '100';
@@ -914,6 +938,8 @@ function navSyncPerfSettings() {
   if (au) au.checked = NAV_SETTINGS.autoUpdate === 'true';
 }
 
+// Leftover from early builds that could switch Windows protections off. Nothing calls it
+// any more, and the app ignores this setting
 function navToggleSecurityBypass(enabled) {
   NAV_SETTINGS['disableSecurityBypass'] = enabled ? 'false' : 'true'; // enabled checkbox = bypass ON
   sendToHost({ type:'saveSettings', settings: NAV_SETTINGS });
@@ -921,6 +947,7 @@ function navToggleSecurityBypass(enabled) {
   if (lbl) lbl.textContent = enabled ? 'ENABLED' : 'DISABLED';
 }
 
+// Switches the side panel between its four tabs
 function showNavTab(tab) {
   // Make panel more transparent in colors mode so live changes are visible
   const panel = document.getElementById('nav-panel');
@@ -947,6 +974,7 @@ window.closeNav = () => {
   document.getElementById('nav-overlay')?.classList.remove('nv-open');
   document.getElementById('nav-btn')?.classList.remove('nv-shifted');
 };
+// ☰ button: slide the side panel in or out (the dark overlay behind it closes it too)
 function toggleNav() {
   const o = document.getElementById('nav-panel').classList.toggle('nv-open');
   document.getElementById('nav-overlay').classList.toggle('nv-open', o);
@@ -954,6 +982,7 @@ function toggleNav() {
 }
 
 // ── Popout badge ──────────────────────────────────────────────────────────────
+// ✌ V was here — 89% of this section is still my original code
 function initPopoutBadge() {
   const b = document.createElement('div');
   b.id = 'popout-badge'; b.innerHTML = '⊞ INSTANCE';
@@ -1231,6 +1260,8 @@ function injectSharedStyles() {
   document.head.appendChild(s);
 }
 
+// nav.js brings its own CSS, so every page gets the same menu, gear and panel without
+// each page's stylesheet having to include it. !important wins over page styles
 function injectNavStyles() {
   const s = document.createElement('style');
   s.textContent = `
@@ -1357,6 +1388,7 @@ function injectNavStyles() {
     .nv-order-bar button:hover { color:var(--header-title,#ffcc00); }
 
     /* ── Colors tab ── */
+    /* ✌ V was here — 95% of this section is still my original code */
     .nvc-toolbar {
       display:flex;align-items:center;justify-content:space-between;
       padding:8px 12px 6px;flex-shrink:0;border-bottom:1px solid color-mix(in srgb,var(--border,#443300) 25%,transparent);
@@ -1415,6 +1447,7 @@ function injectNavStyles() {
     .nvc-input::-webkit-color-swatch { border:none;border-radius:1px; }
 
     /* ── Themes tab ── */
+    /* ✌ V was here — 100% of this section is still my original code */
     .nv-section-hdr { padding:8px 14px 4px;font-size:8px;letter-spacing:.16em;color:var(--label,#554400);opacity:.7;font-family:monospace;flex-shrink:0; }
     .nv-grid { display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:4px 12px 8px;flex-shrink:0; }
     .nv-preset {

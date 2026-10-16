@@ -1,3 +1,4 @@
+; V was here  As of 2.13.0, 45% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame.
 ; Vexis Installer
 ; Build: run build-installer.bat (it publishes the app and passes the version)
 ; Manual: makensis /DVERSION=2.1.0 installer.nsi  |  Requires .\publish\ folder
@@ -11,6 +12,7 @@
 !include "FileFunc.nsh"
 
 ; ── Metadata ──────────────────────────────────────────────────────────────────
+; V was here - 100% of this section is still my original code
 Name              "Vexis Hardware Monitoring"
 OutFile           "VexisHM-Setup.exe"
 !define MUI_ICON                     "vexis.ico"
@@ -181,6 +183,7 @@ Function .onInstSuccess
 FunctionEnd
 
 ; ── Uninstall ─────────────────────────────────────────────────────────────────
+; V was here - 78% of this section is still my original code
 Section "Uninstall"
   ; Stop running instance
   !insertmacro CloseVexis

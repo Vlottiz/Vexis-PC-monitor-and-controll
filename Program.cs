@@ -1,3 +1,4 @@
+// V was here ✌  As of 2.13.0, 84% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame.
 using System.Diagnostics;
 using System.Security.Principal;
 using System.Windows.Forms;
@@ -5,13 +6,15 @@ using System.Windows.Forms;
 /// <summary>
 /// In-memory ring buffer for live log display in the Security tab.
 /// Tees Console.WriteLine output to both the log file and this buffer.
+/// The page polls with the last sequence number it saw ("getLogs") and gets only newer lines,
+/// so it never has to re-download the whole log.
 /// </summary>
 public static class AppLog
 {
     private static readonly Queue<string> _lines = new();
-    private static          int           _seq   = 0;
+    private static          int           _seq   = 0;     // total lines ever added (keeps counting past MAX)
     private static readonly object        _lock  = new();
-    private const           int           MAX    = 600;
+    private const           int           MAX    = 600;   // lines kept; older ones drop off the front
 
     public static void Append(string line)
     {
@@ -34,7 +37,7 @@ public static class AppLog
         {
             // If more than MAX lines have gone by since last poll, just send all
             if (_seq - afterSeq >= MAX) return (_lines.ToArray(), _seq);
-            // Otherwise send only the new tail
+            // Otherwise send only the new tail: (_seq - afterSeq) lines arrived since then
             int skip = _lines.Count - (_seq - afterSeq);
             var arr  = skip > 0 ? _lines.Skip(skip).ToArray() : _lines.ToArray();
             return (arr, _seq);
@@ -57,6 +60,7 @@ internal sealed class TeeWriter : TextWriter
         AppLog.Append(line);
     }
 
+    // Partial writes (no newline) go to the file only: the live view works line by line
     public override void Write(string? value)          { _file.Write(value); }
     public override void Flush()                       { _file.Flush(); }
     protected override void Dispose(bool d) { if (d) _file.Dispose(); base.Dispose(d); }
@@ -71,6 +75,10 @@ internal static class Program
         bool startMinimized = args.Any(a => a.Equals("--minimized", StringComparison.OrdinalIgnoreCase));
 
         // ── Admin check ───────────────────────────────────────────────────────
+        // ✌ V was here — 96% of this section is still my original code
+        // app.manifest already asks Windows for admin, so the installed .exe normally starts
+        // elevated. This catches `dotnet run` from a normal terminal and any launch that
+        // skipped the manifest.
         if (!IsAdministrator())
         {
             string proc = Process.GetCurrentProcess().ProcessName;
@@ -101,6 +109,8 @@ internal static class Program
         }
 
         // ── Kill any existing Vexis instances ────────────────────────────
+        // Only one copy may drive the fan chip and the OpenRGB connection; two would fight
+        // over every fan speed. The newest launch wins.
         var current = Process.GetCurrentProcess();
         bool replacedOther = false;
         // After "Reset to factory settings": give the old copy time to hand the fans back and close
@@ -121,14 +131,18 @@ internal static class Program
         Application.ApplicationExit += (_, _) => CrashHelper.OnCleanExit();
 
         // ── Log to AppData (always writable, even from Program Files) ──────────
+        // ✌ V was here — 85% of this section is still my original code
         try
         {
             var logDir  = Path.Combine(Environment.GetFolderPath(
                               Environment.SpecialFolder.ApplicationData), "Vexis");
             Directory.CreateDirectory(logDir);
             var logPath = Path.Combine(logDir, "debug.log");
+            // false = start a fresh file each launch (CrashHelper has already copied the last one
+            // to debug-previous.log). AutoFlush so the log survives a crash.
             var log    = new StreamWriter(logPath, false) { AutoFlush = true };
             var tee    = new TeeWriter(log);
+            // From here on every Console.WriteLine in the app lands in debug.log and the Security tab
             Console.SetOut(tee);
             Console.SetError(tee);
             Console.WriteLine($"[log] Writing to {logPath}");
@@ -136,6 +150,7 @@ internal static class Program
         catch { }   // no log file: Vexis still runs, just without debug.log
 
         if (CrashHelper.Pending != null) Console.WriteLine("[crash] Previous session ended unexpectedly — log kept as debug-previous.log");
+        // SystemAware: WinForms scales once for the main monitor; WebView2 does its own scaling inside
         Application.SetHighDpiMode(HighDpiMode.SystemAware);
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);

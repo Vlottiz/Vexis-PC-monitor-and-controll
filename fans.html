@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- V was here ✌  As of 2.13.0, 72% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame. -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -113,6 +114,8 @@ window.onFanProfile = function(p) {
   document.querySelectorAll('.preset-note b').forEach(b => b.textContent = PROFILE_NAMES[PROFILE].toUpperCase());
 };
 
+// Per-fan page state (mode, speed, curve points...), created with defaults the first time.
+// The default curve: quiet at idle, 100% from 85 °C
 function gs(name) {
   if (!fanStates[name]) fanStates[name] = {
     mode:'auto', pct:50, tempSrc:'cpu', hyst:5, min:0,
@@ -127,6 +130,7 @@ const FAN_NAMES = [];
 function fanArg(name) { let i = FAN_NAMES.indexOf(name); if (i < 0) { i = FAN_NAMES.length; FAN_NAMES.push(name); } return `FAN_NAMES[${i}]`; }
 
 // ── Mode ──────────────────────────────────────────────────────────────────────
+// ✌ V was here — 95% of this section is still my original code
 function setMode(name, mode) {
   const s = gs(name), id = sid(name);
   if (PROFILE !== 'custom') onFanProfile('custom');   // the host switches back to Custom too
@@ -152,6 +156,7 @@ function applyManual(name) {
 }
 
 // ── Health check ──────────────────────────────────────────────────────────────
+// ✌ V was here — 100% of this section is still my original code
 function runHealth(name) {
   const id  = sid(name);
   const btn = document.getElementById(`hbtn-${id}`);
@@ -162,9 +167,11 @@ function runHealth(name) {
 }
 
 // ── Curve editor ──────────────────────────────────────────────────────────────
+// ✌ V was here — 80% of this section is still my original code
 const PAD = {l:6,r:6,t:8,b:8};
 const TMIN=20, TMAX=100;
 
+// Curve graph maths: temperature (x) and speed % (y) ↔ pixels inside the padded plot area
 function ptToPx(W, H, t, s) {
   const iw = W - PAD.l - PAD.r;
   const ih = H - PAD.t - PAD.b;
@@ -183,6 +190,8 @@ function pxToPt(W, H, px, py) {
   };
 }
 
+// Same straight-line interpolation as AppConfig.InterpolateCurve in the app, so the
+// preview on the graph matches what the fan will really do
 function interp(pts, t) {
   const s = [...pts].sort((a,b)=>a.t-b.t);
   if (t <= s[0].t) return s[0].s;
@@ -196,6 +205,7 @@ function interp(pts, t) {
   return 50;
 }
 
+// Draws the curve as SVG: grid, line, draggable points and the current-temperature marker
 function renderCurve(name) {
   const id  = sid(name);
   const svg = document.getElementById(`csvg-${id}`);
@@ -273,6 +283,7 @@ function renderCurve(name) {
 
 // Drag
 let _drag = null;
+// Dragging a curve point: start / move (clamped to the graph) / release
 function startDrag(e, name, i) {
   e.stopPropagation(); e.preventDefault();
   _drag = {name, i};
@@ -296,6 +307,7 @@ function onUp() {
   document.removeEventListener('mousemove', onMove);
   document.removeEventListener('mouseup',   onUp);
 }
+// Right-click a point to delete it (a curve keeps at least two)
 function delPt(e, name, i) {
   e.preventDefault();
   const pts = gs(name).pts;
@@ -328,6 +340,7 @@ function resetCurve(name) {
   renderCurve(name);
 }
 
+// Sends the curve to the app, which saves it in config.json and starts using it
 function saveCurve(name) {
   const s = gs(name);
   if (PROFILE !== 'custom') onFanProfile('custom');
@@ -348,6 +361,8 @@ function setPump(name, on) {
   _built = false;   // rebuild the cards on the next update so the slider floor changes too
 }
 
+// One card per fan: name, RPM gauge, mode buttons and the manual / curve controls.
+// Fan names come from hardware, so they go through escHtml and fanArg, never straight into code
 function buildCard(fan) {
   // GPU fans follow the GPU temperature unless a saved curve says otherwise
   if (!fanStates[fan.name]) {
@@ -455,6 +470,7 @@ function buildCard(fan) {
 }
 
 // ── Data ──────────────────────────────────────────────────────────────────────
+// ✌ V was here — 91% of this section is still my original code
 function receiveData(data) {
   _latestData = data;
   const fans = data.fans;
@@ -500,6 +516,7 @@ function receiveData(data) {
 }
 
 
+// Saved curves arrive with the settings; load them into the page state
 function onConfigReceived(cfg) {
   // Load saved fan curves into state
   if (cfg.fanCurves && cfg.fanCurves.length) {

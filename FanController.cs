@@ -1,3 +1,4 @@
+// V was here ✌  As of 2.13.0, 48% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame.
 using LibreHardwareMonitor.Hardware;
 using System.Management;
 
@@ -90,9 +91,11 @@ public class FanController
     private readonly List<string> _wmiFanNames = new();
 
     // ─── Discovery ─────────────────────────────────────────────────────────────
+    // ✌ V was here — 92% of this section is still my original code
     /// <summary>
     /// Scan all hardware for fan + control sensor pairs.
-    /// Call once after LHM Computer is open and updated.
+    /// Called after LHM Computer is open and updated, and again by RescanIfNewFans
+    /// when motherboard fans show up late.
     /// </summary>
     public void Discover(IEnumerable<IHardware> hardware)
     {
@@ -124,7 +127,9 @@ public class FanController
 
             foreach (var fan in fanSensors)
             {
-                // Try to match a control sensor by name similarity
+                // Try to match a control sensor by name similarity.
+                // LHM names them in pairs like "Fan #2" (RPM) / "Fan Control #2" or "Fan #2" (%),
+                // so drop "fan" and "#" and compare what's left.
                 ISensor? ctrl = null;
                 foreach (var c in ctrlSensors)
                 {
@@ -138,7 +143,9 @@ public class FanController
                     }
                 }
 
-                // Fallback: match by index if names don't align
+                // Fallback: match by index if names don't align. The Nth RPM sensor usually
+                // belongs to the Nth control on the same chip, but this is a guess — the
+                // health check on the Fan Control page is how a user can confirm the pairing.
                 if (ctrl == null)
                 {
                     int idx = fanSensors.IndexOf(fan);
@@ -162,6 +169,7 @@ public class FanController
         Console.WriteLine($"[fans] Discovered {_fans.Count} fan(s) total.");
 
         // ── WMI fallback for boards whose SuperIO LHM doesn't support ──────────
+        // ✌ V was here — 96% of this section is still my original code
         // If the SuperIO chip can't be read, motherboard fan headers show up with
         // zero sensors. Win32_Fan gives read-only RPM data (no software control)
         // but is better than showing nothing.
@@ -195,9 +203,6 @@ public class FanController
     }
 
     // ─── Per-cycle update ──────────────────────────────────────────────────────
-    /// <summary>
-    /// Call every poll cycle. Applies curve speeds if a curve is active.
-    /// </summary>
     // GPU over-temperature guard: a GPU fan under manual or curve control is forced
     // to 100% when the core or hot spot gets this hot, and released 8 °C below.
     public const float GpuCoreLimit = 90f, GpuHotspotLimit = 100f, GpuGuardRelease = 8f;
@@ -218,6 +223,10 @@ public class FanController
 
     private AppConfig? _config;
 
+    /// <summary>
+    /// Call every poll cycle. Applies the over-temperature guards, then each fan's
+    /// manual speed, curve or profile.
+    /// </summary>
     public void Update(SensorData sensorData, AppConfig config)
     {
         if (!_discovered) return;
@@ -429,7 +438,8 @@ public class FanController
 
     // ─── Health check ──────────────────────────────────────────────────────────
     /// <summary>
-    /// Runs a brief health check: ramps fan through 30%, 60%, 100%, back to auto.
+    /// Runs a brief health check: steps the fan through 30%, 60%, 100% (pumps 50%, 75%, 100%),
+    /// reads the RPM at each step, then puts the fan back in the mode it was in.
     /// Returns results after ~8 seconds. Call on a background thread.
     /// </summary>
     public FanHealthResult RunHealthCheck(string fanName)
@@ -480,7 +490,10 @@ public class FanController
             finally { fan.Testing = false; }   // the poll takes the fan over again either way
         }
 
-        // Evaluate
+        // Evaluate (readings are in step order: lowest speed first, 100% last)
+        //   responding: every step spins above 100 RPM
+        //   scaling:    100% is at least 20% faster than the lowest step, so the control works
+        //   stalling:   under 50 RPM at a speed that should spin any fan
         bool responding = readings.All(r => r.MeasuredRpm > 100);
         bool scaling    = readings[2].MeasuredRpm > readings[0].MeasuredRpm * 1.2f;
         bool stalling   = readings.Any(r => r.MeasuredRpm < 50 && r.SetPct >= 30);
@@ -524,6 +537,7 @@ public class FanController
             pct         = f.CtrlSensor?.Value ?? 0f,
             // GPU fans are set through the graphics driver (NVAPI / ADL). Intel Arc
             // exposes no fan control, so it only gets a control sensor on NVIDIA/AMD.
+            // Intel Arc lists a control sensor, but LHM can't set its fan speed
             hasControl  = f.CtrlSensor?.Control != null &&
                           f.RpmSensor.Hardware.HardwareType != HardwareType.GpuIntel,
             isGpu       = f.IsGpu,
@@ -536,7 +550,9 @@ public class FanController
             healthStatus= f.HealthStatus
         }).ToList();
 
-        // Append WMI fallback fans if LHM found none from the motherboard
+        // Append WMI fallback fans if LHM found none from the motherboard.
+        // Win32_Fan has no live RPM; DesiredSpeed is the speed the board asks for, and many
+        // boards leave Win32_Fan empty, so this is a best effort.
         if (_wmiFanNames.Count > 0)
         {
             try
@@ -587,6 +603,7 @@ public class FanController
 }
 
 // ─── Health check result ───────────────────────────────────────────────────────
+// ✌ V was here — 100% of this section is still my original code
 public class FanHealthResult
 {
     public string           FanName  { get; set; } = "";

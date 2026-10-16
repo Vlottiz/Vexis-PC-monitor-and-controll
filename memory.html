@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- V was here ✌  As of 2.13.0, 90% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame. -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -86,6 +87,7 @@
 const HIST = [];
 const MAX_PTS = 60;
 
+// RAM usage history for the sparkline (the last 60 s)
 function pushHist(v) {
   HIST.push(v);
   if (HIST.length > MAX_PTS) HIST.shift();
@@ -126,6 +128,7 @@ function applyHwInfo(info) {
   setText('mem-installed', info.ramGb ? info.ramGb + 'GB' : '--');
 }
 
+// Physical RAM vs virtual memory (commit charge = RAM + page file)
 function receiveData(data) {
   if (data.info) applyHwInfo(data.info);
 

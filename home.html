@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- V was here ✌  As of 2.13.0, 68% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame. -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -217,6 +218,7 @@ setInterval(()=>{ const e=document.getElementById('htime'); if(e)e.textContent=n
 
 let _hwDone=false;
 const _fansSeen=new Set(); // fans that have reported RPM > 0 this session
+// Fills the header with the CPU / GPU / RAM names once they arrive
 function applyHwInfo(info){
   const warn = document.getElementById('driver-warn');
   if (warn && info) {
@@ -254,6 +256,7 @@ function applyHwInfo(info){
   if(info.gpuVram)s('h-vram',info.gpuVram+'GB VRAM');
 }
 
+// Temperature → colour: under 60 °C cool, under 78 °C warm, above that hot
 function tc(t){if(t==null)return'var(--label)'; return t<60?'var(--temp-low)':t<78?'var(--temp-warn)':'var(--temp-hot)';}
 function tempBadge(t){if(t==null)return'badge-dim'; return t<60?'badge-ok':t<78?'badge-warn':'badge-hot';}
 function sv(id,v){const e=document.getElementById(id);if(e)e.textContent=v;}
