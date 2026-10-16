@@ -47,6 +47,27 @@ public sealed class DuplicateFinder
 
     public void Cancel() => _cts?.Cancel();
 
+    /// <summary>True only for a file that the last scan listed as a duplicate.</summary>
+    public bool IsInResults(string? path)
+    {
+        if (!IsPlainPath(path)) return false;
+        lock (_lock) return _groups.Values.Any(g => g.paths.Contains(path!));
+    }
+
+    /// <summary>A scan folder from the page: a full local path to a folder that exists.</summary>
+    internal static string? CheckFolder(string? path)
+    {
+        if (!IsPlainPath(path)) return null;
+        string full = Path.GetFullPath(path!);
+        return Directory.Exists(full) ? full : null;
+    }
+
+    // Full path, no wildcards, quotes or device prefixes (\\?\, \\.\)
+    private static bool IsPlainPath(string? p) =>
+        !string.IsNullOrWhiteSpace(p) && Path.IsPathFullyQualified(p) &&
+        p.IndexOfAny(new[] { '*', '?', '"', '<', '>', '|', '\0' }) < 0 &&
+        !p.StartsWith(@"\\?\") && !p.StartsWith(@"\\.\");
+
     /// <summary>Runs the scan on a background thread, reporting progress about 3 times a second.</summary>
     public void Start(Options opt, Action<Progress> progress, Action<Result> done)
     {
@@ -241,7 +262,7 @@ public sealed class DuplicateFinder
     {
         var skipped = new List<string>();
         int removed = 0; long freed = 0;
-        var want = paths.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var want = paths.Where(IsPlainPath).ToHashSet(StringComparer.OrdinalIgnoreCase);
         List<(string hash, long size, HashSet<string> paths)> groups;
         lock (_lock) groups = _groups.Values.ToList();
 

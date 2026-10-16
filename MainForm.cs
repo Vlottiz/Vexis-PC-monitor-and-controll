@@ -837,11 +837,15 @@ public class MainForm : Form
                     break;
                 }
                 case "dupStart":
-                    if (msg.dup?.paths is { Count: > 0 } && !_dupes.Running)
-                        _dupes.Start(new DuplicateFinder.Options(msg.dup.paths, (long)(Math.Max(0, msg.dup.minMb) * 1048576), msg.dup.includeSystem),
+                {
+                    // Only full paths to folders that exist; anything else from the page is dropped
+                    var folders = (msg.dup?.paths ?? new()).Select(DuplicateFinder.CheckFolder).OfType<string>().ToList();
+                    if (folders.Count > 0 && !_dupes.Running)
+                        _dupes.Start(new DuplicateFinder.Options(folders, (long)(Math.Clamp(msg.dup!.minMb, 0, 1_000_000) * 1048576), msg.dup.includeSystem),
                             pr => RunScriptEverywhere($"typeof onDupProgress==='function'&&onDupProgress({JsonSerializer.Serialize(pr, _json)})"),
                             res => RunScriptEverywhere($"typeof onDupResults==='function'&&onDupResults({JsonSerializer.Serialize(res, _json)})"));
                     break;
+                }
                 case "dupCancel":
                     _dupes.Cancel();
                     break;
@@ -854,7 +858,8 @@ public class MainForm : Form
                         });
                     break;
                 case "dupReveal":
-                    if (msg.file != null && File.Exists(msg.file))
+                    // Only files the last scan found, never an arbitrary path from the page
+                    if (_dupes.IsInResults(msg.file) && File.Exists(msg.file))
                         System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{msg.file}\"");
                     break;
 

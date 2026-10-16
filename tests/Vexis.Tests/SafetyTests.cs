@@ -126,3 +126,56 @@ public class AppPageTests
     [InlineData("about:blank")]
     public void Anything_else_is_not(string? url) => Assert.False(SafeLinks.IsAppPage(url));
 }
+
+// Paths the pages can send to the duplicate finder and the recordings page.
+public sealed class PathCheckTests : IDisposable
+{
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "vexis-path-tests-" + Guid.NewGuid().ToString("N"));
+    public PathCheckTests() => Directory.CreateDirectory(_dir);
+    public void Dispose() { try { Directory.Delete(_dir, true); } catch { } }
+
+    [Fact]
+    public void A_real_folder_can_be_scanned() =>
+        Assert.Equal(Path.GetFullPath(_dir), DuplicateFinder.CheckFolder(_dir));
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("relative/folder")]
+    [InlineData("*")]
+    public void Anything_else_is_not_scanned(string? path) =>
+        Assert.Null(DuplicateFinder.CheckFolder(path));
+
+    [Fact]
+    public void A_missing_folder_is_not_scanned() =>
+        Assert.Null(DuplicateFinder.CheckFolder(Path.Combine(_dir, "missing")));
+
+    [Fact]
+    public void Only_files_from_the_last_scan_can_be_revealed_or_recycled()
+    {
+        var data = new byte[5000]; new Random(7).NextBytes(data);
+        string a = Path.Combine(_dir, "a.bin"), b = Path.Combine(_dir, "b.bin"), other = Path.Combine(_dir, "other.txt");
+        File.WriteAllBytes(a, data); File.WriteAllBytes(b, data); File.WriteAllText(other, "not a duplicate");
+
+        var finder = new DuplicateFinder();
+        var done = new TaskCompletionSource();
+        finder.Start(new DuplicateFinder.Options(new() { _dir }, 0, false), _ => { }, _ => done.TrySetResult());
+        Assert.True(done.Task.Wait(TimeSpan.FromSeconds(30)));
+
+        Assert.True(finder.IsInResults(a));
+        Assert.False(finder.IsInResults(other));                       // exists, but wasn't a duplicate
+        Assert.False(finder.IsInResults(Path.Combine(_dir, "*.bin")));  // wildcards
+        Assert.False(finder.IsInResults("a.bin"));                      // not a full path
+
+        var (removed, _, skipped) = finder.Recycle(new() { other });     // never touched
+        Assert.Equal(0, removed);
+        Assert.True(File.Exists(other));
+    }
+
+    [Theory]
+    [InlineData("desktop.ini")]
+    [InlineData("notes.csv")]
+    [InlineData("vexis-run.exe")]
+    public void Only_vexis_recordings_can_be_opened(string name) =>
+        Assert.Null(CsvRecorder.ResolveFile(name));
+}

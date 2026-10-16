@@ -16,6 +16,8 @@ the GitHub release notes.
 - Fans: new CPU over-temperature guard. At 95 °C, case, CPU and pump fans under Vexis's control go to full speed until the CPU is 10 °C cooler
 - Fans: the health check respects the pump minimum, puts the fan back in the mode it was in (it used to switch it to auto), and no longer fights the normal fan updates while it runs
 - Opening the OpenRGB window no longer freezes Vexis for a moment
+- Security: the duplicate finder only reveals or recycles files from its own last scan, and only scans real folders; the recordings page only opens Vexis's own recordings
+- Fans: if a health check fails partway, the fan is still put back to its setting and the page is told what happened
 
 ## 2.12.1 — 2026-10-08
 - Fixed: when started with Windows, Vexis could open as a grey window that didn't respond until it was restarted. It now runs only the monitoring, fans and alerts in the tray after sign-in, and builds the interface the first time you open it

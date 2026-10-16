@@ -429,14 +429,25 @@ public class FanController
                 Console.WriteLine($"[health] {fanName} @ {pct}% → {rpm:F0} RPM");
             }
         }
+        catch (Exception ex)
+        {
+            // The finally below still puts the fan back; the page gets an answer instead of silence
+            Console.WriteLine($"[health] {fanName} check stopped: {ex.Message}");
+            fan.HealthStatus = "FAIL";
+            return new FanHealthResult { FanName = fanName, Status = "FAIL", Message = $"Check stopped partway ({ex.Message}). The fan was put back to its setting." };
+        }
         finally
         {
             // Put the fan back the way it was: auto to the BIOS, manual to its speed,
             // a curve or profile picks up again on the next poll
             fan.LastSent = -1; fan.CurveSpeed = -1;
-            if (fan.Mode == "auto") { lock (_hwLock) fan.CtrlSensor.Control.SetDefault(); }
-            else if (fan.Mode == "manual") Send(fan, (int)fan.ManualPct);
-            fan.Testing = false;
+            try
+            {
+                if (fan.Mode == "auto") { lock (_hwLock) fan.CtrlSensor.Control.SetDefault(); }
+                else if (fan.Mode == "manual") Send(fan, (int)fan.ManualPct);
+            }
+            catch (Exception ex) { Console.WriteLine($"[health] {fanName} restore failed: {ex.Message}"); }
+            finally { fan.Testing = false; }   // the poll takes the fan over again either way
         }
 
         // Evaluate

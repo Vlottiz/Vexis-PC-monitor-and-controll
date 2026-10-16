@@ -133,6 +133,9 @@ end tasks, recycle files and change fan speeds, the browser around them is locke
 - Developer tools are only available in Debug builds, and no app objects are exposed to the pages.
 - Names and text that come from outside Vexis (process names, file names, device and sensor names,
   log lines) are escaped before they're shown, and are never put into the pages' own code.
+- File paths a page sends are checked by the app: the duplicate finder only scans real folders and
+  only reveals or recycles files from its own last scan (re-hashed first, Recycle Bin only, never the
+  last copy), and the recordings page only opens Vexis's own `vexis-*.csv` / `.txt` files.
 
 ---
 

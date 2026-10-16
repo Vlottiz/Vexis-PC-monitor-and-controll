@@ -294,6 +294,9 @@ public sealed class CsvRecorder : IDisposable
     public static string? ResolveFile(string? name)
     {
         if (string.IsNullOrWhiteSpace(name) || name != Path.GetFileName(name)) return null;
+        // Only Vexis's own recordings, the same files the list shows
+        if (!name.StartsWith("vexis-", StringComparison.OrdinalIgnoreCase) ||
+            !(name.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))) return null;
         string path = Path.Combine(Folder, name);
         return File.Exists(path) ? path : null;
     }
