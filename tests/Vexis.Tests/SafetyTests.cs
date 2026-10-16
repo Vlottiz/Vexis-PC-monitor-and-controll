@@ -78,3 +78,51 @@ public class CpuTempTests
     public void Nothing_usable_means_no_reading() =>
         Assert.Null(Pick(("Core #1", 0.5f)));
 }
+
+// Over-temperature guards: fans to 100% at the limit, back only after a real drop.
+public class GuardTests
+{
+    [Fact]
+    public void Switches_on_at_the_limit() =>
+        Assert.True(FanController.NextGuard(false, 10f, (95f, FanController.CpuLimit)));
+
+    [Fact]
+    public void Stays_off_below_the_limit() =>
+        Assert.False(FanController.NextGuard(false, 10f, (94.9f, FanController.CpuLimit)));
+
+    [Fact]
+    public void Stays_on_until_it_has_cooled_by_the_release_margin()
+    {
+        Assert.True(FanController.NextGuard(true, 10f, (90f, 95f)));    // 5 °C under: still on
+        Assert.True(FanController.NextGuard(true, 10f, (85f, 95f)));    // exactly at the margin: still on
+        Assert.False(FanController.NextGuard(true, 10f, (84.9f, 95f))); // cooled off
+    }
+
+    [Fact]
+    public void Gpu_guard_trips_on_either_core_or_hot_spot() =>
+        Assert.True(FanController.NextGuard(false, 8f, (70f, FanController.GpuCoreLimit), (101f, FanController.GpuHotspotLimit)));
+
+    [Fact]
+    public void Gpu_guard_releases_only_when_both_have_cooled() =>
+        Assert.True(FanController.NextGuard(true, 8f, (70f, 90f), (95f, 100f)));   // hot spot still within 8 °C
+}
+
+// Commands are only accepted from Vexis's own pages.
+public class AppPageTests
+{
+    [Theory]
+    [InlineData("https://vexis.local/home.html")]
+    [InlineData("https://vexis.local/fans.html?popout=1")]
+    [InlineData("https://VEXIS.local/rgb.html")]
+    public void Own_pages_are_trusted(string url) => Assert.True(SafeLinks.IsAppPage(url));
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("http://vexis.local/home.html")]           // not https
+    [InlineData("https://vexis.local.evil.com/home.html")]
+    [InlineData("https://evil.com/?vexis.local")]
+    [InlineData("https://vexis.local:8443/home.html")]
+    [InlineData("file:///C:/Program%20Files/Vexis/home.html")]
+    [InlineData("about:blank")]
+    public void Anything_else_is_not(string? url) => Assert.False(SafeLinks.IsAppPage(url));
+}
