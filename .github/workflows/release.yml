@@ -25,6 +25,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write       # build provenance: proves the installer came from this workflow run
+  attestations: write
 
 # A release made on the website can fire both the tag push and the release event;
 # run them one at a time so the second just replaces the same exe.
@@ -128,6 +130,12 @@ jobs:
           "hash=$hash" >> $env:GITHUB_OUTPUT
           Write-Host "SHA-256: $hash"
 
+      - name: Build provenance (signed record of which commit and workflow built the installer)
+        if: github.event_name != 'workflow_dispatch'
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: VexisHM-Setup.exe
+
       - name: Release notes (CHANGELOG.md or the website) + build information
         id: notes
         shell: pwsh
@@ -171,6 +179,7 @@ jobs:
             "| Tests | passed ($($bt)tests/Vexis.Tests$bt) |",
             "| Signed | $signed |",
             "| VexisHM-Setup.exe SHA-256 | $($bt)${{ steps.sum.outputs.hash }}$($bt) |",
+            "| Provenance | signed by GitHub: $($bt)gh attestation verify VexisHM-Setup.exe -R ${{ github.repository }}$($bt) |",
             '',
             "To check your download, run $($bt)Get-FileHash .\VexisHM-Setup.exe$bt in PowerShell and compare it with the SHA-256 above (also in $($bt)VexisHM-Setup.exe.sha256$bt). The in-app updater does this check for you."
           ) -join "`n"

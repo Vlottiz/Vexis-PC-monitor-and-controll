@@ -105,6 +105,14 @@ public static class UpdateManager
     public static async Task<bool> DownloadAndRunAsync(ReleaseInfo r, string appVersion, Action<int, string> progress, bool restartMinimized = false)
     {
         if (Busy || r.InstallerUrl == null) return false;
+        // Every release built by the GitHub workflow publishes a checksum. Without one there's
+        // nothing to check the download against, so it isn't installed automatically.
+        if (r.ChecksumUrl == null)
+        {
+            Console.WriteLine($"[update] {r.Tag} has no SHA-256 checksum — not installing automatically");
+            progress(-1, "This release has no checksum to check it against. Download it from the release page instead.");
+            return false;
+        }
         Busy = true;
         try
         {
@@ -139,12 +147,10 @@ public static class UpdateManager
                 if (fs.ReadByte() != 'M' || fs.ReadByte() != 'Z')
                     throw new Exception("downloaded file is not an installer");
 
-            // Checksum: releases built by the GitHub workflow publish one. If it's there, the
-            // installer must match it exactly or it is deleted instead of run.
-            if (r.ChecksumUrl != null)
+            // The installer must match the release's SHA-256 exactly, or it's deleted instead of run
+            progress(100, "Checking the download");
+            using (var http = NewClient(appVersion, TimeSpan.FromSeconds(30)))
             {
-                progress(100, "Checking the download");
-                using var http = NewClient(appVersion, TimeSpan.FromSeconds(30));
                 string? expected = ParseChecksum(await http.GetStringAsync(r.ChecksumUrl), r.InstallerName);
                 if (expected == null) throw new Exception("the release's checksum file couldn't be read");
                 string actual;
@@ -157,7 +163,6 @@ public static class UpdateManager
                 }
                 Console.WriteLine($"[update] SHA-256 verified: {actual}");
             }
-            else Console.WriteLine("[update] This release has no checksum file; size and file type were checked.");
 
             progress(100, "Installing — Vexis will restart");
             string args = "/S /UPDATE" + (restartMinimized ? " /MINIMIZED" : "");

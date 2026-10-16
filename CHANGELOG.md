@@ -9,6 +9,14 @@ for the installed version on Info → Version, and the release workflow uses it 
 the GitHub release notes.
 -->
 
+## 2.13.0 — 2026-10-16
+- Security: the interface's browser now runs with its normal security on (the old flags that turned it off are gone), only loads Vexis's own pages, and only accepts commands from them. Developer tools are off in released builds
+- Security: names from outside Vexis (process names, recordings, fan, drive and device names) can no longer be read as code by the pages. A program with a crafted name could do that on the Processes page before
+- Updates: a release without a SHA-256 checksum is no longer installed automatically, and every release now carries a GitHub-signed record of which commit built it
+- Fans: new CPU over-temperature guard. At 95 °C, case, CPU and pump fans under Vexis's control go to full speed until the CPU is 10 °C cooler
+- Fans: the health check respects the pump minimum, puts the fan back in the mode it was in (it used to switch it to auto), and no longer fights the normal fan updates while it runs
+- Opening the OpenRGB window no longer freezes Vexis for a moment
+
 ## 2.12.1 — 2026-10-08
 - Fixed: when started with Windows, Vexis could open as a grey window that didn't respond until it was restarted. It now runs only the monitoring, fans and alerts in the tray after sign-in, and builds the interface the first time you open it
 - If the interface's browser process crashes (e.g. a graphics driver reset), Vexis reloads or rebuilds it by itself instead of leaving a dead window

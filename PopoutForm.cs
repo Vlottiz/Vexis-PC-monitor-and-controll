@@ -64,8 +64,7 @@ public class PopoutForm : Form
 
     private async void OnLoad(object? s, EventArgs e)
     {
-        var webViewOptsP = new Microsoft.Web.WebView2.Core.CoreWebView2EnvironmentOptions(
-            additionalBrowserArguments: "--disable-web-security --allow-running-insecure-content");
+        var webViewOptsP = WebViewSecurity.EnvironmentOptions();
         var webViewEnv = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync(
             browserExecutableFolder: null,
             userDataFolder: Path.Combine(
@@ -76,9 +75,7 @@ public class PopoutForm : Form
         _webView.ZoomFactor = ZoomHelper.Parse(_config.Settings); // start at the main window's zoom
         _webView.ZoomFactorChanged += (_, _) =>
             _webView.CoreWebView2?.ExecuteScriptAsync(ZoomHelper.Script(_webView.ZoomFactor));
-        _webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
-        _webView.CoreWebView2.Settings.IsStatusBarEnabled            = false;
-        _webView.CoreWebView2.Settings.AreDevToolsEnabled            = true;
+        WebViewSecurity.Apply(_webView.CoreWebView2);
         _webView.CoreWebView2.WebMessageReceived += OnWebMessage;
 
         _webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
@@ -141,6 +138,7 @@ public class PopoutForm : Form
     {
         try
         {
+            if (!SafeLinks.IsAppPage(e.Source)) return;   // only Vexis's own pages
             string raw = e.TryGetWebMessageAsString();
             // Always handle config requests locally
             if (raw.Contains("\"requestConfig\"")) { _ = SendConfig(); return; }

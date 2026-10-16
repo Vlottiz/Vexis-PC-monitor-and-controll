@@ -166,8 +166,7 @@ public class MainForm : Form
 
     private async Task InitWebViewAsync()
     {
-        var webViewOpts = new Microsoft.Web.WebView2.Core.CoreWebView2EnvironmentOptions(
-            additionalBrowserArguments: "--disable-web-security --allow-running-insecure-content --allow-file-access-from-files");
+        var webViewOpts = WebViewSecurity.EnvironmentOptions();
 
         // Creating the environment can fail briefly (runtime updating, profile still in use
         // by a closing instance) — retry a few times before giving up.
@@ -232,10 +231,7 @@ public class MainForm : Form
             Console.WriteLine("[cache] WebView2 cache cleared");
         } catch { }
 
-        _webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
-        _webView.CoreWebView2.Settings.IsStatusBarEnabled            = false;
-        _webView.CoreWebView2.Settings.AreDevToolsEnabled            = true;
-        _webView.CoreWebView2.Settings.AreHostObjectsAllowed         = true;
+        WebViewSecurity.Apply(_webView.CoreWebView2);
         _webView.CoreWebView2.WebMessageReceived += OnWebMessage;
         _webView.CoreWebView2.ProcessFailed      += OnWebViewProcessFailed;
 
@@ -368,7 +364,7 @@ public class MainForm : Form
                 current  = AppVersionText,
                 latest   = r?.Tag,
                 available = newer,
-                canInstall = newer && r!.InstallerUrl != null,
+                canInstall = newer && r!.InstallerUrl != null && r.ChecksumUrl != null,   // no checksum = no one-click install
                 notes    = r?.Notes is { Length: > 1200 } n ? n[..1200] + "…" : r?.Notes,
                 url      = UpdateManager.ReleasesUrl
             };
@@ -376,7 +372,7 @@ public class MainForm : Form
             RunScriptEverywhere($"typeof navUpdateInfo==='function'&&navUpdateInfo({_updateJson})");
 
             // Optional: install straight away (Settings → Install updates automatically)
-            if (newer && r!.InstallerUrl != null && !_autoUpdateTried &&
+            if (newer && r!.InstallerUrl != null && r.ChecksumUrl != null && !_autoUpdateTried &&
                 _config.Settings?.GetValueOrDefault("autoUpdate") == "true")
             {
                 _autoUpdateTried = true;
@@ -526,6 +522,8 @@ public class MainForm : Form
 
     private void OnWebMessage(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
+        // Only Vexis's own pages may send commands (navigation is locked to them anyway)
+        if (!SafeLinks.IsAppPage(e.Source)) { Console.WriteLine($"[msg] ignored message from {e.Source}"); return; }
         try { HandleMessage(e.TryGetWebMessageAsString()); }
         catch (Exception ex) { Console.WriteLine($"[msg] error: {ex.Message}"); }
     }
@@ -781,84 +779,35 @@ public class MainForm : Form
                     break;
 
                 case "killOpenRGB":
-                    foreach (var p in System.Diagnostics.Process.GetProcessesByName("OpenRGB"))
-                        try { p.Kill(); Console.WriteLine($"[rgb] Killed OpenRGB PID {p.Id}"); } catch { }
+                    OpenRgbLauncher.StopAll();
                     _orgbClient?.ResetFailedDevices();
                     _orgbClient = null;
                     break;
 
                 case "checkOpenRGB":
                 {
-                    bool isRunning = System.Diagnostics.Process.GetProcessesByName("OpenRGB").Length > 0;
                     string cid3 = msg.callId ?? "0";
-                    string runJson = isRunning ? "{\"running\":true}" : "{\"running\":false}";
-                    string runEsc  = System.Text.Json.JsonSerializer.Serialize(runJson);
+                    string runEsc = JsonSerializer.Serialize(OpenRgbLauncher.IsRunning() ? "{\"running\":true}" : "{\"running\":false}");
                     Invoke(() => { _ = _webView.CoreWebView2?.ExecuteScriptAsync(
                         $"typeof orgbProxyResult==='function'&&orgbProxyResult('{cid3}',true,{runEsc})"); });
                     break;
                 }
 
                 case "launchOpenRGB":
-                    var existing = System.Diagnostics.Process.GetProcessesByName("OpenRGB");
-                    if (existing.Length > 0)
-                    {
-                        Console.WriteLine($"[rgb] OpenRGB already running (PID {existing[0].Id}), not launching again");
-                        break;
-                    }
-                    _sensor.PausePoll(5000);
-                    Console.WriteLine("[rgb] Paused sensor polling for OpenRGB launch");
-                    var orgbPaths = new[]
-                    {
-                        Path.Combine(AppDir, "OpenRGB.exe"),
-                        Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "OpenRGB.exe"),
-                        @"C:\Program Files\OpenRGB\OpenRGB.exe",
-                        @"C:\Program Files (x86)\OpenRGB\OpenRGB.exe",
-                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenRGB", "OpenRGB.exe"),
-                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "OpenRGB", "OpenRGB.exe"),
-                        @"C:\OpenRGB\OpenRGB.exe",
-                        @"C:\Tools\OpenRGB\OpenRGB.exe",
-                    };
-                    string? orgbExe = orgbPaths.FirstOrDefault(File.Exists);
-                    if (orgbExe != null)
-                    {
-                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                        { FileName = orgbExe, Arguments = "--server", UseShellExecute = true });
-                        Console.WriteLine($"[rgb] Launched OpenRGB --server from {orgbExe}");
-                    }
-                    else
-                    {
-                        try {
-                            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                            { FileName = "OpenRGB.exe", Arguments = "--server", UseShellExecute = true });
-                            Console.WriteLine("[rgb] Launched OpenRGB --server via PATH");
-                        }
-                        catch {
-                            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                            { FileName = "https://openrgb.org", UseShellExecute = true });
-                        }
-                    }
+                    if (OpenRgbLauncher.IsRunning()) { Console.WriteLine("[rgb] OpenRGB already running"); break; }
+                    _sensor.PausePoll(5000);   // OpenRGB scans the RAM bus at start; keep LHM off it meanwhile
+                    OpenRgbLauncher.Start();
                     break;
 
                 case "launchOpenRGBGui":
-                    foreach (var p2 in System.Diagnostics.Process.GetProcessesByName("OpenRGB"))
-                        try { p2.Kill(); Console.WriteLine($"[rgb] Killed OpenRGB PID {p2.Id} for GUI mode"); } catch { }
+                    // Restart it so its window opens; wait off the UI thread while the old copy exits
                     _orgbClient = null;
-                    System.Threading.Thread.Sleep(800);
-                    var orgbGuiPaths = new[]
+                    _ = Task.Run(async () =>
                     {
-                        @"C:\Program Files\OpenRGB\OpenRGB.exe",
-                        @"C:\Program Files (x86)\OpenRGB\OpenRGB.exe",
-                        Path.Combine(AppDir, "OpenRGB.exe"),
-                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenRGB", "OpenRGB.exe"),
-                        @"C:\OpenRGB\OpenRGB.exe",
-                    };
-                    string? orgbGuiExe = orgbGuiPaths.FirstOrDefault(File.Exists);
-                    if (orgbGuiExe != null)
-                    {
-                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                        { FileName = orgbGuiExe, Arguments = "--server", UseShellExecute = true });   // window + SDK server, so Vexis stays connected
-                        Console.WriteLine($"[rgb] Launched OpenRGB GUI from {orgbGuiExe}");
-                    }
+                        OpenRgbLauncher.StopAll();
+                        await Task.Delay(800);
+                        OpenRgbLauncher.Start();
+                    });
                     break;
 
                 // Changing one fan by hand leaves a preset profile (back to Custom)

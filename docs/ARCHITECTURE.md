@@ -83,8 +83,14 @@ Fan control is the part that can do real harm, so it's the most defensive:
   around a curve point makes fans rev up and down.
 - **Minimum speed.** A floor on every curve. Pump presets never go below 60 % because a slowed pump
   heats the CPU quickly.
-- **GPU over-temperature guard.** If the GPU core or hot spot passes its limit, GPU fans on manual or
-  curve are forced to 100 % until it cools down again.
+- **Over-temperature guards.** If the GPU core (90 °C) or hot spot (100 °C) passes its limit, GPU
+  fans on manual or curve go to 100 % until both are 8 °C under. If the CPU reaches 95 °C, the case,
+  CPU and pump fans on manual, curve or profile do the same until it's 10 °C under. Fans on auto are
+  left to the BIOS. The on/off rule is one tested function, `NextGuard`.
+- **One writer at a time.** The poll runs on the UI thread, the health check on a worker thread.
+  Every write to the fan chip takes the same lock, and a fan being health-checked is skipped by the
+  poll. The health check uses the same safe speeds (pumps from 50 %) and puts the fan back in the
+  mode it was in afterwards.
 - **Handing control back.** `RestoreAll()` runs when Vexis exits (normally, from the tray, or through
   a factory reset), so fans never stay stuck at a manual speed.
 - **Writes only on change.** Speeds are only sent to the hardware when they change (`LastSent`).
@@ -119,9 +125,9 @@ See [SECURITY.md](../SECURITY.md).
 
 ## Known debt / next refactors
 
-`MainForm.cs` (~1,300 lines) does too much: window, tray, message routing, alerts, recording,
-updates and more. The plan is to move these, one at a time, into small services that `MainForm`
-wires together:
+`MainForm.cs` (~1,300 lines) still does too much: window, tray, message routing, alerts, recording,
+updates and more. The first pieces have moved out (`WebViewSecurity`, `OpenRgbLauncher`, `SafeLinks`).
+The plan is to keep moving these, one at a time, into small services that `MainForm` wires together:
 
 - `AlertService`: limits, latch/cool-down, inbox, tray blink
 - `UpdateService`: check, auto-install, progress (wrapping `UpdateManager`)

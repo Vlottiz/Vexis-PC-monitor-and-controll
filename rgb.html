@@ -169,7 +169,7 @@
     </div>
   </div>
 </div>
-<script src="/nav.js?v=24" data-page="rgb"></script>
+<script src="/nav.js?v=25" data-page="rgb"></script>
 <script>
 const ORGB_PORT=localStorage.getItem('pcm-rgb-port')||'6742';
 let _devices=[],_connected=false,_callCounter=0;
@@ -553,7 +553,7 @@ function releasedCard(d,i){
 function looksGet(){try{const a=JSON.parse((typeof NAV_SETTINGS!=='undefined'&&NAV_SETTINGS.rgbLooks)||'[]');return Array.isArray(a)?a:[];}catch{return[];}}
 function looksPut(a){navSaveSetting('rgbLooks',JSON.stringify(a));renderLooks();}
 function lookSetting(k){return (typeof NAV_SETTINGS!=='undefined'&&NAV_SETTINGS[k])||'';}
-function escH(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+const escH=escHtml;
 // What one device is showing right now (unscaled colours, or its built-in mode)
 function captureDev(i){
   const d=_devices[i];if(!canColor(d))return null;
@@ -662,13 +662,13 @@ function renderDevices(){
   updateDevCount();
   list.innerHTML=_devices.map((d,i)=>{
     if(isReleasedDev(d))return releasedCard(d,i);
-    if(!supportsColor(d))return`<div class="card device-card" id="dev-${i}" style="opacity:.4"><div class="card-header"><span class="card-title">${d.name||'Device '+i}</span><span class="badge badge-warn">UNSUPPORTED</span></div></div>`;
+    if(!supportsColor(d))return`<div class="card device-card" id="dev-${i}" style="opacity:.4"><div class="card-header"><span class="card-title">${escH(d.name||'Device '+i)}</span><span class="badge badge-warn">UNSUPPORTED</span></div></div>`;
     const cnt=ledCnt(i),isR=isRam(i);
     const cHex=d.colors?.[0]?rgbHex(d.colors[0].r||0,d.colors[0].g||0,d.colors[0].b||0):'#ff0000';
-    const modeChips=(d.modes||[]).map((m,mi)=>`<button class="mode-chip${d.active_mode===mi?' active':''}" onclick="pickMode(${i},${mi})">${cleanMode(m.name,mi)}</button>`).join('');
+    const modeChips=(d.modes||[]).map((m,mi)=>`<button class="mode-chip${d.active_mode===mi?' active':''}" onclick="pickMode(${i},${mi})">${escH(cleanMode(m.name,mi))}</button>`).join('');
     return`<div class="card device-card" id="dev-${i}">
       <div class="card-header">
-        <span class="card-title">${d.name||'Device '+i}</span>
+        <span class="card-title">${escH(d.name||'Device '+i)}</span>
         <div style="display:flex;align-items:center;gap:6px">
           <span class="badge badge-dim">${cnt} LED${cnt!==1?'s':''}</span>
           <button class="rel-btn" onclick="askRelease(${i})" title="Stop Vexis controlling this device and hand it back to its own lighting (or its own software)">&#x23CF; RELEASE</button>

@@ -91,7 +91,13 @@ Each release built by GitHub Actions ([`release.yml`](.github/workflows/release.
   ```powershell
   Get-FileHash .\VexisHM-Setup.exe
   ```
-  The in-app updater checks this automatically, and won't run an installer that doesn't match.
+  The in-app updater checks this automatically. It won't run an installer that doesn't match, and it
+  won't install a release that has no checksum at all.
+- **Build provenance.** GitHub signs a record of which commit and which workflow run built the
+  installer. Anyone can check it with the GitHub CLI:
+  ```powershell
+  gh attestation verify VexisHM-Setup.exe -R Vlottiz/Vexis-PC-monitor-and-controll
+  ```
 - **Build information.** The exact source commit, build date, toolchain, and a link to the public
   Actions run that built it. The unit tests have to pass before anything is released.
 - **The commit inside the app.** **Info → About → Build** shows the commit the copy you're running
@@ -104,7 +110,29 @@ certificate is added as repository secrets (`SIGN_PFX_BASE64` and `SIGN_PFX_PASS
 release's **Build information** says whether that build is signed.
 
 Until then, releases are unsigned, and Windows SmartScreen may warn about a new program from an
-unknown publisher. The checksum and build information above are the way to check an unsigned download.
+unknown publisher. The checksum, provenance and build information above are the way to check an unsigned download.
+
+### What these checks do and don't protect against
+
+The checksum catches a broken or swapped download. Provenance shows the installer was built by this
+repository's own workflow from a public commit. Neither can stop someone who has taken over the
+GitHub account itself, because they could publish a release through the same workflow. The defences
+for that are two-factor authentication on the GitHub account and, once it's added, a code-signing
+certificate kept outside GitHub.
+
+## The interface (WebView2)
+
+The pages run in Microsoft's WebView2 browser inside Vexis. Because they can ask the elevated app to
+end tasks, recycle files and change fan speeds, the browser around them is locked down
+(`WebViewSecurity.cs`):
+
+- The browser runs with its normal security on. No `--disable-web-security` or similar flags.
+- Only Vexis's own pages (`https://vexis.local/`, files from the install folder) can load. Any other
+  link opens in your normal browser instead.
+- Commands are only accepted from those pages, and are checked again by the app before it acts.
+- Developer tools are only available in Debug builds, and no app objects are exposed to the pages.
+- Names and text that come from outside Vexis (process names, file names, device and sensor names,
+  log lines) are escaped before they're shown, and are never put into the pages' own code.
 
 ---
 

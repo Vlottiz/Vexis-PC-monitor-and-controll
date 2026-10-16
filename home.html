@@ -211,7 +211,7 @@
   </div>
 </div>
 
-<script src="/nav.js?v=24" data-page="home"></script>
+<script src="/nav.js?v=25" data-page="home"></script>
 <script>
 setInterval(()=>{ const e=document.getElementById('htime'); if(e)e.textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}); },1000);
 
@@ -318,7 +318,7 @@ function updateTiles(d) {
   // Storage card
   const box = document.getElementById('h-storage');
   if (box && drives.length) {
-    box.innerHTML = drives.map(x => `<div class="hdrive"><span class="n" title="${x.name}">${x.letters ? x.letters + ' ' : ''}${x.name}</span>
+    box.innerHTML = drives.map(x => `<div class="hdrive"><span class="n" title="${escHtml(x.name)}">${x.letters ? escHtml(x.letters) + ' ' : ''}${escHtml(x.name)}</span>
       <span class="t" style="color:${x.temp == null ? 'var(--label-dim)' : x.temp >= (x.temp_warn || 70) ? 'var(--temp-hot)' : 'var(--temp-val)'}">${x.temp != null ? x.temp.toFixed(0) + '°C' : '--'}</span>
       <div class="bar" title="${x.used_pct != null ? Math.round(x.used_pct) + '% used' : ''}"><i style="width:${x.used_pct ?? 0}%"></i></div></div>`).join('');
     const bad = drives.filter(x => x.health === 'replace' || x.health === 'hot').length;
@@ -339,7 +339,7 @@ function receiveData(data){
     data.fans.forEach(f=>{if(f.rpm>0)_fansSeen.add(f.name);});
     const shown=data.fans.filter(f=>_fansSeen.has(f.name));
     const idle=data.fans.length-shown.length;
-    div.innerHTML=shown.map(f=>`<div class="fan-row"><span class="fan-name">${f.name}</span><span class="fan-rpm">${Math.round(f.rpm)} <span style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim)">RPM</span></span></div>`).join('')
+    div.innerHTML=shown.map(f=>`<div class="fan-row"><span class="fan-name">${escHtml(f.name)}</span><span class="fan-rpm">${Math.round(f.rpm)} <span style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim)">RPM</span></span></div>`).join('')
       +(idle?`<div class="fan-row" style="opacity:.55"><span class="fan-name">+${idle} idle header${idle>1?'s':''} (0 RPM)</span><span></span></div>`:'')
       +(!shown.length&&!idle?'<div class="empty-state">No fans detected</div>':'');
   }

@@ -82,10 +82,10 @@
 <div id="confirm"><div class="box"><h3 id="c-title">END TASK?</h3><p id="c-text"></p>
   <div class="btns"><button class="btn btn-ghost" onclick="closeConfirm()">CANCEL</button><button class="btn btn-primary end-btn" id="c-ok">END TASK</button></div></div></div>
 
-<script src="/nav.js?v=24" data-page="processes"></script>
+<script src="/nav.js?v=25" data-page="processes"></script>
 <script>
 function $(id) { return document.getElementById(id); }
-function esc(t) { return String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c])); }
+const esc = escHtml;
 function fmtMem(b) { return b >= 1073741824 ? (b / 1073741824).toFixed(1) + ' GB' : (b / 1048576).toFixed(1) + ' MB'; }
 function fmtPct(v) { return (v || 0).toFixed(1) + '%'; }
 
@@ -136,7 +136,7 @@ function render() {
   const cmp = (a, b) => (SORT.key === 'name' ? a.name.localeCompare(b.name) : (a[SORT.key] || 0) - (b[SORT.key] || 0)) * SORT.dir;
   // Processes inside a group: same column, by PID when sorting by name
   const pcmp = (a, b) => (SORT.key === 'name' ? a.pid - b.pid : (a[SORT.key] || 0) - (b[SORT.key] || 0)) * SORT.dir;
-  const icon = exe => ICONS[exe] ? `<img class="ico" src="${ICONS[exe]}" alt="">` : '<span class="ico none"></span>';
+  const icon = exe => ICONS[exe] ? `<img class="ico" src="${esc(ICONS[exe])}" alt="">` : '<span class="ico none"></span>';
 
   let html = '';
   for (const [type, title] of SECTIONS) {
@@ -147,13 +147,13 @@ function render() {
     for (const g of list) {
       const open = OPEN.has(g.key) || (q && g.count > 1 && g.procs.some(p => String(p.pid) === q));
       const sel = SEL && SEL.key === g.key && SEL.pid == null;
-      html += `<tr class="prow${sel ? ' sel' : ''}" onclick="select('${esc(g.key)}')" ondblclick="toggle('${esc(g.key)}')" title="${esc(g.exe)}">
-        <td>${g.count > 1 ? `<span class="caret" onclick="event.stopPropagation();toggle('${esc(g.key)}')">${open ? '▾' : '▸'}</span>` : '<span class="caret"></span>'}${icon(g.key)}${esc(g.name)}${g.count > 1 ? `<span class="cnt">(${g.count})</span>` : ''}${g.name.toLowerCase() !== g.key.toLowerCase() ? `<span class="sub">${esc(g.exe)}</span>` : ''}${g.canEnd ? '' : '<span class="lock" title="Windows needs this process — it can\'t be ended here">&#x1F512;</span>'}</td>
+      html += `<tr class="prow${sel ? ' sel' : ''}" data-k="${esc(g.key)}" onclick="select(this.dataset.k)" ondblclick="toggle(this.dataset.k)" title="${esc(g.exe)}">
+        <td>${g.count > 1 ? `<span class="caret" onclick="event.stopPropagation();toggle(this.closest('tr').dataset.k)">${open ? '▾' : '▸'}</span>` : '<span class="caret"></span>'}${icon(g.key)}${esc(g.name)}${g.count > 1 ? `<span class="cnt">(${g.count})</span>` : ''}${g.name.toLowerCase() !== g.key.toLowerCase() ? `<span class="sub">${esc(g.exe)}</span>` : ''}${g.canEnd ? '' : '<span class="lock" title="Windows needs this process — it can\'t be ended here">&#x1F512;</span>'}</td>
         <td style="${shade(g.cpu, 50)}">${fmtPct(g.cpu)}</td><td style="${shade(g.mem, memTotal * 0.25)}">${fmtMem(g.mem)}</td><td style="${shade(g.gpu, 50)}">${fmtPct(g.gpu)}</td></tr>`;
       if (open && g.count > 1)
         for (const p of g.procs.slice().sort(pcmp)) {
           const psel = SEL && SEL.key === g.key && SEL.pid === p.pid;
-          html += `<tr class="prow child${psel ? ' sel' : ''}" onclick="select('${esc(g.key)}',${p.pid})">
+          html += `<tr class="prow child${psel ? ' sel' : ''}" data-k="${esc(g.key)}" onclick="select(this.dataset.k,${Number(p.pid) | 0})">
             <td>${esc(p.title || g.exe)}<span class="sub">PID ${p.pid}</span></td>
             <td style="${shade(p.cpu, 50)}">${fmtPct(p.cpu)}</td><td style="${shade(p.mem, memTotal * 0.25)}">${fmtMem(p.mem)}</td><td style="${shade(p.gpu, 50)}">${fmtPct(p.gpu)}</td></tr>`;
         }

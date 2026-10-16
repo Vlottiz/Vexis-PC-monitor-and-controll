@@ -7,6 +7,14 @@ window.IS_WEBVIEW = !!window.chrome?.webview;
 document.addEventListener('keydown', e => {
   if (e.key === 'F11') { e.preventDefault(); sendToHost({type:'toggleFullscreen'}); }
 });
+// Escape text before putting it into HTML (element text or a quoted attribute).
+// Names, paths and log lines come from hardware, files and other programs, so they
+// must never be read as markup. Never build inline onclick="f('…')" code from data:
+// the browser decodes &#39; back to ' before running it. Use data-* attributes instead.
+window.escHtml = function(t) {
+  return String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+};
+
 window.sendToHost = function(obj) {
   if (window.IS_WEBVIEW) window.chrome.webview.postMessage(JSON.stringify(obj));
 };
@@ -991,7 +999,7 @@ window.navCrashBanner = function(c) {
   if (!c) { if (box) box.remove(); _navCrashShown = false; return; }
   if (_navCrashShown && box) return;
   _navCrashShown = true;
-  const esc = t => String(t).replace(/[&<>]/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[ch]));
+  const esc = escHtml;
   if (!box) { box = document.createElement('div'); box.id = 'nav-crash'; document.body.appendChild(box); }
   box.innerHTML =
     `<div class="ncr-title">&#x26A0; ${c.hasError ? 'Vexis ran into an error last time' : 'Vexis didn\'t close properly last time'}${c.when ? ' <span>(' + esc(c.when) + ')</span>' : ''}</div>` +
@@ -1017,7 +1025,7 @@ window.navAlertInbox = function(list) {
     document.body.appendChild(box);
   }
   if (grew) _navInboxOpen = true;           // a new alert always opens the list
-  const esc = t => String(t).replace(/[&<>]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[c]));
+  const esc = escHtml;
   box.className = _navInboxOpen ? 'open' : '';
   box.innerHTML =
     `<div class="nib-head" onclick="navInboxToggle()"><span class="nib-bell">&#x26A0;</span>` +

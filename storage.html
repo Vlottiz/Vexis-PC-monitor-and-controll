@@ -128,10 +128,10 @@
   <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn btn-ghost" onclick="document.getElementById('dup-confirm').style.display='none'">CANCEL</button>
   <button class="btn btn-ghost danger" onclick="dupRecycle()">MOVE TO RECYCLE BIN</button></div></div></div>
 <div id="dup-toast"></div>
-<script src="/nav.js?v=24" data-page="storage"></script>
+<script src="/nav.js?v=25" data-page="storage"></script>
 <script>
 function $(id) { return document.getElementById(id); }
-function esc(t) { return String(t ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c])); }
+const esc = escHtml;
 function fmtGb(v) { return v == null ? '--' : v >= 1000 ? (v / 1024).toFixed(2) + ' TB' : Math.round(v) + ' GB'; }
 function fmtRate(b) { if (b == null) return '--'; return b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB/s' : b >= 1024 ? Math.round(b / 1024) + ' KB/s' : Math.round(b) + ' B/s'; }
 function fmtHours(h) { if (h == null) return '--'; const d = Math.floor(h / 24); return d >= 365 ? (d / 365).toFixed(1) + ' years' : d >= 1 ? d + ' days' : Math.round(h) + ' h'; }
@@ -226,7 +226,7 @@ function dupDrives(list) {
   const sig = letters.join(',');
   if (sig === _dupDriveSig) return;
   _dupDriveSig = sig;
-  $('dup-drives').innerHTML = letters.map(l => `<button class="chip${DUP.drives.has(l) ? ' on' : ''}" onclick="dupToggleDrive('${l}',this)">${l}\\</button>`).join(' ');
+  $('dup-drives').innerHTML = letters.map(l => `<button class="chip${DUP.drives.has(l) ? ' on' : ''}" data-l="${esc(l)}" onclick="dupToggleDrive(this.dataset.l,this)">${esc(l)}\\</button>`).join(' ');
 }
 function dupToggleDrive(l, el) { DUP.drives.has(l) ? DUP.drives.delete(l) : DUP.drives.add(l); el.classList.toggle('on'); }
 window.onDupFolder = function(path) { if (!DUP.folders.includes(path)) DUP.folders.push(path); dupRenderFolders(); };
