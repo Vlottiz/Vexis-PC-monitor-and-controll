@@ -236,7 +236,6 @@ The whole process is in **[CONTRIBUTING.md](CONTRIBUTING.md)**, and how the code
 | [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) | All hardware sensor reading | MPL-2.0 |
 | [PawnIO](https://pawnio.eu) | Signed sensor driver (installed unmodified) | — |
 | [OpenRGB](https://gitlab.com/CalcProgrammer1/OpenRGB) | RGB device control (external, not bundled) | GPL-2.0 |
-| [HIDAPI](https://github.com/libusb/hidapi) | HID device communication | MIT/BSD |
 | [Microsoft WebView2](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) | Embedded browser for the UI | Free |
 | [System.Management](https://www.nuget.org/packages/System.Management) | WMI — CPU load, RAM, Intel fallback | MIT |
 | [NSIS](https://nsis.sourceforge.io) | Windows installer | zLib |

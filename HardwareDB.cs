@@ -368,7 +368,7 @@ public static class HardwareDB
                 board    = o["Product"]?.ToString()?.Trim() ?? "";
                 break;
             }
-        } catch { }
+        } catch (Exception ex) { Console.WriteLine($"[hwdb] WMI lookup failed: {ex.Message}"); }
 
         try
         {
@@ -379,7 +379,7 @@ public static class HardwareDB
                 bios = o["SMBIOSBIOSVersion"]?.ToString()?.Trim() ?? "";
                 break;
             }
-        } catch { }
+        } catch (Exception ex) { Console.WriteLine($"[hwdb] WMI lookup failed: {ex.Message}"); }
 
         try
         {
@@ -392,7 +392,7 @@ public static class HardwareDB
                     chassis = ct;
                 break;
             }
-        } catch { }
+        } catch (Exception ex) { Console.WriteLine($"[hwdb] WMI lookup failed: {ex.Message}"); }
 
         try
         {
@@ -403,7 +403,7 @@ public static class HardwareDB
                 family = o["SystemFamily"]?.ToString()?.Trim() ?? "";
                 break;
             }
-        } catch { }
+        } catch (Exception ex) { Console.WriteLine($"[hwdb] WMI lookup failed: {ex.Message}"); }
 
         // Battery presence = laptop/tablet
         try
@@ -413,7 +413,7 @@ public static class HardwareDB
             hasBattery = q.Get().Count > 0;
             if (hasBattery && chassis == ChassisType.Unknown)
                 chassis = ChassisType.Laptop;
-        } catch { }
+        } catch (Exception ex) { Console.WriteLine($"[hwdb] WMI lookup failed: {ex.Message}"); }
 
         // RAM slot topology
         try
@@ -422,7 +422,7 @@ public static class HardwareDB
                 "SELECT MemoryType FROM Win32_PhysicalMemoryArray");
             foreach (ManagementObject o in q.Get())
                 memSlots += Convert.ToInt32(o["MemoryType"] ?? 0);
-        } catch { }
+        } catch (Exception ex) { Console.WriteLine($"[hwdb] WMI lookup failed: {ex.Message}"); }
 
         try
         {
@@ -430,7 +430,7 @@ public static class HardwareDB
                 "SELECT Capacity FROM Win32_PhysicalMemory");
             foreach (ManagementObject o in q.Get())
                 if (Convert.ToInt64(o["Capacity"] ?? 0) > 0) memSlotsUsed++;
-        } catch { }
+        } catch (Exception ex) { Console.WriteLine($"[hwdb] WMI lookup failed: {ex.Message}"); }
 
         return new SmBiosInfo(board, boardMfr, bios, family,
                               chassis, hasBattery, memSlots, memSlotsUsed);
@@ -476,7 +476,7 @@ public static class HardwareDB
                     cpuLoad = Convert.ToSingle(o["LoadPercentage"]);
                 break;
             }
-        } catch { }
+        } catch (Exception ex) { Console.WriteLine($"[hwdb] WMI lookup failed: {ex.Message}"); }
 
         // CPU temp via ACPI thermal zone (unreliable on many systems, but works on some laptops)
         try
@@ -491,7 +491,7 @@ public static class HardwareDB
                 if (c > 20 && c < 115 && c > best) best = c;
             }
             if (best > 0) cpuTemp = best;
-        } catch { }
+        } catch (Exception ex) { Console.WriteLine($"[hwdb] WMI lookup failed: {ex.Message}"); }
 
         // GPU info and VRAM
         try
@@ -512,7 +512,7 @@ public static class HardwareDB
                     gpuVram  = (int)(vram / (1024L * 1024));
                 }
             }
-        } catch { }
+        } catch (Exception ex) { Console.WriteLine($"[hwdb] WMI lookup failed: {ex.Message}"); }
 
         // RAM usage
         try
@@ -527,7 +527,7 @@ public static class HardwareDB
                 ramUsed  = (totalKb - freeKb) / (1024f * 1024f);
                 break;
             }
-        } catch { }
+        } catch (Exception ex) { Console.WriteLine($"[hwdb] WMI lookup failed: {ex.Message}"); }
 
         return new WmiFallbackData(cpuTemp, cpuLoad, gpuTemp, gpuLoad,
                                    cpuName, gpuName, gpuVram, ramUsed, ramTotal);

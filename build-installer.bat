@@ -22,13 +22,19 @@ rem --- Step 1: PawnIO sensor driver installer (bundled into the setup) -------
 echo  [1/4] Checking bundled installers (PawnIO, WebView2)...
 if exist "PawnIO_setup.exe" goto :have_pawnio
 echo      Downloading from github.com/namazso/PawnIO.Setup ...
-curl.exe -L --fail -o PawnIO_setup.exe https://github.com/namazso/PawnIO.Setup/releases/latest/download/PawnIO_setup.exe >> "%LOG%" 2>&1
+rem Pinned version and SHA-256 - keep in step with .github/workflows/release.yml
+curl.exe -L --fail -o PawnIO_setup.exe https://github.com/namazso/PawnIO.Setup/releases/download/2.2.0/PawnIO_setup.exe >> "%LOG%" 2>&1
 if not exist "PawnIO_setup.exe" echo      [!] Download failed - put PawnIO_setup.exe from https://pawnio.eu in this folder.
-goto :after_pawnio
 :have_pawnio
-echo      Found.
+if not exist "PawnIO_setup.exe" goto :after_pawnio
+powershell -NoProfile -Command "if ((Get-FileHash PawnIO_setup.exe -Algorithm SHA256).Hash -ne '1f519a22e47187f70a1379a48ca604981c4fcf694f4e65b734aaa74a9fba3032') { exit 1 }"
+if errorlevel 1 (
+    echo      [!] PawnIO_setup.exe does not match the pinned SHA-256 - deleted. Run the build again.
+    del PawnIO_setup.exe
+    goto :fail
+)
+echo      PawnIO 2.2.0 checked.
 :after_pawnio
-if not exist "hidapi.dll" echo      [!] hidapi.dll missing - MSI motherboard RGB will not work.
 if exist "MicrosoftEdgeWebview2Setup.exe" goto :have_webview2
 echo      Downloading WebView2 bootstrapper (for Windows 10 PCs without it)...
 curl.exe -L --fail -o MicrosoftEdgeWebview2Setup.exe "https://go.microsoft.com/fwlink/p/?LinkId=2124703" >> "%LOG%" 2>&1

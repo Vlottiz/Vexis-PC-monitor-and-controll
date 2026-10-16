@@ -92,7 +92,9 @@ Each release built by GitHub Actions ([`release.yml`](.github/workflows/release.
   Get-FileHash .\VexisHM-Setup.exe
   ```
   The in-app updater checks this automatically. It won't run an installer that doesn't match, and it
-  won't install a release that has no checksum at all.
+  won't install a release that has no checksum at all. It downloads into a new folder each time and
+  keeps the file locked from the check until the installer has started, so it can't be swapped in
+  between.
 - **Build provenance.** GitHub signs a record of which commit and which workflow run built the
   installer. Anyone can check it with the GitHub CLI:
   ```powershell
@@ -114,7 +116,8 @@ unknown publisher. The checksum, provenance and build information above are the 
 
 ### What these checks do and don't protect against
 
-The checksum catches a broken or swapped download. Provenance shows the installer was built by this
+The checksum catches a broken or swapped download. It sits in the same GitHub release as the
+installer, so on its own it can't prove who made the release. Provenance shows the installer was built by this
 repository's own workflow from a public commit. Neither can stop someone who has taken over the
 GitHub account itself, because they could publish a release through the same workflow. The defences
 for that are two-factor authentication on the GitHub account and, once it's added, a code-signing
@@ -133,9 +136,12 @@ end tasks, recycle files and change fan speeds, the browser around them is locke
 - Developer tools are only available in Debug builds, and no app objects are exposed to the pages.
 - Names and text that come from outside Vexis (process names, file names, device and sensor names,
   log lines) are escaped before they're shown, and are never put into the pages' own code.
+- OpenRGB is only started from `Program Files` (or the Vexis folder), which only administrators can
+  change. Vexis runs elevated, so it never starts an `OpenRGB.exe` from Downloads, the desktop or `PATH`.
 - File paths a page sends are checked by the app: the duplicate finder only scans real folders and
   only reveals or recycles files from its own last scan (re-hashed first, Recycle Bin only, never the
-  last copy), and the recordings page only opens Vexis's own `vexis-*.csv` / `.txt` files.
+  last copy, skipped on drives without a Recycle Bin), and the recordings page only opens Vexis's own
+  `vexis-*.csv` / `.txt` files.
 
 ---
 
@@ -144,10 +150,9 @@ end tasks, recycle files and change fan speeds, the browser around them is locke
 | Component | Use | License |
 |---|---|---|
 | [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) (+ HidSharp, RAMSPDToolkit) | Sensor reading, fan control | MPL-2.0 |
-| [PawnIO](https://pawnio.eu) | Signed kernel driver for sensor access, installed unmodified | see pawnio.eu |
+| [PawnIO](https://pawnio.eu) | Signed kernel driver for sensor access, installed unmodified. Release builds pin version 2.2.0 by SHA-256 | see pawnio.eu |
 | [Microsoft WebView2](https://developer.microsoft.com/microsoft-edge/webview2/) | Renders the interface | Microsoft |
 | [OpenRGB](https://gitlab.com/CalcProgrammer1/OpenRGB) | RGB control. Not bundled; you install it yourself | GPL-2.0 |
-| [HIDAPI](https://github.com/libusb/hidapi) | HID device access | BSD-style |
 | [Newtonsoft.Json](https://www.newtonsoft.com/json), System.Management, .NET 8 | Runtime libraries | MIT |
 | [NSIS](https://nsis.sourceforge.io) | Installer | zlib |
 

@@ -767,7 +767,6 @@ function setStatus(state,msg){
   else{dot.className='rgb-dot';txt.textContent='CONNECTING...';sub.textContent='Trying localhost:6742...';updLights('none');}
 }
 async function chkProc(){if(!IS_WEBVIEW)return;return new Promise(resolve=>{const id=String(++_callCounter);_pendingCalls[id]=(ok,data)=>{try{const d=JSON.parse(typeof data==='string'?data:'{}');if(!_connected)sL('sl-notopen',d.running===true);}catch{}resolve();};setTimeout(()=>{if(_pendingCalls[id]){delete _pendingCalls[id];resolve();}},3000);sendToHost({type:'checkOpenRGB',callId:id});});}
-// ── MSI Mystic Light SDK ─────────────────────────────────────────────────────
 setInterval(()=>{if(!_connected&&IS_WEBVIEW)chkProc();},3000);
 let _retryLoop=null,_countdownTimer=null;
 

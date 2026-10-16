@@ -295,7 +295,7 @@ public class OpenRGBClient : IDisposable
             if (streamDead)
             {
                 Console.WriteLine("[orgb] Stream dead — reconnecting");
-                try { _ns?.Dispose(); _tcp?.Dispose(); } catch {}
+                try { _ns?.Dispose(); _tcp?.Dispose(); } catch {}   // already closed
                 _ns = null; _tcp = null;
                 try { await Task.Delay(800); await ConnectAsync(); await Task.Delay(200); }
                 catch (Exception rex) { Console.WriteLine($"[orgb] Reconnect failed: {rex.Message}"); }

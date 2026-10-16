@@ -82,7 +82,10 @@ Fan control is the part that can do real harm, so it's the most defensive:
   dropped `Hysteresis` °C below the reading that set the current speed. Without it, a CPU hovering
   around a curve point makes fans rev up and down.
 - **Minimum speed.** A floor on every curve. Pump presets never go below 60 % because a slowed pump
-  heats the CPU quickly.
+  heats the CPU quickly, and no pump is ever set below 50 % (`SafeSpeed`).
+- **What counts as a pump.** A header whose name has "Pump" or "AIO" in it, or one the user ticked on
+  the Fan Control page (saved in `PumpFans`). Many boards name every header "Fan #n", so the name
+  alone isn't enough.
 - **Over-temperature guards.** If the GPU core (90 °C) or hot spot (100 °C) passes its limit, GPU
   fans on manual or curve go to 100 % until both are 8 °C under. If the CPU reaches 95 °C, the case,
   CPU and pump fans on manual, curve or profile do the same until it's 10 °C under. Fans on auto are
@@ -92,7 +95,9 @@ Fan control is the part that can do real harm, so it's the most defensive:
   poll. The health check uses the same safe speeds (pumps from 50 %) and puts the fan back in the
   mode it was in afterwards.
 - **Handing control back.** `RestoreAll()` runs when Vexis exits (normally, from the tray, or through
-  a factory reset), so fans never stay stuck at a manual speed.
+  a factory reset), and `RestoreFansSafely` also tries it on an unhandled crash or when Windows ends
+  the process, so fans don't stay stuck at a manual speed. A hard kill (Task Manager → End task) or
+  power loss can't run any code; then the BIOS takes over again at the next boot.
 - **Writes only on change.** Speeds are only sent to the hardware when they change (`LastSent`).
 
 ## Other pieces
@@ -103,18 +108,27 @@ Fan control is the part that can do real harm, so it's the most defensive:
 | `DuplicateFinder.cs` | Finds identical files | Size → first/last 64 KB → full SHA-256, so almost nothing is fully read unless it's very likely a duplicate. Removal only goes to the Recycle Bin, always keeps one copy, and hashes the file again first in case it changed since the scan |
 | `ProcessMonitor.cs` | Processes page | Only sampled while that page is open (about every 1.5 s), CPU % from the change in each process's CPU time between samples. Refuses to end PID ≤ 4, itself, and Windows-critical processes |
 | `CsvRecorder.cs` | CSV / text recording | Rows are written as they happen, so a recording survives a crash. Files are opened by name only, never a path |
-| `UpdateManager.cs` | Update check and install | Tag must be `v` + `<Version>`. Before running an installer it checks the size, that it's a Windows executable, and the release's SHA-256 file |
+| `UpdateManager.cs` | Update check and install | Tag must be `v` + `<Version>`. Before running an installer it checks the size, that it's a Windows executable, and the release's SHA-256 file, all on a locked handle that stays open until the installer starts |
 | `CrashHelper.cs` | "Vexis didn't close properly" banner | A `running.flag` file that only a clean exit removes. The previous log is kept for the report |
 | `StartupManager.cs` | Start with Windows | A Task Scheduler task (runs elevated at sign-in without a UAC prompt), not the registry Run key, which can't start admin apps silently |
 | `DriverSetup.cs` / `StartupCheck.cs` | Driver check at launch | Installs/repairs PawnIO from the bundled installer. Only *reads* Windows security settings, except the user-initiated Restore button |
 | `Config.cs` | Settings | One JSON file in `%AppData%\Vexis`. Unknown keys are ignored, so older and newer versions can share it |
+
+## Logging
+
+Everything is written with `Console.WriteLine("[area] ...")`. `Program.cs` sends the console to
+`%AppData%\Vexis\debug.log` (the previous run is kept as `debug-previous.log`), so that is the log.
+Errors that are expected and harmless (a protected process, a window already closed, a file already
+gone) are caught with a short comment saying so. Ones that matter (fans, sensors, files, pop-outs)
+are logged. Code that runs every 250 ms keeps the last value instead of logging, so the log doesn't fill up.
 
 ## Releases
 
 `.github/workflows/release.yml` builds releases on GitHub's servers from a tagged commit:
 
 1. Runs the unit tests (no release if they fail).
-2. Builds the app with the commit id embedded.
+2. Downloads the PawnIO installer (pinned version and SHA-256) and the WebView2 bootstrapper
+   (must be signed by Microsoft), then builds the app with the commit id embedded.
 3. Signs it (when a certificate is configured).
 4. Builds the installer.
 5. Writes a SHA-256 file.

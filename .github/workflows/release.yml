@@ -64,8 +64,20 @@ jobs:
       - name: Download PawnIO and WebView2 installers (bundled into the setup)
         shell: pwsh
         run: |
-          Invoke-WebRequest https://github.com/namazso/PawnIO.Setup/releases/latest/download/PawnIO_setup.exe -OutFile PawnIO_setup.exe
+          # PawnIO is pinned to one version and its SHA-256. A new PawnIO is only bundled after
+          # someone updates both lines here (and in build-installer.bat) on purpose.
+          $pawnioUrl  = 'https://github.com/namazso/PawnIO.Setup/releases/download/2.2.0/PawnIO_setup.exe'
+          $pawnioHash = '1f519a22e47187f70a1379a48ca604981c4fcf694f4e65b734aaa74a9fba3032'
+          Invoke-WebRequest $pawnioUrl -OutFile PawnIO_setup.exe
+          $got = (Get-FileHash PawnIO_setup.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($got -ne $pawnioHash) { throw "PawnIO_setup.exe SHA-256 is $got, expected $pawnioHash" }
+
+          # The WebView2 bootstrapper is a moving Microsoft link, so check Microsoft's signature instead
           Invoke-WebRequest "https://go.microsoft.com/fwlink/p/?LinkId=2124703" -OutFile MicrosoftEdgeWebview2Setup.exe
+          $sig = Get-AuthenticodeSignature MicrosoftEdgeWebview2Setup.exe
+          if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') {
+            throw "MicrosoftEdgeWebview2Setup.exe signature check failed: $($sig.Status) $($sig.SignerCertificate.Subject)"
+          }
 
       - name: Publish the app
         # SourceRevisionId puts the commit into the version info; Info → About shows it

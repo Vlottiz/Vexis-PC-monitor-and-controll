@@ -107,12 +107,12 @@ internal static class Program
         int resetIdx = Array.FindIndex(args, a => a.Equals("--after-reset", StringComparison.OrdinalIgnoreCase));
         if (resetIdx >= 0 && resetIdx + 1 < args.Length && int.TryParse(args[resetIdx + 1], out int oldPid))
         {
-            try { using var old = Process.GetProcessById(oldPid); old.WaitForExit(10000); } catch { }
+            try { using var old = Process.GetProcessById(oldPid); old.WaitForExit(10000); } catch { }   // already gone
         }
         foreach (var p in Process.GetProcessesByName(current.ProcessName))
         {
             if (p.Id == current.Id) continue;
-            try { p.Kill(); p.WaitForExit(3000); replacedOther = true; } catch { }
+            try { p.Kill(); p.WaitForExit(3000); replacedOther = true; } catch { }   // already gone, or not ours to stop
         }
 
         // ── Did the last session end badly? (must run before the log is truncated) ──
@@ -133,7 +133,7 @@ internal static class Program
             Console.SetError(tee);
             Console.WriteLine($"[log] Writing to {logPath}");
         }
-        catch { }
+        catch { }   // no log file: Vexis still runs, just without debug.log
 
         if (CrashHelper.Pending != null) Console.WriteLine("[crash] Previous session ended unexpectedly — log kept as debug-previous.log");
         Application.SetHighDpiMode(HighDpiMode.SystemAware);

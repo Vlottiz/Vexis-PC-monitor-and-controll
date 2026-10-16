@@ -12,8 +12,10 @@ public class FanInfo
     public string  mode       { get; set; } = "auto";  // auto | manual | curve | profile
     public string? healthStatus { get; set; }
     public bool    isGpu      { get; set; }     // graphics-card fan (driver control)
-    public bool    failsafe   { get; set; }     // forced to 100% by the GPU over-temperature guard
+    public bool    failsafe   { get; set; }     // forced to 100% by the GPU or CPU over-temperature guard
     public int     minPct     { get; set; }     // lowest speed Vexis will set (pumps: FanController.PumpMinPct)
+    public bool    isPump     { get; set; }
+    public bool    pumpByName { get; set; }     // detected from the name (can't be unmarked)
 }
 
 // ─── Internal fan state ────────────────────────────────────────────────────────
@@ -32,8 +34,11 @@ internal class FanEntry
     public int      LastSent     { get; set; } = -1;
     public bool     Testing      { get; set; }   // health check running: the poll loop leaves it alone
 
-    public bool IsPump => Name.Contains("Pump", StringComparison.OrdinalIgnoreCase) ||
-                          Name.Contains("AIO", StringComparison.OrdinalIgnoreCase);
+    // A pump gets the 50% floor, the pump curves and pump health-check steps. Detected
+    // from the header name, or marked by the user on the Fan Control page.
+    public bool PumpByName => Name.Contains("Pump", StringComparison.OrdinalIgnoreCase) ||
+                              Name.Contains("AIO", StringComparison.OrdinalIgnoreCase);
+    public bool IsPump => PumpByName || FanController.IsMarkedPump(Name);
 
     // For health check
     public List<(float SetPct, float MeasuredRpm)> HealthReadings { get; set; } = new();
@@ -48,6 +53,30 @@ public class FanController
     // The poll (UI thread), the health check (worker thread) and exit all write to the same
     // fan chip. LibreHardwareMonitor isn't thread-safe, so every write takes this lock.
     private static readonly object _hwLock = new();
+
+    // Fans the user marked as pumps (saved in config.PumpFans)
+    private static readonly HashSet<string> _markedPumps = new(StringComparer.OrdinalIgnoreCase);
+    internal static bool IsMarkedPump(string name) { lock (_markedPumps) return _markedPumps.Contains(name); }
+    internal static void LoadMarkedPumps(IEnumerable<string>? names)
+    {
+        lock (_markedPumps) { _markedPumps.Clear(); foreach (var n in names ?? Array.Empty<string>()) _markedPumps.Add(n); }
+    }
+
+    /// <summary>Marks or unmarks a fan as a pump, saves it, and applies the pump floor at once.</summary>
+    public void SetPump(string fanName, bool isPump, AppConfig config)
+    {
+        lock (_markedPumps)
+        {
+            if (isPump) _markedPumps.Add(fanName); else _markedPumps.Remove(fanName);
+            config.PumpFans = _markedPumps.ToList();
+        }
+        config.Save();
+        var fan = Find(fanName);
+        if (fan == null) return;
+        fan.LastSent = -1; fan.CurveSpeed = -1;
+        if (fan.Mode == "manual") { fan.ManualPct = SafeSpeed(fan.ManualPct, fan.IsPump); Send(fan, (int)fan.ManualPct); }
+        Console.WriteLine($"[fans] {fanName} {(isPump ? "marked as a pump" : "no longer marked as a pump")}");
+    }
     private bool _discovered;
 
     // LHM lists a SuperIO fan only after a successful read. The read is skipped
@@ -296,6 +325,7 @@ public class FanController
     /// </summary>
     public void ApplyProfile(AppConfig config)
     {
+        LoadMarkedPumps(config.PumpFans);
         string profile = FanProfiles.Normalize(config.FanProfile);
         foreach (var fan in _fans)
         {
@@ -304,7 +334,7 @@ public class FanController
             if (profile != "custom") { fan.Mode = "profile"; continue; }
             if (fan.Mode == "manual") { Send(fan, (int)fan.ManualPct); continue; }
             if (config.GetCurve(fan.Name) is { Enabled: true } c && c.Points.Count > 0) fan.Mode = "curve";
-            else { fan.Mode = "auto"; try { lock (_hwLock) fan.CtrlSensor.Control.SetDefault(); } catch { } }
+            else { fan.Mode = "auto"; try { lock (_hwLock) fan.CtrlSensor.Control.SetDefault(); } catch (Exception ex) { Console.WriteLine($"[fans] {fan.Name}: couldn't hand control back to the BIOS: {ex.Message}"); } }
         }
         Console.WriteLine($"[fans] Profile: {profile}");
     }
@@ -498,7 +528,9 @@ public class FanController
                           f.RpmSensor.Hardware.HardwareType != HardwareType.GpuIntel,
             isGpu       = f.IsGpu,
             minPct      = f.IsPump ? PumpMinPct : 0,
-            failsafe    = f.IsGpu && _gpuGuard && f.Mode != "auto",
+            isPump      = f.IsPump,
+            pumpByName  = f.PumpByName,
+            failsafe    = f.Mode != "auto" && !f.Testing && (f.IsGpu ? _gpuGuard : _cpuGuard),
             curveActive = f.Mode == "curve",
             mode        = f.Mode,
             healthStatus= f.HealthStatus
@@ -516,7 +548,7 @@ public class FanController
                 {
                     string name = idx < _wmiFanNames.Count ? _wmiFanNames[idx] : $"Fan {idx+1}";
                     float rpm = 0f;
-                    try { rpm = Convert.ToSingle(obj["DesiredSpeed"]); } catch { }
+                    try { rpm = Convert.ToSingle(obj["DesiredSpeed"]); } catch { }   // no reading: show 0 rather than fail the whole list
                     result.Add(new FanInfo
                     {
                         name       = name,
@@ -541,7 +573,7 @@ public class FanController
         foreach (var f in _fans)
         {
             if (f.Mode == "auto" && !f.Testing) continue;
-            try { lock (_hwLock) f.CtrlSensor?.Control?.SetDefault(); } catch { }
+            try { lock (_hwLock) f.CtrlSensor?.Control?.SetDefault(); } catch (Exception ex) { Console.WriteLine($"[fans] {f.Name}: couldn't hand control back to the BIOS: {ex.Message}"); }
             f.Mode = "auto";
         }
         Console.WriteLine("[fans] Fan control handed back to BIOS / driver.");

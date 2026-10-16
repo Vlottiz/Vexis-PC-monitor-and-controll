@@ -26,6 +26,27 @@ public class SafeLinkTests
         Assert.False(SafeLinks.IsWebLink(url, out _));
 }
 
+public class PumpMarkTests
+{
+    [Fact]
+    public void Pumps_are_found_by_name_or_by_the_users_mark()
+    {
+        try
+        {
+            FanController.LoadMarkedPumps(new[] { "Fan #3" });
+            Assert.True(new FanEntry { Name = "Pump Fan" }.IsPump);       // by name
+            Assert.True(new FanEntry { Name = "AIO Pump" }.PumpByName);
+            Assert.True(new FanEntry { Name = "fan #3" }.IsPump);         // marked (case doesn't matter)
+            Assert.False(new FanEntry { Name = "fan #3" }.PumpByName);
+            Assert.False(new FanEntry { Name = "Fan #2" }.IsPump);
+
+            FanController.LoadMarkedPumps(null);                          // unmarked again
+            Assert.False(new FanEntry { Name = "Fan #3" }.IsPump);
+        }
+        finally { FanController.LoadMarkedPumps(null); }
+    }
+}
+
 public class FanSafeSpeedTests
 {
     [Theory]

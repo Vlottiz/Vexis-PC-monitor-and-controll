@@ -111,7 +111,7 @@ public class PopoutForm : Form
                     return;
                 }
             }
-            catch { }
+            catch { }   // page still loading: try again next round
         }
         Console.WriteLine($"[popout:{_pageName}] page ready timeout after 20s");
     }
@@ -131,7 +131,7 @@ public class PopoutForm : Form
             await _webView.CoreWebView2.ExecuteScriptAsync(
                 $"typeof onConfigReceived==='function'&&onConfigReceived({json})");
         }
-        catch { }
+        catch (Exception ex) { Console.WriteLine($"[popout] Couldn't send settings: {ex.Message}"); }
     }
 
     private void OnWebMessage(object? s, CoreWebView2WebMessageReceivedEventArgs e)
@@ -156,7 +156,7 @@ public class PopoutForm : Form
             // Route everything else back to MainForm via the callback
             _onMessage?.Invoke(raw);
         }
-        catch { }
+        catch (Exception ex) { Console.WriteLine($"[popout] Bad message from the page: {ex.Message}"); }
     }
 
     // Called by MainForm to push sensor data into the popout page
@@ -168,7 +168,7 @@ public class PopoutForm : Form
             await _webView.CoreWebView2.ExecuteScriptAsync(
                 $"typeof receiveData==='function'&&receiveData({sensorJson})");
         }
-        catch { }
+        catch { }   // window closing: the next push goes to a live page
     }
 
     // Called by MainForm to send script results back into the popout (e.g. OpenRGB proxy responses)
@@ -176,6 +176,6 @@ public class PopoutForm : Form
     {
         if (!_ready || IsDisposed) return;
         try { await _webView.CoreWebView2.ExecuteScriptAsync(script); }
-        catch { }
+        catch { }   // window closing
     }
 }

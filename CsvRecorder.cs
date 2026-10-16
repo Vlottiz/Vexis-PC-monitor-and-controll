@@ -249,7 +249,7 @@ public sealed class CsvRecorder : IDisposable
             if (_format == "pretty") WritePrettySummary();
             _writer.Dispose();
         }
-        catch { }
+        catch (Exception ex) { Console.WriteLine($"[csv] Couldn't finish the recording file: {ex.Message}"); }
         _writer = null;
         LastFile = _path;
         Console.WriteLine($"[record] Stopped — {_rows} rows in {_path}");

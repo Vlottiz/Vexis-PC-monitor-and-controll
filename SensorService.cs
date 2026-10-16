@@ -231,7 +231,7 @@ public class SensorService : IDisposable
                         break;
                     }
                 }
-                catch { }
+                catch (Exception ex) { Console.WriteLine($"[sensors] Couldn't read the thread count from WMI: {ex.Message}"); }
                 if (_hwInfo.threads == 0) _hwInfo.threads = _hwInfo.cores;
 
                 // CCD count for AMD
@@ -291,7 +291,7 @@ public class SensorService : IDisposable
             }
             _hwInfo.ramGb = (int)(total / (1024L * 1024 * 1024));
         }
-        catch { }
+        catch (Exception ex) { Console.WriteLine($"[sensors] Couldn't read memory info from WMI: {ex.Message}"); }
 
         try
         {
@@ -304,7 +304,7 @@ public class SensorService : IDisposable
             }
             _hwInfo.socket = NormalizeSocket(_hwInfo.socket, _hwInfo.cpu, _hwInfo.vendor);
         }
-        catch { }
+        catch (Exception ex) { Console.WriteLine($"[sensors] Couldn't read the CPU socket from WMI: {ex.Message}"); }
 
         Console.WriteLine($"[hw] CPU: {_hwInfo.cpu} ({_hwInfo.cores}C/{_hwInfo.threads}T, {_hwInfo.socket}, vendor={_hwInfo.vendor})");
         Console.WriteLine($"[hw] GPU: {_hwInfo.gpu} ({_hwInfo.gpuVram}GB)");
@@ -593,7 +593,7 @@ public class SensorService : IDisposable
                     data.cpu_load = Convert.ToSingle(obj["LoadPercentage"]);
                     break;
                 }
-            } catch { }
+            } catch { }   // runs every tick: keep the last value instead of filling the log
 
             // One-time: get actual max turbo frequency
             if (_maxMhz == 0)
@@ -613,7 +613,7 @@ public class SensorService : IDisposable
                         if (mhzVal != null) _maxMhz = Convert.ToSingle(mhzVal);
                     }
                 }
-                catch { }
+                catch (Exception ex) { Console.WriteLine($"[sensors] Couldn't read the CPU base clock from the registry: {ex.Message}"); }
 
                 // WMI fallback for base clock
                 if (_maxMhz == 0)
@@ -658,7 +658,7 @@ public class SensorService : IDisposable
                     if (perfPct > 0)
                         actualMhz = _maxMhz * (perfPct / 100f);
                 }
-                catch { }
+                catch { }   // runs every tick: fall back to the max clock
             }
 
             // Populate core slots with live frequency

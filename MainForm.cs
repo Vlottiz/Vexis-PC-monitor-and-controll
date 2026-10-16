@@ -103,7 +103,7 @@ public class MainForm : Form
         _ = Task.Delay(TimeSpan.FromSeconds(60)).ContinueWith(_ =>
         {
             try { BeginInvoke(async () => { if (!_revealed) { Console.WriteLine("[startup] slow start — showing window"); await RevealWindow(); } }); }
-            catch { }
+            catch { }   // window already closed
         });
 
         _config = AppConfig.Load();
@@ -128,7 +128,12 @@ public class MainForm : Form
         _fans   = new FanController();
         await Task.Run(() => _fans.Discover(_sensor.AllHardware));
         _fans.ApplyProfile(_config);   // saved curves / fan profile take effect at launch
-        Application.ApplicationExit += (_, _) => { try { _fans.RestoreAll(); } catch { } };
+        // Hand the fans back to the BIOS on every way out, not just a normal close: a crash
+        // (unhandled error) or the process being shut down would otherwise leave them at
+        // the last software speed until the PC restarts.
+        Application.ApplicationExit                += (_, _) => RestoreFansSafely("exit");
+        AppDomain.CurrentDomain.ProcessExit        += (_, _) => RestoreFansSafely("process exit");
+        AppDomain.CurrentDomain.UnhandledException += (_, _) => RestoreFansSafely("crash");
         SetupTray();
 
         // Fans, alerts and recording run from the poll timer, independent of the interface,
@@ -146,7 +151,7 @@ public class MainForm : Form
             Console.WriteLine("[startup] Running in the tray — the interface loads when Vexis is opened.");
             await RevealWindow();   // driver-problem notification only; the window stays hidden
             // Pages normally ask for the update check; nothing is open yet, so ask once here
-            _ = Task.Delay(TimeSpan.FromSeconds(30)).ContinueWith(_ => { try { BeginInvoke(() => PushUpdateInfo(force: false)); } catch { } });
+            _ = Task.Delay(TimeSpan.FromSeconds(30)).ContinueWith(_ => { try { BeginInvoke(() => PushUpdateInfo(force: false)); } catch { /* window already closed */ } });
             return;
         }
 
@@ -226,10 +231,10 @@ public class MainForm : Form
                 string cacheDir = System.IO.Path.Combine(wv2Root, subdir);
                 if (System.IO.Directory.Exists(cacheDir))
                     foreach (var f in System.IO.Directory.GetFiles(cacheDir, "*", System.IO.SearchOption.AllDirectories))
-                        try { System.IO.File.Delete(f); } catch { }
+                        try { System.IO.File.Delete(f); } catch { }   // in use by WebView2: cleared next time
             }
             Console.WriteLine("[cache] WebView2 cache cleared");
-        } catch { }
+        } catch (Exception ex) { Console.WriteLine($"[cache] Couldn't clear the WebView2 cache: {ex.Message}"); }
 
         WebViewSecurity.Apply(_webView.CoreWebView2);
         _webView.CoreWebView2.WebMessageReceived += OnWebMessage;
@@ -278,7 +283,7 @@ public class MainForm : Form
             case CoreWebView2ProcessFailedKind.RenderProcessExited:
             case CoreWebView2ProcessFailedKind.RenderProcessUnresponsive:
             case CoreWebView2ProcessFailedKind.FrameRenderProcessExited:
-                BeginInvoke(() => { try { _webView.CoreWebView2?.Reload(); } catch { } });
+                BeginInvoke(() => { try { _webView.CoreWebView2?.Reload(); } catch { /* rebuilt below if the control is gone */ } });
                 break;
             // GPU and utility processes are restarted by WebView2 itself
         }
@@ -296,7 +301,7 @@ public class MainForm : Form
         _webView = new WebView2 { Dock = DockStyle.Fill, DefaultBackgroundColor = System.Drawing.Color.Black };
         Controls.Add(_webView);
         Controls.Remove(old);
-        try { old.Dispose(); } catch { }
+        try { old.Dispose(); } catch { }   // the old control is already broken; nothing to do
         await StartUiAsync();
     }
 
@@ -735,7 +740,7 @@ public class MainForm : Form
                             Invoke(() => { _ = _webView.CoreWebView2?.ExecuteScriptAsync(
                                 $"typeof receiveData==='function'&&receiveData({snapJson})"); });
                         }
-                        catch { }
+                        catch (Exception ex) { Console.WriteLine($"[popout] First data push failed: {ex.Message}"); }
                     });
                     break;
 
@@ -813,6 +818,9 @@ public class MainForm : Form
                 // Changing one fan by hand leaves a preset profile (back to Custom)
                 case "fanSetManual":
                     if (msg.fanName != null) { _fans.LeavePreset(_config); _fans.SetManual(msg.fanName, msg.value ?? 50f); UpdateTrayProfile(); }
+                    break;
+                case "setFanPump":
+                    if (msg.fanName != null) _fans.SetPump(msg.fanName, msg.enabled == true, _config);
                     break;
                 case "fanSetAuto":
                     if (msg.fanName != null) { _fans.LeavePreset(_config); _fans.SetAuto(msg.fanName); UpdateTrayProfile(); }
@@ -947,7 +955,7 @@ public class MainForm : Form
                         else if (msg2.type != null && !MainWindowOnly.Contains(msg2.type))
                             BeginInvoke(() => HandleMessage(raw));
                     }
-                    catch { }
+                    catch (Exception ex) { Console.WriteLine($"[popout] Message from a pop-out failed: {ex.Message}"); }
                 });
             });
         });
@@ -1010,7 +1018,7 @@ public class MainForm : Form
         }
         catch (Exception ex)
         {
-            try { _orgbClient?.Dispose(); } catch { } // don't leak the old socket
+            try { _orgbClient?.Dispose(); } catch { }   // already closed; don't leak the old socket
             _orgbClient = null;
             Console.WriteLine($"[rgb] proxy error: {ex.Message}");
             return (false, ex.Message);
@@ -1038,7 +1046,7 @@ public class MainForm : Form
         try {
             string icoPath = Path.Combine(AppDir, "vexis.ico");
             if (File.Exists(icoPath)) appIcon = new Icon(icoPath);
-        } catch { }
+        } catch (Exception ex) { Console.WriteLine($"[tray] Couldn't load vexis.ico, using the default icon: {ex.Message}"); }
         _tray.Text = "Vexis Hardware Monitoring";
         _trayIcon      = appIcon ?? SystemIcons.Application;
         _trayAlertIcon = MakeAlertIcon(_trayIcon);
@@ -1120,8 +1128,8 @@ public class MainForm : Form
         _resetting = true;
         Console.WriteLine("[reset] Reset to factory settings");
         try { _fans.RestoreAll(); } catch (Exception ex) { Console.WriteLine($"[reset] fans: {ex.Message}"); }
-        try { if (_recorder.IsRecording) _recorder.Stop(); } catch { }
-        try { ClearInbox(); } catch { }
+        try { if (_recorder.IsRecording) _recorder.Stop(); } catch (Exception ex) { Console.WriteLine($"[csv] Couldn't stop the recording cleanly: {ex.Message}"); }
+        try { ClearInbox(); } catch { }   // nothing left to clear
         try { await Task.Run(() => StartupManager.SetEnabled(false)); StartWithWindowsEnabled = false; }
         catch (Exception ex) { Console.WriteLine($"[reset] startup: {ex.Message}"); }
         AppConfig.DeleteSaved();
@@ -1151,6 +1159,14 @@ public class MainForm : Form
         Application.Exit();
     }
 
+    private int _fansRestored;
+    private void RestoreFansSafely(string why)
+    {
+        if (Interlocked.Exchange(ref _fansRestored, 1) == 1) return;   // once is enough
+        try { _fans?.RestoreAll(); Console.WriteLine($"[fans] Handed back on {why}"); }
+        catch (Exception ex) { Console.WriteLine($"[fans] Hand-back on {why} failed: {ex.Message}"); }
+    }
+
     // ── Closing for the installer ──────────────────────────────────────────────
     // The installer writes this file and gives Vexis a few seconds to close by itself
     // (fans handed back, recording closed, no "didn't close properly" banner next time)
@@ -1161,7 +1177,7 @@ public class MainForm : Form
 
     private void ExitForInstaller()
     {
-        try { File.Delete(ExitRequestPath); } catch { }
+        try { File.Delete(ExitRequestPath); } catch { }   // not there: nothing to remove
         Console.WriteLine("[exit] Closing for the installer");
         _tray.Visible = false;
         Application.Exit();
@@ -1321,7 +1337,7 @@ public class MainForm : Form
     {
         if (disposing)
         {
-            try { _fans?.RestoreAll(); } catch { }
+            try { _fans?.RestoreAll(); } catch (Exception ex) { Console.WriteLine($"[fans] Couldn't hand the fans back on close: {ex.Message}"); }
             _recorder.Dispose();
             _blinkTimer.Dispose();
             _pollTimer.Dispose(); _sensor?.Dispose(); _tray.Dispose(); _webView.Dispose();

@@ -342,6 +342,12 @@ function saveCurve(name) {
 }
 
 // ── Card HTML ─────────────────────────────────────────────────────────────────
+const PUMP_MIN = 50;   // FanController.PumpMinPct
+function setPump(name, on) {
+  sendToHost({type:'setFanPump', fanName:name, enabled:on});
+  _built = false;   // rebuild the cards on the next update so the slider floor changes too
+}
+
 function buildCard(fan) {
   // GPU fans follow the GPU temperature unless a saved curve says otherwise
   if (!fanStates[fan.name]) {
@@ -363,7 +369,11 @@ function buildCard(fan) {
         <div class="stat-sub" style="margin-top:3px">${fan.isGpu
           ? (fan.hasControl?'Controlled through the graphics driver · AUTO hands it back to the driver':'Graphics driver controlled only')
           : (fan.hasControl?'Software controllable':'BIOS controlled only')}</div>
-        <div class="stat-sub" id="fs-${id}" style="margin-top:3px;color:var(--temp-hot);display:${fan.failsafe?'block':'none'}">&#x26A0; GPU too hot &#x2014; forced to 100% until it cools down</div>
+        ${!fan.isGpu && fan.hasControl ? `<label class="stat-sub" style="margin-top:5px;display:flex;align-items:center;gap:6px;cursor:${fan.pumpByName?'default':'pointer'}"
+          title="${fan.pumpByName?'Detected as a pump from its name':'Tick this if a pump or AIO is plugged into this header'}">
+          <input type="checkbox" ${fan.isPump?'checked':''} ${fan.pumpByName?'disabled':''} onchange="setPump(${fanArg(fan.name)},this.checked)">
+          Pump or AIO on this header (never below ${PUMP_MIN}%)</label>` : ''}
+        <div class="stat-sub" id="fs-${id}" style="margin-top:3px;color:var(--temp-hot);display:${fan.failsafe?'block':'none'}">&#x26A0; ${fan.isGpu?'GPU':'CPU'} too hot &#x2014; forced to 100% until it cools down</div>
       </div>
       <div style="text-align:right">
         <span class="fan-rpm-big" id="rpm-${id}">${Math.round(fan.rpm)}</span>

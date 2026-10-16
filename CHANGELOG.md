@@ -18,6 +18,14 @@ the GitHub release notes.
 - Opening the OpenRGB window no longer freezes Vexis for a moment
 - Security: the duplicate finder only reveals or recycles files from its own last scan, and only scans real folders; the recordings page only opens Vexis's own recordings
 - Fans: if a health check fails partway, the fan is still put back to its setting and the page is told what happened
+- Fans: tick "Pump or AIO on this header" on a fan card if your pump is plugged into a header with a plain name (like "Fan #3"). It then gets the same 50 % minimum, pump curves and health-check steps as a pump Vexis finds by name
+- Fans: if Vexis crashes or is closed by Windows, it still tries to hand the fans back to the BIOS on the way out
+- Updates: the downloaded installer is kept locked from the moment it's checked until it has started, in a new folder each time, so nothing can swap it in between
+- Release builds: the bundled PawnIO driver installer is pinned to version 2.2.0 and its SHA-256, and the WebView2 installer must carry Microsoft's signature, or the build stops
+- RGB: OpenRGB is only started from Program Files (or the Vexis folder), never from Downloads, the desktop or other folders anyone can write to. If it isn't installed, the OpenRGB website opens instead
+- Duplicate finder: files on drives without a Recycle Bin (USB sticks, network drives) are skipped instead of risking a permanent delete, and Windows is told to ask rather than delete outright
+- Removed the unused MSI HID code and hidapi.dll (it was never called, and only knew one MSI board)
+- Errors that used to be ignored silently are now written to debug.log where they matter (fans, sensors, files, pop-outs); the rest say why they're safe to ignore
 
 ## 2.12.1 — 2026-10-08
 - Fixed: when started with Windows, Vexis could open as a grey window that didn't respond until it was restarted. It now runs only the monitoring, fans and alerts in the tray after sign-in, and builds the interface the first time you open it

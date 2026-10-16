@@ -46,6 +46,9 @@ public class AppConfig
     // Active fan profile: custom (your own modes / curves) | silent | balanced | performance
     public string FanProfile { get; set; } = "custom";
 
+    // Fans the user marked as pumps (for headers whose name doesn't say "Pump" / "AIO")
+    public List<string> PumpFans { get; set; } = new();
+
     // Main window size/position from the last session
     public WindowPlacement? Window { get; set; }
 

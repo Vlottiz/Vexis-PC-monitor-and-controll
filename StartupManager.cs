@@ -77,7 +77,7 @@ public static class StartupManager
             string file = Path.Combine(Path.GetTempPath(), "vexis-startup-task.xml");
             File.WriteAllText(file, xml, Encoding.Unicode); // matches encoding="UTF-16"
             var (code, text) = Run("schtasks.exe", $"/Create /TN \"{TaskName}\" /XML \"{file}\" /F");
-            try { File.Delete(file); } catch { }
+            try { File.Delete(file); } catch { }   // temp file: Windows cleans it up
             Console.WriteLine($"[startup] Start with Windows on (schtasks exit {code}) {text.Trim()}");
         }
         catch (Exception ex)

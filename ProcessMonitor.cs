@@ -106,7 +106,7 @@ public sealed class ProcessMonitor : IDisposable
                 else if (!string.IsNullOrWhiteSpace(v.ProductName)) desc = v.ProductName.Trim();
             }
         }
-        catch { }
+        catch { }   // no version info: show the file name
         return _descCache[exe] = desc;
     }
 
@@ -198,15 +198,15 @@ public sealed class ProcessMonitor : IDisposable
                             cpu = Math.Max(0, (t - prev.cpu).TotalMilliseconds / ((now - prev.at).TotalMilliseconds * cpus) * 100);
                     }
                     catch { }                                     // protected process: no CPU time
-                    long mem = 0; try { mem = p.WorkingSet64; } catch { }
-                    try { threads += p.Threads.Count; } catch { }
+                    long mem = 0; try { mem = p.WorkingSet64; } catch { }   // protected process
+                    try { threads += p.Threads.Count; } catch { }   // protected process
                     string title = windows.GetValueOrDefault(pid, "");
-                    int session = 0; try { session = p.SessionId; } catch { }
+                    int session = 0; try { session = p.SessionId; } catch { }   // protected process
                     string type = title.Length > 0 ? "app"
                                 : IsWindowsProcess(exe, path, session) ? "win" : "bg";
                     rows.Add((exe, path, type, new ProcRow(pid, title, Math.Round(Math.Min(cpu, 100), 1), mem, Math.Round(gpu.GetValueOrDefault(pid), 1))));
                 }
-                catch { }
+                catch { }   // process exited while being read
                 finally { p.Dispose(); }
             }
             _prevCpu = nextCpu;

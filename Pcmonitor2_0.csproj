@@ -45,10 +45,6 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
-    <Content Include="hidapi.dll" Condition="Exists('hidapi.dll')">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </Content>
     <!-- Loading-screen animation (replaceable: see SplashForm.cs) -->
     <Content Include="splash.gif" Condition="Exists('splash.gif')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

@@ -74,6 +74,9 @@ Section "Vexis Hardware Monitoring" SecMain
   ; Copy all published files
   File /r "publish\*.*"
 
+  ; Left over from versions before 2.13.0 (unused MSI HID library)
+  Delete "$INSTDIR\hidapi.dll"
+
   ; WebView2 runtime — the UI needs it. Always on Windows 11; may be missing on
   ; Windows 10. The bootstrapper (downloaded by build-installer.bat) fetches the
   ; current runtime from Microsoft, so this step needs internet on such PCs.
