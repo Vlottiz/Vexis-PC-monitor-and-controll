@@ -1,9 +1,16 @@
+// V was here ✌  As of 2.13.0, 53% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame.
 using Timer = System.Threading.Timer;
 using LibreHardwareMonitor.Hardware;
 using System.Management;
 using System.Net.Http;
 using System.Text.RegularExpressions;
 
+// ─── Data sent to the pages ─────────────────────────────────────────────────────
+// HwInfo and SensorData are serialised to JSON as-is every poll, so the property names
+// (lower case, snake_case) are exactly what the pages read: data.cpu_temp, data.info.cores...
+// Renaming one here means renaming it in the pages too.
+
+// Things that don't change while running: read once in ScanHardware
 public class HwInfo
 {
     public string cpu     { get; set; } = "";
@@ -22,6 +29,8 @@ public class HwInfo
     public bool   driverOk  { get; set; } = false; // true = LHM ring-0 driver reading OK
 }
 
+// One snapshot of every reading, rebuilt each poll. null = this PC has no such sensor
+// (the pages hide that tile rather than showing 0)
 public class SensorData
 {
     public float?  cpu_temp    { get; set; }
@@ -111,9 +120,9 @@ public class SensorService : IDisposable
     private readonly Computer   _computer;
     private readonly Timer      _timer;
     private          HwInfo     _hwInfo   = new();
-    private volatile SensorData _latest   = new();
+    private volatile SensorData _latest   = new();   // swapped whole each poll, so readers never see half an update
     private          bool       _disposed;
-    private          bool       _firstPoll = true;
+    private          bool       _firstPoll = true;   // first poll logs extra detail to debug.log
 
     // Dynamic core map — built per-CPU in ScanHardware
     private Dictionary<int, (int displayId, int rank)> _coreMap = new();
@@ -176,6 +185,8 @@ public class SensorService : IDisposable
 
         foreach (var hw in _computer.Hardware)
         {
+            // Twice: loads and clocks are worked out from the change between two reads,
+            // so the first read alone leaves them empty
             hw.Update(); hw.Update();
             // Also update and log all sub-hardware (SuperIO, EC chips)
             foreach (var sub in hw.SubHardware)
@@ -207,7 +218,7 @@ public class SensorService : IDisposable
                 string name = hw.Name;
                 _hwInfo.cpu = CleanCpuName(name);
 
-                // Detect vendor
+                // Detect vendor (AMD first: "Core" alone would also match some AMD names)
                 if (name.Contains("AMD") || name.Contains("Ryzen") || name.Contains("EPYC"))
                     _hwInfo.vendor = "amd";
                 else if (name.Contains("Intel") || name.Contains("Core") || name.Contains("Xeon"))
@@ -231,7 +242,7 @@ public class SensorService : IDisposable
                         break;
                     }
                 }
-                catch { }
+                catch (Exception ex) { Console.WriteLine($"[sensors] Couldn't read the thread count from WMI: {ex.Message}"); }
                 if (_hwInfo.threads == 0) _hwInfo.threads = _hwInfo.cores;
 
                 // CCD count for AMD
@@ -267,6 +278,8 @@ public class SensorService : IDisposable
                 var vramSensor = hw.Sensors.FirstOrDefault(s => s.Name == "GPU Memory Total");
                 int vramMb = vramSensor?.Value.HasValue == true ? (int)vramSensor.Value.Value : 0;
                 Console.WriteLine($"[hw]   → GPU: {hw.Name}, VRAM: {vramMb} MB");
+                // The GPU with the most VRAM is the one shown, so a CPU's integrated graphics
+                // never wins over a graphics card
                 if (vramMb > bestGpuVram) { bestGpuVram = vramMb; bestGpuName = hw.Name; }
             }
         }
@@ -274,7 +287,7 @@ public class SensorService : IDisposable
         if (!string.IsNullOrEmpty(bestGpuName))
         {
             _hwInfo.gpu     = CleanGpuName(bestGpuName);
-            _hwInfo.gpuVram = (int)Math.Round(bestGpuVram / 1024f);
+            _hwInfo.gpuVram = (int)Math.Round(bestGpuVram / 1024f);   // MB → GB
         }
 
         try
@@ -286,12 +299,13 @@ public class SensorService : IDisposable
                 total += Convert.ToInt64(obj["Capacity"]);
                 if (_hwInfo.ramMhz == 0) _hwInfo.ramMhz = RamSpeedMts(obj);
                 if (string.IsNullOrEmpty(_hwInfo.ramType))
+                    // SMBIOS memory type codes (SMBIOS spec, table "Memory Device — Type")
                     _hwInfo.ramType = Convert.ToInt32(obj["SMBIOSMemoryType"]) switch
                     { 34=>"DDR5", 26=>"DDR4", 24=>"DDR3", _=>"DDR" };
             }
             _hwInfo.ramGb = (int)(total / (1024L * 1024 * 1024));
         }
-        catch { }
+        catch (Exception ex) { Console.WriteLine($"[sensors] Couldn't read memory info from WMI: {ex.Message}"); }
 
         try
         {
@@ -304,7 +318,7 @@ public class SensorService : IDisposable
             }
             _hwInfo.socket = NormalizeSocket(_hwInfo.socket, _hwInfo.cpu, _hwInfo.vendor);
         }
-        catch { }
+        catch (Exception ex) { Console.WriteLine($"[sensors] Couldn't read the CPU socket from WMI: {ex.Message}"); }
 
         Console.WriteLine($"[hw] CPU: {_hwInfo.cpu} ({_hwInfo.cores}C/{_hwInfo.threads}T, {_hwInfo.socket}, vendor={_hwInfo.vendor})");
         Console.WriteLine($"[hw] GPU: {_hwInfo.gpu} ({_hwInfo.gpuVram}GB)");
@@ -398,7 +412,7 @@ public class SensorService : IDisposable
             foreach (int idx in pCores)
                 _coreMap[idx] = (displayId++, 0);
             foreach (int idx in eCores)
-                _coreMap[1000 + idx] = (displayId++, 0);  // offset prevents collision
+                _coreMap[1000 + idx] = (displayId++, 0);  // offset prevents collision: P-Core #1 and E-Core #1 both exist
             _hwInfo.cores = pCores.Count + eCores.Count;
             _hybrid = true;
             Console.WriteLine($"[hw]   --> Intel hybrid: {pCores.Count} P-Cores + {eCores.Count} E-Cores = {_hwInfo.cores} total");
@@ -453,6 +467,7 @@ public class SensorService : IDisposable
                 continue;
             }
             hw.Update();
+            // CPU twice, as in ScanHardware: per-core loads need two reads close together
             if (hw.HardwareType == HardwareType.Cpu) hw.Update();
 
             // Update sub-hardware (SuperIO chip — contains motherboard fan sensors)
@@ -464,7 +479,7 @@ public class SensorService : IDisposable
                 case HardwareType.GpuAmd:
                 case HardwareType.GpuNvidia:
                 case HardwareType.GpuIntel:
-                    if (CleanGpuName(hw.Name) == _hwInfo.gpu) ReadGpu(hw, data);
+                    if (CleanGpuName(hw.Name) == _hwInfo.gpu) ReadGpu(hw, data);   // only the GPU picked in ScanHardware
                     break;
             }
 
@@ -521,6 +536,7 @@ public class SensorService : IDisposable
             ApplyWmiFallback(data);
 
         // ── Re-check driverOk each poll — driver may load late ───────────────────
+        // ✌ V was here — 77% of this section is still my original code
         // If PawnIO registered after startup (manual registration path) LHM may start
         // returning real values mid-session. Clear the "blocked" warning automatically.
         if (!_hwInfo.driverOk && data.cpu_temp.HasValue && data.cpu_temp.Value > 1f)
@@ -553,6 +569,7 @@ public class SensorService : IDisposable
         !s.Name.Contains("Threshold", StringComparison.OrdinalIgnoreCase);
 
     // ── CPU load from LHM sensors (AMD gets this for free; Intel needs WMI fallback) ──
+    // ✌ V was here — 100% of this section is still my original code
     private void ReadCpuLoad(IHardware hw, SensorData data)
     {
         if (data.cpu_load != null) return; // already set
@@ -561,7 +578,8 @@ public class SensorService : IDisposable
                 s.Name.Equals("CPU Total", StringComparison.OrdinalIgnoreCase) &&
                 s.Value.HasValue)
             { data.cpu_load = s.Value.Value; return; }
-        // Fallback: average of all core load sensors
+        // Fallback: average of every load sensor on the CPU (cores, threads, max...) —
+        // a rough figure, only used when there's no "CPU Total"
         var loads = hw.Sensors
             .Where(s => s.SensorType == SensorType.Load && s.Value.HasValue)
             .Select(s => s.Value!.Value).ToList();
@@ -569,7 +587,7 @@ public class SensorService : IDisposable
     }
 
     // ── Fallback for when LHM driver is blocked ───────────────────────────────
-    // AMD:   LHM gives real per-core clocks via SMU — this method never runs
+    // AMD:   LHM gives real per-core clocks via SMU — this normally only runs if the driver is missing
     // Intel: LHM MSR blocked → use Windows Performance Counters for live clock speed
     //        Formula: ActualMHz = MaxMHz × (% Processor Performance ÷ 100)
     //        Much more accurate than WMI CurrentClockSpeed (base clock only)
@@ -586,34 +604,33 @@ public class SensorService : IDisposable
 
         try
         {
-            // Read CPU load from WMI every tick (cheap query)
+            // Read CPU load from WMI every tick. Not free (a WMI query takes tens of ms),
+            // but this path only runs when the sensor driver gave nothing
             try {
                 using var lq = new ManagementObjectSearcher("SELECT LoadPercentage FROM Win32_Processor");
                 foreach (ManagementObject obj in lq.Get()) {
                     data.cpu_load = Convert.ToSingle(obj["LoadPercentage"]);
                     break;
                 }
-            } catch { }
+            } catch { }   // runs every tick: keep the last value instead of filling the log
 
-            // One-time: get actual max turbo frequency
+            // One-time: get the reference clock. Despite the name, _maxMhz ends up as the
+            // CPU's base clock (both sources below report base, not turbo) — that's what the
+            // performance counter's 100% means, so it's the right reference.
             if (_maxMhz == 0)
             {
-                // Registry has the real max turbo, WMI only has base clock
+                // Registry first (~MHz under CentralProcessor\0)
                 try
                 {
                     using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
                         @"HARDWARE\DESCRIPTION\System\CentralProcessor");
                     if (key != null)
                     {
-                        // ~MHz is base, MaxClockSpeed from WMI is also base
-                        // But processor name string contains max turbo e.g. "3.20GHz"
-                        // Better: use CurrentClockSpeed × performance% at 100% load
-                        // For now, read ~MHz and multiply by known turbo ratio from WMI
                         var mhzVal = key.GetValue("~MHz");
                         if (mhzVal != null) _maxMhz = Convert.ToSingle(mhzVal);
                     }
                 }
-                catch { }
+                catch (Exception ex) { Console.WriteLine($"[sensors] Couldn't read the CPU base clock from the registry: {ex.Message}"); }
 
                 // WMI fallback for base clock
                 if (_maxMhz == 0)
@@ -658,12 +675,14 @@ public class SensorService : IDisposable
                     if (perfPct > 0)
                         actualMhz = _maxMhz * (perfPct / 100f);
                 }
-                catch { }
+                catch { }   // runs every tick: fall back to the max clock
             }
 
             // Populate core slots with live frequency
             if (needClocks && actualMhz > 0)
             {
+                // Every core gets the same package clock: Windows has no per-core figure here.
+                // 16 slots if the core count is unknown, so the page still has bars to draw
                 int coreCount = _hwInfo.cores > 0 ? _hwInfo.cores : 16;
                 for (int i = 0; i < coreCount; i++)
                     if (!data.cores.ContainsKey(i))
@@ -724,7 +743,7 @@ public class SensorService : IDisposable
                     // sensor listed before "CPU Package" can't win just by coming first
                     if (!isCcd) cpuTempCandidates.Add((n, v));
 
-                    // CCD temps (AMD)
+                    // CCD temps (AMD). LHM numbers CCDs from 1 ("CCD1 (Tdie)"), the page from 0
                     if (isCcd)
                     {
                         if (n.Contains("1")) data.ccd0_temp ??= v;
@@ -855,6 +874,8 @@ public class SensorService : IDisposable
     private static void ReadGpu(IHardware hw, SensorData data)
     {
         ReadGpuDetail(hw, data);
+        // The short gpu_* fields used by Home and Performance (the GPU page uses data.gpu).
+        // Zero readings are skipped, so an idle 0% load shows as "no reading" rather than 0.
         foreach (var s in hw.Sensors)
         {
             if (s.Value is null || s.Value.Value == 0f) continue;
@@ -945,6 +966,7 @@ public class SensorService : IDisposable
         data.gpu = g;
     }
 
+    // Shorter names for the header: "AMD Ryzen 9 9950X3D" → "Ryzen 9 9950X3D"
     private static string CleanCpuName(string name) =>
         name.Replace("AMD ", "").Replace("Intel® Core™ ", "")
             .Replace("Intel® ", "").Replace("Intel ", "")
@@ -955,6 +977,8 @@ public class SensorService : IDisposable
             .Replace("Intel® Arc™", "Arc").Replace("Intel Arc", "Arc")
             .Replace("(TM)", "").Trim();
 
+    // Stops sensor reads for a while. OpenRGB scans the RAM's SMBus when it starts; if LHM
+    // reads the same bus at the same moment, both can get garbage or lock it up.
     private bool _paused = false;
     public void PausePoll(int ms)
     {

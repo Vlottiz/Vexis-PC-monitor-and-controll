@@ -85,7 +85,7 @@
   </div>
 </div>
 
-<script src="/nav.js?v=24" data-page="gpu"></script>
+<script src="/nav.js?v=25" data-page="gpu"></script>
 <script>
 // ── Formatting ───────────────────────────────────────────────────────────────
 const fmt = {
@@ -157,7 +157,7 @@ function meter(boxId, key, label, v, f, max, col, extra) {
   if (!row) {
     row = document.createElement('div');
     row.className = 'meter'; row.id = 'mr-' + key;
-    row.innerHTML = `<div class="meter-lbl" title="${label}">${label}</div>
+    row.innerHTML = `<div class="meter-lbl" title="${escHtml(label)}">${escHtml(label)}</div>
       <div class="meter-bar"><div class="meter-fill" id="mf-${key}"></div><div class="meter-peak" id="mp-${key}"></div></div>
       <div class="meter-val" id="mv-${key}">--</div>`;
     box.appendChild(row);
@@ -259,8 +259,8 @@ function renderSensors(list) {
     _sensSig = sig;
     let html = '', last = '';
     sorted.forEach((s, i) => {
-      if (s.type !== last) { last = s.type; html += `<tr class="sens-group"><td colspan="2">${TYPE_NAME[s.type] || s.type.toUpperCase()}</td></tr>`; }
-      html += `<tr><td>${s.name}</td><td class="v" id="sv-${i}"></td></tr>`;
+      if (s.type !== last) { last = s.type; html += `<tr class="sens-group"><td colspan="2">${escHtml(TYPE_NAME[s.type] || s.type.toUpperCase())}</td></tr>`; }
+      html += `<tr><td>${escHtml(s.name)}</td><td class="v" id="sv-${i}"></td></tr>`;
     });
     body.innerHTML = html;
   }

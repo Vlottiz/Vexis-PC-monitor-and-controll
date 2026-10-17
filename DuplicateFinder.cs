@@ -10,7 +10,9 @@ using System.Security.Cryptography;
 /// byte-for-byte identical end up in a group.
 ///
 /// Safety:
-///  • Removing sends files to the Recycle Bin — never a permanent delete.
+///  • Removing sends files to the Recycle Bin. Files on drives without one (USB, network) are
+///    skipped, and if Windows still can't recycle a file (e.g. too big for the bin) it asks
+///    before deleting it for good — Vexis never deletes permanently on its own.
 ///  • At least one copy of every group is always kept, whatever the page asks.
 ///  • Each file is hashed again right before it is removed, so a file that changed
 ///    since the scan is left alone.
@@ -46,6 +48,27 @@ public sealed class DuplicateFinder
         { "$Recycle.Bin", "System Volume Information", "$WinREAgent", "Recovery", "Config.Msi", "Windows.old" };
 
     public void Cancel() => _cts?.Cancel();
+
+    /// <summary>True only for a file that the last scan listed as a duplicate.</summary>
+    public bool IsInResults(string? path)
+    {
+        if (!IsPlainPath(path)) return false;
+        lock (_lock) return _groups.Values.Any(g => g.paths.Contains(path!));
+    }
+
+    /// <summary>A scan folder from the page: a full local path to a folder that exists.</summary>
+    internal static string? CheckFolder(string? path)
+    {
+        if (!IsPlainPath(path)) return null;
+        string full = Path.GetFullPath(path!);
+        return Directory.Exists(full) ? full : null;
+    }
+
+    // Full path, no wildcards, quotes or device prefixes (\\?\, \\.\)
+    private static bool IsPlainPath(string? p) =>
+        !string.IsNullOrWhiteSpace(p) && Path.IsPathFullyQualified(p) &&
+        p.IndexOfAny(new[] { '*', '?', '"', '<', '>', '|', '\0' }) < 0 &&
+        !p.StartsWith(@"\\?\") && !p.StartsWith(@"\\.\");
 
     /// <summary>Runs the scan on a background thread, reporting progress about 3 times a second.</summary>
     public void Start(Options opt, Action<Progress> progress, Action<Result> done)
@@ -221,14 +244,24 @@ public sealed class DuplicateFinder
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
     private static extern int SHFileOperation(ref SHFILEOPSTRUCT op);
     private const uint FO_DELETE = 3;
-    private const ushort FOF_ALLOWUNDO = 0x40, FOF_NOCONFIRMATION = 0x10, FOF_SILENT = 0x4, FOF_NOERRORUI = 0x400;
+    private const ushort FOF_ALLOWUNDO = 0x40, FOF_NOCONFIRMATION = 0x10, FOF_SILENT = 0x4, FOF_NOERRORUI = 0x400,
+                         FOF_WANTNUKEWARNING = 0x4000;   // ask first if the file can't go to the Recycle Bin
+
+    // Only fixed local drives have a Recycle Bin; USB sticks and network shares don't
+    private static bool HasRecycleBin(string path)
+    {
+        try { return new DriveInfo(Path.GetPathRoot(path)!).DriveType == DriveType.Fixed; }
+        catch { return false; }
+    }
 
     private static bool SendToRecycleBin(string path)
     {
         var op = new SHFILEOPSTRUCT
         {
             wFunc = FO_DELETE, pFrom = path + "\0\0",
-            fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI
+            // FOF_NOCONFIRMATION alone would delete for good where there's no Recycle Bin (USB and
+            // network drives, files too big for the bin). FOF_WANTNUKEWARNING makes Windows ask first.
+            fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_WANTNUKEWARNING | FOF_SILENT | FOF_NOERRORUI
         };
         return SHFileOperation(ref op) == 0 && !op.fAnyOperationsAborted && !File.Exists(path);
     }
@@ -241,7 +274,7 @@ public sealed class DuplicateFinder
     {
         var skipped = new List<string>();
         int removed = 0; long freed = 0;
-        var want = paths.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var want = paths.Where(IsPlainPath).ToHashSet(StringComparer.OrdinalIgnoreCase);
         List<(string hash, long size, HashSet<string> paths)> groups;
         lock (_lock) groups = _groups.Values.ToList();
 
@@ -263,6 +296,7 @@ public sealed class DuplicateFinder
             {
                 long dummy = 0;
                 if (!File.Exists(p)) { skipped.Add(p + " (already gone)"); continue; }
+                if (!HasRecycleBin(p)) { skipped.Add(p + " (not on a local drive with a Recycle Bin)"); continue; }
                 if (new FileInfo(p).Length != g.size || FullHash(p, ref dummy, CancellationToken.None) != g.hash)
                 { skipped.Add(p + " (changed since the scan)"); continue; }
                 if (SendToRecycleBin(p)) { removed++; freed += g.size; g.paths.Remove(p); }

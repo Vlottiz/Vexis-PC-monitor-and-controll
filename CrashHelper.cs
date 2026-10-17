@@ -46,13 +46,13 @@ public static class CrashHelper
             }
             File.WriteAllText(FlagPath, $"{Environment.ProcessId} {DateTime.Now:O}");
         }
-        catch { }
+        catch (Exception ex) { Console.WriteLine($"[crash] Couldn't check or write the running flag: {ex.Message}"); }
     }
 
     /// <summary>Clean exit: remove the marker.</summary>
     public static void OnCleanExit()
     {
-        try { File.Delete(FlagPath); } catch { }
+        try { File.Delete(FlagPath); } catch { }   // not there: nothing to remove
     }
 
     /// <summary>Hooks global handlers so unexpected errors are written down.</summary>
@@ -81,14 +81,14 @@ public static class CrashHelper
             Console.WriteLine($"[crash] {what}: {ex?.GetBaseException().Message}");
             if (fatal) File.WriteAllText(CrashPath, sb.ToString());
         }
-        catch { }
+        catch { }   // the log itself failed: nowhere left to write
     }
 
     // ── Actions from the banner ──────────────────────────────────────────────
     public static void OpenLog()
     {
         string file = File.Exists(PreviousLogPath) ? PreviousLogPath : LogPath;
-        try { Process.Start("explorer.exe", $"/select,\"{file}\""); } catch { }
+        try { Process.Start("explorer.exe", $"/select,\"{file}\""); } catch { }   // Explorer didn't open: the path is shown in the banner
     }
 
     /// <summary>Opens a new GitHub issue with version, system and error details filled in.</summary>
@@ -117,13 +117,13 @@ public static class CrashHelper
         body.AppendLine();
         body.AppendLine("Please drag `debug-previous.log` from `%AppData%\\Vexis` into this issue (the Open log button shows it).");
         string url = $"https://github.com/{UpdateManager.Repo}/issues/new?title={Uri.EscapeDataString(title)}&body={Uri.EscapeDataString(body.ToString())}";
-        try { Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true }); } catch { }
+        try { Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true }); } catch { }   // no browser: the user can copy the link
     }
 
     public static void Dismiss()
     {
         Pending = null;
-        try { File.Delete(CrashPath); } catch { }
+        try { File.Delete(CrashPath); } catch { }   // not there: nothing to remove
     }
 
     private static string FirstLine(string s)

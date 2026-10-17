@@ -1,3 +1,4 @@
+// V was here ✌  As of 2.13.0, 47% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame.
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json.Nodes;
@@ -6,6 +7,9 @@ using System.Text.Json.Nodes;
 /// Implements the OpenRGB SDK binary protocol.
 /// Protocol: https://gitlab.com/CalcProgrammer1/OpenRGB/-/wikis/OpenRGB-SDK-Documentation
 /// Packet: magic(4) | device_idx(4) | packet_id(4) | data_size(4) | data(N)
+/// All numbers are little-endian. OpenRGB's SDK server listens on 127.0.0.1:6742 by default.
+/// Every request/reply pair holds _lock, so the RGB page and effects can't interleave
+/// their packets on the one socket.
 /// </summary>
 public class OpenRGBClient : IDisposable
 {
@@ -48,12 +52,14 @@ public class OpenRGBClient : IDisposable
     {
         _tcp = new TcpClient();
         await _tcp.ConnectAsync("127.0.0.1", _port);
+        // Device data can take a few seconds while OpenRGB is still scanning hardware
         _tcp.ReceiveTimeout = 8000;
         _tcp.SendTimeout    = 5000;
         _ns = _tcp.GetStream();
 
         // Negotiate protocol version (required for OpenRGB 1.0+)
-        // Send our supported version (3), server replies with agreed version
+        // Send the highest version we support (MAX_PROTOCOL); the server replies with its own,
+        // and both sides use the lower of the two. Packet 40 = REQUEST_PROTOCOL_VERSION.
         try
         {
             await SendAsync(0, 40, BitConverter.GetBytes(MAX_PROTOCOL));
@@ -93,6 +99,7 @@ public class OpenRGBClient : IDisposable
         buf[14] = (byte)((dl >> 16) & 0xFF);
         buf[15] = (byte)((dl >> 24) & 0xFF);
         data.CopyTo(buf, 16);
+        // Logs every packet header in hex — handy for protocol bugs, but chatty during effects
         Console.WriteLine($"[orgb] SEND hdr: devIdx={devIdx} pktId={pktId} dataLen={dl} | bytes: {string.Join(' ', buf.Take(16).Select(b => b.ToString("X2")))}");
         await _ns!.WriteAsync(buf);
     }
@@ -141,7 +148,7 @@ public class OpenRGBClient : IDisposable
         await _lock.WaitAsync();
         try
         {
-            // Get count
+            // Get count (REQUEST_CONTROLLER_COUNT), then ask for each device's description
             await SendAsync(0, PKT_COUNT, Array.Empty<byte>());
             var cntData = await RecvReplyAsync(PKT_COUNT);
             int count = (int)Read32(cntData, 0);
@@ -182,7 +189,7 @@ public class OpenRGBClient : IDisposable
         finally { _lock.Release(); }
     }
 
-    // Reset failed device list (e.g. when OpenRGB restarts)
+    // Reset failed device list (e.g. when OpenRGB restarts and device numbers may change)
     public void ResetFailedDevices() => _failedDevices.Clear();
 
     /// <summary>
@@ -282,7 +289,7 @@ public class OpenRGBClient : IDisposable
                 pkt.Add((byte)led.GetValueOrDefault("r"));
                 pkt.Add((byte)led.GetValueOrDefault("g"));
                 pkt.Add((byte)led.GetValueOrDefault("b"));
-                pkt.Add(0); // W/padding
+                pkt.Add(0); // padding: OpenRGB colours are 4 bytes (R, G, B, unused)
             }
             int dataSize = pkt.Count;
             Console.WriteLine($"[orgb] SetLEDs dev={devIdx} count={numLeds} dataSize={dataSize} pktBytes={dataSize}");
@@ -291,11 +298,13 @@ public class OpenRGBClient : IDisposable
         catch (Exception ex)
         {
             Console.WriteLine($"[orgb] SetLEDs dev={devIdx} failed: {ex.Message}");
+            // Two kinds of failure: the socket died (OpenRGB closed or restarted) → reconnect;
+            // or the socket is fine and just this device refused → stop sending to it
             bool streamDead = _ns == null || !(_tcp?.Connected ?? false);
             if (streamDead)
             {
                 Console.WriteLine("[orgb] Stream dead — reconnecting");
-                try { _ns?.Dispose(); _tcp?.Dispose(); } catch {}
+                try { _ns?.Dispose(); _tcp?.Dispose(); } catch {}   // already closed
                 _ns = null; _tcp = null;
                 try { await Task.Delay(800); await ConnectAsync(); await Task.Delay(200); }
                 catch (Exception rex) { Console.WriteLine($"[orgb] Reconnect failed: {rex.Message}"); }
@@ -433,6 +442,7 @@ public class OpenRGBClient : IDisposable
     }
 
     // ── Binary helpers ────────────────────────────────────────────────────────
+    // ✌ V was here — 79% of this section is still my original code
     private static uint   Read32 (byte[] d, int off)       => BitConverter.ToUInt32(d, off);
     private static uint   Read32 (byte[] d, ref int p)     { var v=BitConverter.ToUInt32(d,p); p+=4; return v; }
     private static int    ReadU16(byte[] d, ref int p)     { var v=BitConverter.ToUInt16(d,p); p+=2; return v; }
@@ -443,6 +453,7 @@ public class OpenRGBClient : IDisposable
         int len = BitConverter.ToUInt16(d, p); p += 2;       // throws past the end
         if (len == 0) return "";
         if (p + len > d.Length) throw new IndexOutOfRangeException("string past end of data");
+        // OpenRGB strings: uint16 length (including the trailing \0), then the bytes
         var s = Encoding.UTF8.GetString(d, p, len - 1);   // exclude null terminator
         p += len;
         return s;

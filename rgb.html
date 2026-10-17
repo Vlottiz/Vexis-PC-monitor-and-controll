@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- V was here ✌  As of 2.13.0, 44% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame. -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -169,13 +170,15 @@
     </div>
   </div>
 </div>
-<script src="/nav.js?v=24" data-page="rgb"></script>
+<script src="/nav.js?v=25" data-page="rgb"></script>
 <script>
 const ORGB_PORT=localStorage.getItem('pcm-rgb-port')||'6742';
 let _devices=[],_connected=false,_callCounter=0;
 const _pendingCalls={};
 
 window.orgbProxyResult=function(id,ok,data){const cb=_pendingCalls[id];if(cb){delete _pendingCalls[id];cb(ok,data);}};
+// OpenRGB requests go through the app (orgbProxy): each call gets an id, and the app's
+// reply resolves the matching promise. Times out if the app never answers
 function orgbCall(m,p,b){return new Promise((res,rej)=>{const id=String(++_callCounter);_pendingCalls[id]=(ok,d)=>ok?res(d):rej(new Error(d));setTimeout(()=>{if(_pendingCalls[id]){delete _pendingCalls[id];rej(new Error('Timeout'));}},8000);sendToHost({type:'openrgbProxy',method:m,path:p,body:b||null,port:parseInt(ORGB_PORT),callId:id});});}
 async function orgbGet(p){const r=await orgbCall('GET',p,null);return typeof r==='string'?JSON.parse(r):r;}
 // Every colour write goes through here, so the brightness slider applies to static
@@ -236,6 +239,7 @@ const ANIMS=[{id:'rainbow',icon:'&#x25C8;',l:'RAINBOW'},{id:'spectrum',icon:'&#x
 
 function hexRgb(h){return{r:parseInt(h.slice(1,3),16),g:parseInt(h.slice(3,5),16),b:parseInt(h.slice(5,7),16)};}
 function rgbHex(r,g,b){return'#'+[r,g,b].map(v=>(v||0).toString(16).padStart(2,'0')).join('');}
+// How many LEDs a device really has (OpenRGB reports it in different fields per device type)
 function ledCnt(i){
   const d=_devices[i];
   if(!d)return 1;
@@ -272,9 +276,11 @@ async function ensureDirect(devIdx){
 function cleanMode(raw,idx){if(!raw)return'Mode '+idx;const c=raw.replace(/[^\x20-\x7E]/g,'').trim();return(c&&c.length<=32)?c:'Mode '+idx;}
 
 // ── Per-LED painter ──────────────────────────────────────────────────────────
+// ✌ V was here — 100% of this section is still my original code
 const _lc={},_exp=new Set();
 let _pt=false,_pd=-1;
 document.addEventListener('mouseup',()=>{_pt=false;_pd=-1;});
+// Per-LED painter: a colour grid per device, painted locally, then sent in one go (SEND)
 function initLC(i){const cnt=ledCnt(i),d=_devices[i];_lc[i]=Array.from({length:cnt},(_,li)=>{const c=d.colors?.[li];return c&&(c.r||c.g||c.b)?{r:c.r||0,g:c.g||0,b:c.b||0}:{r:25,g:25,b:25};});}
 function getLC(i){if(!_lc[i])initLC(i);return _lc[i];}
 function toggleLed(i){const p=document.getElementById('lp-'+i),b=document.getElementById('lt-'+i);if(!p)return;if(_exp.has(i)){_exp.delete(i);p.style.display='none';if(b){b.textContent='&#x25C8; INDIVIDUAL LEDs &#x25BC;';b.classList.remove('open');}}else{_exp.add(i);if(!_lc[i])initLC(i);p.style.display='block';if(b){b.textContent='&#x25C8; INDIVIDUAL LEDs &#x25B2;';b.classList.add('open');}renderGrid(i);}}
@@ -286,7 +292,9 @@ function fillAll(i){const{r,g,b}=hexRgb(pickH(i));getLC(i).fill({r,g,b});renderG
 async function sendLC(i){const btn=document.getElementById('lp-send-'+i);if(btn){btn.textContent='SENDING\u2026';btn.disabled=true;}try{await setDC(i,getLC(i),null);if(btn)btn.textContent='SENT \u2713';setTimeout(()=>{if(btn){btn.textContent='SEND \u25B6';btn.disabled=false;}},1200);}catch(e){if(btn){btn.textContent='ERROR';btn.disabled=false;}}}
 
 // ── RAM sync ─────────────────────────────────────────────────────────────────
+// ✌ V was here — 83% of this section is still my original code
 let _ramSync=localStorage.getItem('pcm-ram-sync')!=='0';
+// RAM sync: colour one RAM stick and the others follow
 function toggleSync(){_ramSync=!_ramSync;localStorage.setItem('pcm-ram-sync',_ramSync?'1':'0');document.querySelectorAll('.rsd').forEach(e=>e.classList.toggle('off',!_ramSync));document.querySelectorAll('.rsl').forEach(e=>e.textContent=_ramSync?'RAM STICKS SYNCED':'RAM STICKS UNLINKED');}
 async function applyRAM(devIdx,leds,hex){
   await setDC(devIdx,leds,hex);
@@ -308,6 +316,8 @@ function startHold(devIdx,leds){
 }
 function clearHold(devIdx){if(_hold[devIdx]){clearTimeout(_hold[devIdx]);delete _hold[devIdx];}}
 
+// Sets a device's colours: stops any effect on it, switches it to a software mode once,
+// sends the LEDs, then keeps resending them (startHold) in case the device drifts back
 async function setDC(devIdx,leds,hex){
   if(!leds||!leds.length)return;
   if(_devAnim[devIdx]){stopDevAnim(devIdx);if(!Object.keys(_devAnim).length)stopFx();else updateAnimBtn();}
@@ -337,8 +347,11 @@ async function setDevMode(devIdx,modeIdx){if(_devAnim[devIdx]){stopDevAnim(devId
 // Uses recursive setTimeout so ticks never overlap (each waits for TCP to finish).
 const _devAnim={};
 
+// Colour maths for the software effects (rainbow, breathing, wave...)
 function hsvRgb(h,s,v){const c=v*s,x=c*(1-Math.abs((h/60)%2-1)),m=v-c;let r=0,g=0,b=0;if(h<60){r=c;g=x;}else if(h<120){r=x;g=c;}else if(h<180){g=c;b=x;}else if(h<240){g=x;b=c;}else if(h<300){r=x;b=c;}else{r=c;b=x;}return{r:Math.round((r+m)*255),g:Math.round((g+m)*255),b:Math.round((b+m)*255)};}
 
+// The colour of one LED at time t for an effect. Effects run here in the page and send
+// frames to OpenRGB, so they work on devices with no hardware effects of their own
 function animColor(type,li,total,devIdx,t,speed,c1,c2){
   // t is wall-clock seconds * speed — always based on real elapsed time
   const len=Math.max(total,1);
@@ -421,6 +434,7 @@ function animTick(devIdx){
     .finally(()=>{if(_devAnim[devIdx])_devAnim[devIdx].sending=false;});
 }
 
+// Start / stop a software effect on one device
 async function startDevAnim(devIdx,type){
   stopDevAnim(devIdx);
   const spd=_fx.spd;
@@ -553,7 +567,7 @@ function releasedCard(d,i){
 function looksGet(){try{const a=JSON.parse((typeof NAV_SETTINGS!=='undefined'&&NAV_SETTINGS.rgbLooks)||'[]');return Array.isArray(a)?a:[];}catch{return[];}}
 function looksPut(a){navSaveSetting('rgbLooks',JSON.stringify(a));renderLooks();}
 function lookSetting(k){return (typeof NAV_SETTINGS!=='undefined'&&NAV_SETTINGS[k])||'';}
-function escH(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+const escH=escHtml;
 // What one device is showing right now (unscaled colours, or its built-in mode)
 function captureDev(i){
   const d=_devices[i];if(!canColor(d))return null;
@@ -657,18 +671,20 @@ function autoApplyLook(){
 function buildQC(){document.getElementById('quick-colors').innerHTML=QCOLS.map(({c,l})=>`<div class="qcol" style="background:${c}" title="${l}" onclick="applyAllColor('${c}');document.getElementById('custom-color').value='${c}'"></div>`).join('');}
 
 function updateDevCount(){const sub=document.getElementById('rgb-sub');if(!sub||!_connected)return;const a=_devices.filter(canColor).length,r=_devices.filter(isReleasedDev).length;sub.textContent=`${a} active${r?` · ${r} released`:''} (${_devices.length} total)`;}
+// One card per OpenRGB device: modes, colours, painter. Device names come from OpenRGB,
+// so they're escaped before going into the page
 function renderDevices(){
   const list=document.getElementById('device-list');if(!_devices.length){list.innerHTML='';return;}
   updateDevCount();
   list.innerHTML=_devices.map((d,i)=>{
     if(isReleasedDev(d))return releasedCard(d,i);
-    if(!supportsColor(d))return`<div class="card device-card" id="dev-${i}" style="opacity:.4"><div class="card-header"><span class="card-title">${d.name||'Device '+i}</span><span class="badge badge-warn">UNSUPPORTED</span></div></div>`;
+    if(!supportsColor(d))return`<div class="card device-card" id="dev-${i}" style="opacity:.4"><div class="card-header"><span class="card-title">${escH(d.name||'Device '+i)}</span><span class="badge badge-warn">UNSUPPORTED</span></div></div>`;
     const cnt=ledCnt(i),isR=isRam(i);
     const cHex=d.colors?.[0]?rgbHex(d.colors[0].r||0,d.colors[0].g||0,d.colors[0].b||0):'#ff0000';
-    const modeChips=(d.modes||[]).map((m,mi)=>`<button class="mode-chip${d.active_mode===mi?' active':''}" onclick="pickMode(${i},${mi})">${cleanMode(m.name,mi)}</button>`).join('');
+    const modeChips=(d.modes||[]).map((m,mi)=>`<button class="mode-chip${d.active_mode===mi?' active':''}" onclick="pickMode(${i},${mi})">${escH(cleanMode(m.name,mi))}</button>`).join('');
     return`<div class="card device-card" id="dev-${i}">
       <div class="card-header">
-        <span class="card-title">${d.name||'Device '+i}</span>
+        <span class="card-title">${escH(d.name||'Device '+i)}</span>
         <div style="display:flex;align-items:center;gap:6px">
           <span class="badge badge-dim">${cnt} LED${cnt!==1?'s':''}</span>
           <button class="rel-btn" onclick="askRelease(${i})" title="Stop Vexis controlling this device and hand it back to its own lighting (or its own software)">&#x23CF; RELEASE</button>
@@ -724,12 +740,14 @@ function bestColours(i){
 function updateModeChips(devIdx,am){document.querySelectorAll('#dev-modes-'+devIdx+' .mode-chip').forEach((c,mi)=>c.classList.toggle('active',mi===am));}
 
 // ── Status ────────────────────────────────────────────────────────────────────
+// ✌ V was here — 91% of this section is still my original code
 function stopAllAnims(){Object.keys(_devAnim).forEach(i=>stopDevAnim(Number(i)));updateAnimBtn();}
 
 // Open OpenRGB in full GUI mode for plugin/effect configuration.
 // PCMonitor pauses direct RGB control while the GUI is open; auto-reconnects
 // in server mode when the user closes OpenRGB.
 let _guiWatchInterval=null;
+// ⚙ GUI: opens OpenRGB's own window (with its SDK server on, so Vexis stays connected)
 function openRgbGui(){
   // Stop all active holds and animations so PCMonitor stops sending during GUI session
   Object.keys(_hold).forEach(i=>clearHold(Number(i)));
@@ -760,6 +778,7 @@ function closeRgbGui(){
 }
 function sL(id,on,col){const e=document.getElementById(id);if(!e)return;e.style.background=on?(col||'#44ff88'):'#333';e.style.boxShadow=on?`0 0 6px ${col||'#44ff88'}`:'none';}
 function updLights(s){if(s==='connected'){sL('sl-notopen',true);sL('sl-noserver',true);sL('sl-connected',true);}else if(s==='process_up'){sL('sl-notopen',true);sL('sl-noserver',false);sL('sl-connected',false);}else{sL('sl-notopen',false);sL('sl-noserver',false);sL('sl-connected',false);}}
+// Connection status light + which panel shows (devices when online, help when offline)
 function setStatus(state,msg){
   const dot=document.getElementById('rgb-dot'),txt=document.getElementById('rgb-status-txt'),sub=document.getElementById('rgb-sub'),off=document.getElementById('rgb-offline'),on=document.getElementById('rgb-online');
   if(state==='online'){_connected=true;dot.className='rgb-dot on';txt.textContent='CONNECTED';updateDevCount();off.style.display='none';on.style.display='block';buildQC();updLights('connected');}
@@ -767,10 +786,10 @@ function setStatus(state,msg){
   else{dot.className='rgb-dot';txt.textContent='CONNECTING...';sub.textContent='Trying localhost:6742...';updLights('none');}
 }
 async function chkProc(){if(!IS_WEBVIEW)return;return new Promise(resolve=>{const id=String(++_callCounter);_pendingCalls[id]=(ok,data)=>{try{const d=JSON.parse(typeof data==='string'?data:'{}');if(!_connected)sL('sl-notopen',d.running===true);}catch{}resolve();};setTimeout(()=>{if(_pendingCalls[id]){delete _pendingCalls[id];resolve();}},3000);sendToHost({type:'checkOpenRGB',callId:id});});}
-// ── MSI Mystic Light SDK ─────────────────────────────────────────────────────
 setInterval(()=>{if(!_connected&&IS_WEBVIEW)chkProc();},3000);
 let _retryLoop=null,_countdownTimer=null;
 
+// After starting OpenRGB, count down (it needs a few seconds to find devices), then retry
 function beginRetryWithWait(waitSec){
   stopRetryLoop();
   if(_countdownTimer){clearInterval(_countdownTimer);_countdownTimer=null;}
@@ -800,6 +819,7 @@ function startRetryLoop(){
 }
 function stopRetryLoop(){if(_retryLoop){clearTimeout(_retryLoop);_retryLoop=null;}}
 let _lastDevCount = -1;
+// One connection attempt without error pop-ups (used by the retry loop)
 async function connSilent(){
   try{
     _devices=await orgbGet('/devices');
@@ -813,6 +833,7 @@ async function connSilent(){
     recordOriginals();setStatus('online');renderDevices();buildFx();resumeFx();renderLooks();autoApplyLook();stopRetryLoop();
   }catch(e){if(!_retryLoop)setStatus('offline',e.message);}
 }
+// The RGB page doesn't use sensor data, but nav.js expects every page to have receiveData
 function receiveData(){}
 function onConfigReceived(cfg){navOnConfig(cfg);renderLooks();if(_connected)autoApplyLook();}
 if(IS_WEBVIEW){window.chrome.webview.addEventListener('message',e=>{try{const m=JSON.parse(e.data);if(m.type==='config')onConfigReceived(m);}catch{}});sendToHost({type:'requestConfig'});chkProc();startRetryLoop();}

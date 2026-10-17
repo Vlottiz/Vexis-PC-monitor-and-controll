@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- V was here ✌  As of 2.13.0, 68% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame. -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -227,7 +228,7 @@
   </div>
   </div>
 </div>
-<script src="/nav.js?v=24" data-page="security"></script>
+<script src="/nav.js?v=25" data-page="security"></script>
 <script>
 // ── State ─────────────────────────────────────────────────────────────────────
 // ── Driver + Windows protection status (from C#) ─────────────────────────────
@@ -270,7 +271,7 @@ window.onStartupChecks = function(c) {
   const list = document.getElementById('check-list'), badge = document.getElementById('badge-check');
   if (!c || !c.results || !c.results.length) { list.textContent = 'Not run yet.'; return; }
   const col = { ok:'#22c55e', warn:'#f59e0b', error:'#ff5555' }, mark = { ok:'✓', warn:'!', error:'✗' };
-  const esc = t => String(t).replace(/[&<>]/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[ch]));
+  const esc = escHtml;
   list.innerHTML = c.results.map(r =>
     `<div><span style="color:${col[r.level] || col.ok};font-weight:700;display:inline-block;width:14px">${mark[r.level] || '✓'}</span>` +
     `<b style="color:var(--label)">${esc(r.name)}</b> — ${esc(r.detail)}</div>`).join('');
@@ -285,11 +286,14 @@ function runCheck() {
 }
 
 // ── Live console ─────────────────────────────────────────────────────────────
+// ✌ V was here — 99% of this section is still my original code
 let _logSeq    = 0;
 let _paused    = false;
 let _allLines  = [];   // full buffer for filter replay
 let _pollTimer = null;
 
+// Live console: asks the app for new log lines every 0.8 s (getLogs with the last seq),
+// so only new lines come back each time
 function startLogPoll() {
   if (_pollTimer) return;
   _pollTimer = setInterval(() => {
@@ -325,6 +329,8 @@ function renderLines(lines) {
   if (atBottom) out.scrollTop = out.scrollHeight;
 }
 
+// Colours a log line by its [tag]: errors red, warnings amber, fans/rgb/etc. their own colour.
+// The text is escaped when it is put in the page: log lines can contain device and file names
 function colorize(raw) {
   // Extract timestamp and rest
   const tsMatch = raw.match(/^(\[\d{2}:\d{2}:\d{2}\.\d{3}\])\s*(.*)/s);
@@ -346,10 +352,11 @@ function colorize(raw) {
   else if (bl.includes('error') || bl.includes('fail') || bl.includes('exception')) cls = 'cl-err';
   else if (bl.includes('warn'))  cls = 'cl-warn';
 
-  const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const esc = escHtml;
   return `<span class="cl-time">${esc(ts)} </span><span class="${cls}">${esc(body)}</span>`;
 }
 
+// Filter box: hide lines that don't contain the text
 function applyFilter() {
   const out = document.getElementById('con-out');
   if (!out) return;

@@ -1,8 +1,14 @@
+// V was here ✌  As of 2.13.0, 31% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame.
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+// ─── Main window ────────────────────────────────────────────────────────────────
+// The hub of the app: owns the sensor service, fan controller, tray icon and the WebView2
+// that shows the pages. Every 250 ms OnPollTick sends one JSON snapshot to every open page;
+// pages send commands back through HandleMessage (one switch on msg.type).
+// docs/ARCHITECTURE.md has the bigger picture.
 public class MainForm : Form
 {
     private WebView2                  _webView  = new() { DefaultBackgroundColor = System.Drawing.Color.Black };
@@ -13,16 +19,20 @@ public class MainForm : Form
     private FanController _fans   = null!;
     private AppConfig     _config = null!;
 
+    // A WinForms timer ticks on the UI thread, which WebView2 calls must run on.
+    // The sensor reads themselves happen on SensorService's own background timer.
     private System.Windows.Forms.Timer _pollTimer = new() { Interval = 250 };
     private int   _pollCount      = 0;
     private readonly CsvRecorder _recorder = new();
     private readonly ProcessMonitor _procs = new();
     private readonly DuplicateFinder _dupes = new();
     private SensorData? _lastData;   // last reading sent to the pages (includes fans)
-    private float _lastLoggedTemp = 0;
+    private float _lastLoggedTemp = 0;   // stops the high-temperature log line repeating every tick
 
-    private readonly Dictionary<string, PopoutForm> _popouts = new();
+    private readonly Dictionary<string, PopoutForm> _popouts = new();   // page id → open pop-out window
 
+    // Keep the C# property names as the JSON keys, leave out nulls (pages treat a missing
+    // key as "no sensor"), and allow NaN / Infinity from odd sensors instead of throwing
     private static readonly JsonSerializerOptions _json = new()
     {
         PropertyNamingPolicy   = null,
@@ -103,7 +113,7 @@ public class MainForm : Form
         _ = Task.Delay(TimeSpan.FromSeconds(60)).ContinueWith(_ =>
         {
             try { BeginInvoke(async () => { if (!_revealed) { Console.WriteLine("[startup] slow start — showing window"); await RevealWindow(); } }); }
-            catch { }
+            catch { }   // window already closed
         });
 
         _config = AppConfig.Load();
@@ -128,7 +138,12 @@ public class MainForm : Form
         _fans   = new FanController();
         await Task.Run(() => _fans.Discover(_sensor.AllHardware));
         _fans.ApplyProfile(_config);   // saved curves / fan profile take effect at launch
-        Application.ApplicationExit += (_, _) => { try { _fans.RestoreAll(); } catch { } };
+        // Hand the fans back to the BIOS on every way out, not just a normal close: a crash
+        // (unhandled error) or the process being shut down would otherwise leave them at
+        // the last software speed until the PC restarts.
+        Application.ApplicationExit                += (_, _) => RestoreFansSafely("exit");
+        AppDomain.CurrentDomain.ProcessExit        += (_, _) => RestoreFansSafely("process exit");
+        AppDomain.CurrentDomain.UnhandledException += (_, _) => RestoreFansSafely("crash");
         SetupTray();
 
         // Fans, alerts and recording run from the poll timer, independent of the interface,
@@ -146,7 +161,7 @@ public class MainForm : Form
             Console.WriteLine("[startup] Running in the tray — the interface loads when Vexis is opened.");
             await RevealWindow();   // driver-problem notification only; the window stays hidden
             // Pages normally ask for the update check; nothing is open yet, so ask once here
-            _ = Task.Delay(TimeSpan.FromSeconds(30)).ContinueWith(_ => { try { BeginInvoke(() => PushUpdateInfo(force: false)); } catch { } });
+            _ = Task.Delay(TimeSpan.FromSeconds(30)).ContinueWith(_ => { try { BeginInvoke(() => PushUpdateInfo(force: false)); } catch { /* window already closed */ } });
             return;
         }
 
@@ -166,8 +181,7 @@ public class MainForm : Form
 
     private async Task InitWebViewAsync()
     {
-        var webViewOpts = new Microsoft.Web.WebView2.Core.CoreWebView2EnvironmentOptions(
-            additionalBrowserArguments: "--disable-web-security --allow-running-insecure-content --allow-file-access-from-files");
+        var webViewOpts = WebViewSecurity.EnvironmentOptions();
 
         // Creating the environment can fail briefly (runtime updating, profile still in use
         // by a closing instance) — retry a few times before giving up.
@@ -208,6 +222,7 @@ public class MainForm : Form
             _webView.CoreWebView2?.ExecuteScriptAsync(ZoomHelper.Script(_webView.ZoomFactor));
         };
 
+        // F11 = fullscreen. Caught here because the browser would otherwise swallow the key
         _webView.PreviewKeyDown += (s, e) =>
         {
             if (e.KeyCode == System.Windows.Forms.Keys.F11)
@@ -217,6 +232,9 @@ public class MainForm : Form
             }
         };
 
+        // Clear WebView2's cached page files so pages from a new version always load fresh
+        // (otherwise an update can show the old HTML/JS until the cache expires).
+        // Page storage (settings, menu order) lives elsewhere and is kept.
         try
         {
             string wv2Root = System.IO.Path.Combine(
@@ -227,24 +245,25 @@ public class MainForm : Form
                 string cacheDir = System.IO.Path.Combine(wv2Root, subdir);
                 if (System.IO.Directory.Exists(cacheDir))
                     foreach (var f in System.IO.Directory.GetFiles(cacheDir, "*", System.IO.SearchOption.AllDirectories))
-                        try { System.IO.File.Delete(f); } catch { }
+                        try { System.IO.File.Delete(f); } catch { }   // in use by WebView2: cleared next time
             }
             Console.WriteLine("[cache] WebView2 cache cleared");
-        } catch { }
+        } catch (Exception ex) { Console.WriteLine($"[cache] Couldn't clear the WebView2 cache: {ex.Message}"); }
 
-        _webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
-        _webView.CoreWebView2.Settings.IsStatusBarEnabled            = false;
-        _webView.CoreWebView2.Settings.AreDevToolsEnabled            = true;
-        _webView.CoreWebView2.Settings.AreHostObjectsAllowed         = true;
+        WebViewSecurity.Apply(_webView.CoreWebView2);
         _webView.CoreWebView2.WebMessageReceived += OnWebMessage;
         _webView.CoreWebView2.ProcessFailed      += OnWebViewProcessFailed;
 
         // Update check: requested by nav.js when a page loads (cached after the first check)
 
+        // https://vexis.local/ is a made-up address that WebView2 maps to the install folder;
+        // nothing goes over the network
         _webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
             "vexis.local", AppDir, CoreWebView2HostResourceAccessKind.Allow);
         _webView.CoreWebView2.Navigate("https://vexis.local/home.html");
 
+        // Wait until the page's script has defined receiveData (up to 10 s), then send it
+        // the saved settings. Sending earlier would call a function that doesn't exist yet.
         Console.WriteLine("[startup] waiting for page...");
         for (int i = 0; i < 40; i++)
         {
@@ -282,7 +301,7 @@ public class MainForm : Form
             case CoreWebView2ProcessFailedKind.RenderProcessExited:
             case CoreWebView2ProcessFailedKind.RenderProcessUnresponsive:
             case CoreWebView2ProcessFailedKind.FrameRenderProcessExited:
-                BeginInvoke(() => { try { _webView.CoreWebView2?.Reload(); } catch { } });
+                BeginInvoke(() => { try { _webView.CoreWebView2?.Reload(); } catch { /* rebuilt below if the control is gone */ } });
                 break;
             // GPU and utility processes are restarted by WebView2 itself
         }
@@ -300,7 +319,7 @@ public class MainForm : Form
         _webView = new WebView2 { Dock = DockStyle.Fill, DefaultBackgroundColor = System.Drawing.Color.Black };
         Controls.Add(_webView);
         Controls.Remove(old);
-        try { old.Dispose(); } catch { }
+        try { old.Dispose(); } catch { }   // the old control is already broken; nothing to do
         await StartUiAsync();
     }
 
@@ -368,7 +387,7 @@ public class MainForm : Form
                 current  = AppVersionText,
                 latest   = r?.Tag,
                 available = newer,
-                canInstall = newer && r!.InstallerUrl != null,
+                canInstall = newer && r!.InstallerUrl != null && r.ChecksumUrl != null,   // no checksum = no one-click install
                 notes    = r?.Notes is { Length: > 1200 } n ? n[..1200] + "…" : r?.Notes,
                 url      = UpdateManager.ReleasesUrl
             };
@@ -376,7 +395,7 @@ public class MainForm : Form
             RunScriptEverywhere($"typeof navUpdateInfo==='function'&&navUpdateInfo({_updateJson})");
 
             // Optional: install straight away (Settings → Install updates automatically)
-            if (newer && r!.InstallerUrl != null && !_autoUpdateTried &&
+            if (newer && r!.InstallerUrl != null && r.ChecksumUrl != null && !_autoUpdateTried &&
                 _config.Settings?.GetValueOrDefault("autoUpdate") == "true")
             {
                 _autoUpdateTried = true;
@@ -485,6 +504,8 @@ public class MainForm : Form
                 else _popouts.Remove(kv.Key);
             }
 
+            // Once a minute (240 × 250 ms) write a one-line summary to debug.log, so a log
+            // from a user shows what the hardware was doing
             _pollCount++;
             if (_pollCount % 240 == 0)
             {
@@ -506,6 +527,8 @@ public class MainForm : Form
                 }
             }
 
+            // Log-only warnings (the user-facing alerts are CheckTempAlerts). Logs again only
+            // after a 2 °C change, and says "normal" once it's back under 85 °C
             float cpuTemp = data.cpu_temp ?? 0;
             if (cpuTemp > 90 && Math.Abs(cpuTemp - _lastLoggedTemp) > 2)
             {
@@ -526,6 +549,8 @@ public class MainForm : Form
 
     private void OnWebMessage(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
+        // Only Vexis's own pages may send commands (navigation is locked to them anyway)
+        if (!SafeLinks.IsAppPage(e.Source)) { Console.WriteLine($"[msg] ignored message from {e.Source}"); return; }
         try { HandleMessage(e.TryGetWebMessageAsString()); }
         catch (Exception ex) { Console.WriteLine($"[msg] error: {ex.Message}"); }
     }
@@ -538,7 +563,7 @@ public class MainForm : Form
     {
         try
         {
-            Console.WriteLine($"[msg] {raw[..Math.Min(80,raw.Length)]}");
+            Console.WriteLine($"[msg] {raw[..Math.Min(80,raw.Length)]}");   // first 80 chars, enough to see the type
             var msg = JsonSerializer.Deserialize<IncomingMessage>(raw, _json);
             if (msg == null) return;
 
@@ -685,6 +710,7 @@ public class MainForm : Form
                     _ = Task.Run(() => { DriverSetup.RestoreWindowsSecurity(); PushSecurityStatus(); });
                     break;
 
+                // ── Settings from the pages, merged into config.json ──
                 case "saveSettings":
                     if (msg.settings != null)
                     {
@@ -737,10 +763,12 @@ public class MainForm : Form
                             Invoke(() => { _ = _webView.CoreWebView2?.ExecuteScriptAsync(
                                 $"typeof receiveData==='function'&&receiveData({snapJson})"); });
                         }
-                        catch { }
+                        catch (Exception ex) { Console.WriteLine($"[popout] First data push failed: {ex.Message}"); }
                     });
                     break;
 
+                // Page change from the side menu. Navigation is locked to vexis.local
+                // (WebViewSecurity), so a path here can only open one of the app's own files
                 case "navigate":
                     if (msg.file != null)
                         _webView.CoreWebView2.Navigate($"https://vexis.local/{msg.file}");
@@ -768,6 +796,9 @@ public class MainForm : Form
                         Console.WriteLine($"[msg] openUrl refused (not an https link): {msg.url}");
                     break;
 
+                // ── RGB ──
+                // The RGB page can't open a TCP socket itself, so it sends OpenRGB requests here;
+                // the reply comes back through orgbProxyResult(callId, ...) matched by callId
                 case "openrgbProxy":
                     Console.WriteLine($"[rgb] proxy: {msg.method} {msg.path}");
                     _ = Task.Run(async () =>
@@ -781,89 +812,43 @@ public class MainForm : Form
                     break;
 
                 case "killOpenRGB":
-                    foreach (var p in System.Diagnostics.Process.GetProcessesByName("OpenRGB"))
-                        try { p.Kill(); Console.WriteLine($"[rgb] Killed OpenRGB PID {p.Id}"); } catch { }
+                    OpenRgbLauncher.StopAll();
                     _orgbClient?.ResetFailedDevices();
                     _orgbClient = null;
                     break;
 
                 case "checkOpenRGB":
                 {
-                    bool isRunning = System.Diagnostics.Process.GetProcessesByName("OpenRGB").Length > 0;
                     string cid3 = msg.callId ?? "0";
-                    string runJson = isRunning ? "{\"running\":true}" : "{\"running\":false}";
-                    string runEsc  = System.Text.Json.JsonSerializer.Serialize(runJson);
+                    string runEsc = JsonSerializer.Serialize(OpenRgbLauncher.IsRunning() ? "{\"running\":true}" : "{\"running\":false}");
                     Invoke(() => { _ = _webView.CoreWebView2?.ExecuteScriptAsync(
                         $"typeof orgbProxyResult==='function'&&orgbProxyResult('{cid3}',true,{runEsc})"); });
                     break;
                 }
 
                 case "launchOpenRGB":
-                    var existing = System.Diagnostics.Process.GetProcessesByName("OpenRGB");
-                    if (existing.Length > 0)
-                    {
-                        Console.WriteLine($"[rgb] OpenRGB already running (PID {existing[0].Id}), not launching again");
-                        break;
-                    }
-                    _sensor.PausePoll(5000);
-                    Console.WriteLine("[rgb] Paused sensor polling for OpenRGB launch");
-                    var orgbPaths = new[]
-                    {
-                        Path.Combine(AppDir, "OpenRGB.exe"),
-                        Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "OpenRGB.exe"),
-                        @"C:\Program Files\OpenRGB\OpenRGB.exe",
-                        @"C:\Program Files (x86)\OpenRGB\OpenRGB.exe",
-                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenRGB", "OpenRGB.exe"),
-                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "OpenRGB", "OpenRGB.exe"),
-                        @"C:\OpenRGB\OpenRGB.exe",
-                        @"C:\Tools\OpenRGB\OpenRGB.exe",
-                    };
-                    string? orgbExe = orgbPaths.FirstOrDefault(File.Exists);
-                    if (orgbExe != null)
-                    {
-                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                        { FileName = orgbExe, Arguments = "--server", UseShellExecute = true });
-                        Console.WriteLine($"[rgb] Launched OpenRGB --server from {orgbExe}");
-                    }
-                    else
-                    {
-                        try {
-                            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                            { FileName = "OpenRGB.exe", Arguments = "--server", UseShellExecute = true });
-                            Console.WriteLine("[rgb] Launched OpenRGB --server via PATH");
-                        }
-                        catch {
-                            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                            { FileName = "https://openrgb.org", UseShellExecute = true });
-                        }
-                    }
+                    if (OpenRgbLauncher.IsRunning()) { Console.WriteLine("[rgb] OpenRGB already running"); break; }
+                    _sensor.PausePoll(5000);   // OpenRGB scans the RAM bus at start; keep LHM off it meanwhile
+                    OpenRgbLauncher.Start();
                     break;
 
                 case "launchOpenRGBGui":
-                    foreach (var p2 in System.Diagnostics.Process.GetProcessesByName("OpenRGB"))
-                        try { p2.Kill(); Console.WriteLine($"[rgb] Killed OpenRGB PID {p2.Id} for GUI mode"); } catch { }
+                    // Restart it so its window opens; wait off the UI thread while the old copy exits
                     _orgbClient = null;
-                    System.Threading.Thread.Sleep(800);
-                    var orgbGuiPaths = new[]
+                    _ = Task.Run(async () =>
                     {
-                        @"C:\Program Files\OpenRGB\OpenRGB.exe",
-                        @"C:\Program Files (x86)\OpenRGB\OpenRGB.exe",
-                        Path.Combine(AppDir, "OpenRGB.exe"),
-                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenRGB", "OpenRGB.exe"),
-                        @"C:\OpenRGB\OpenRGB.exe",
-                    };
-                    string? orgbGuiExe = orgbGuiPaths.FirstOrDefault(File.Exists);
-                    if (orgbGuiExe != null)
-                    {
-                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                        { FileName = orgbGuiExe, Arguments = "--server", UseShellExecute = true });   // window + SDK server, so Vexis stays connected
-                        Console.WriteLine($"[rgb] Launched OpenRGB GUI from {orgbGuiExe}");
-                    }
+                        OpenRgbLauncher.StopAll();
+                        await Task.Delay(800);
+                        OpenRgbLauncher.Start();
+                    });
                     break;
 
                 // Changing one fan by hand leaves a preset profile (back to Custom)
                 case "fanSetManual":
                     if (msg.fanName != null) { _fans.LeavePreset(_config); _fans.SetManual(msg.fanName, msg.value ?? 50f); UpdateTrayProfile(); }
+                    break;
+                case "setFanPump":
+                    if (msg.fanName != null) _fans.SetPump(msg.fanName, msg.enabled == true, _config);
                     break;
                 case "fanSetAuto":
                     if (msg.fanName != null) { _fans.LeavePreset(_config); _fans.SetAuto(msg.fanName); UpdateTrayProfile(); }
@@ -888,11 +873,15 @@ public class MainForm : Form
                     break;
                 }
                 case "dupStart":
-                    if (msg.dup?.paths is { Count: > 0 } && !_dupes.Running)
-                        _dupes.Start(new DuplicateFinder.Options(msg.dup.paths, (long)(Math.Max(0, msg.dup.minMb) * 1048576), msg.dup.includeSystem),
+                {
+                    // Only full paths to folders that exist; anything else from the page is dropped
+                    var folders = (msg.dup?.paths ?? new()).Select(DuplicateFinder.CheckFolder).OfType<string>().ToList();
+                    if (folders.Count > 0 && !_dupes.Running)
+                        _dupes.Start(new DuplicateFinder.Options(folders, (long)(Math.Clamp(msg.dup!.minMb, 0, 1_000_000) * 1048576), msg.dup.includeSystem),
                             pr => RunScriptEverywhere($"typeof onDupProgress==='function'&&onDupProgress({JsonSerializer.Serialize(pr, _json)})"),
                             res => RunScriptEverywhere($"typeof onDupResults==='function'&&onDupResults({JsonSerializer.Serialize(res, _json)})"));
                     break;
+                }
                 case "dupCancel":
                     _dupes.Cancel();
                     break;
@@ -905,7 +894,8 @@ public class MainForm : Form
                         });
                     break;
                 case "dupReveal":
-                    if (msg.file != null && File.Exists(msg.file))
+                    // Only files the last scan found, never an arbitrary path from the page
+                    if (_dupes.IsInResults(msg.file) && File.Exists(msg.file))
                         System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{msg.file}\"");
                     break;
 
@@ -917,6 +907,7 @@ public class MainForm : Form
                     SetFanProfile(msg.profile);
                     break;
 
+                // Takes ~8 s, so it runs on a worker thread; the result goes back as a web message
                 case "fanHealthCheck":
                     if (msg.fanName != null)
                     {
@@ -935,7 +926,7 @@ public class MainForm : Form
                     break;
 
                 case "minimize": Invoke(() => { WindowState = FormWindowState.Minimized; }); break;
-                case "close":    Invoke(() => Hide()); break;
+                case "close":    Invoke(() => Hide()); break;   // to the tray; Vexis keeps running
                 case "toggleFullscreen": Invoke(() => ToggleFullscreen()); break;
                 case "exit":
                     Invoke(() => { _tray.Visible = false; Application.Exit(); });
@@ -956,10 +947,13 @@ public class MainForm : Form
         WindowState     = _isFullscreen ? FormWindowState.Maximized : FormWindowState.Normal;
     }
 
+    // One pop-out per page: asking again brings the open one to the front
     private void OpenPopout(string page)
     {
         if (_popouts.TryGetValue(page, out var existing) && !existing.IsDisposed)
         { existing.Activate(); return; }
+        // Messages from the pop-out arrive on its own UI thread. OpenRGB checks are answered
+        // straight back to that window; everything else is handed to HandleMessage
         PopoutForm? form = null;
         form = new PopoutForm(page, _config, raw =>
         {
@@ -993,7 +987,7 @@ public class MainForm : Form
                         else if (msg2.type != null && !MainWindowOnly.Contains(msg2.type))
                             BeginInvoke(() => HandleMessage(raw));
                     }
-                    catch { }
+                    catch (Exception ex) { Console.WriteLine($"[popout] Message from a pop-out failed: {ex.Message}"); }
                 });
             });
         });
@@ -1056,7 +1050,7 @@ public class MainForm : Form
         }
         catch (Exception ex)
         {
-            try { _orgbClient?.Dispose(); } catch { } // don't leak the old socket
+            try { _orgbClient?.Dispose(); } catch { }   // already closed; don't leak the old socket
             _orgbClient = null;
             Console.WriteLine($"[rgb] proxy error: {ex.Message}");
             return (false, ex.Message);
@@ -1064,6 +1058,7 @@ public class MainForm : Form
         finally { _orgbLock.Release(); }
     }
 
+    // Tray icon and its right-click menu (Show, fan profiles, Exit). Double-click opens the window
     private void SetupTray()
     {
         _trayMenu.Items.Clear();
@@ -1084,7 +1079,7 @@ public class MainForm : Form
         try {
             string icoPath = Path.Combine(AppDir, "vexis.ico");
             if (File.Exists(icoPath)) appIcon = new Icon(icoPath);
-        } catch { }
+        } catch (Exception ex) { Console.WriteLine($"[tray] Couldn't load vexis.ico, using the default icon: {ex.Message}"); }
         _tray.Text = "Vexis Hardware Monitoring";
         _trayIcon      = appIcon ?? SystemIcons.Application;
         _trayAlertIcon = MakeAlertIcon(_trayIcon);
@@ -1166,8 +1161,8 @@ public class MainForm : Form
         _resetting = true;
         Console.WriteLine("[reset] Reset to factory settings");
         try { _fans.RestoreAll(); } catch (Exception ex) { Console.WriteLine($"[reset] fans: {ex.Message}"); }
-        try { if (_recorder.IsRecording) _recorder.Stop(); } catch { }
-        try { ClearInbox(); } catch { }
+        try { if (_recorder.IsRecording) _recorder.Stop(); } catch (Exception ex) { Console.WriteLine($"[csv] Couldn't stop the recording cleanly: {ex.Message}"); }
+        try { ClearInbox(); } catch { }   // nothing left to clear
         try { await Task.Run(() => StartupManager.SetEnabled(false)); StartWithWindowsEnabled = false; }
         catch (Exception ex) { Console.WriteLine($"[reset] startup: {ex.Message}"); }
         AppConfig.DeleteSaved();
@@ -1197,6 +1192,14 @@ public class MainForm : Form
         Application.Exit();
     }
 
+    private int _fansRestored;
+    private void RestoreFansSafely(string why)
+    {
+        if (Interlocked.Exchange(ref _fansRestored, 1) == 1) return;   // once is enough
+        try { _fans?.RestoreAll(); Console.WriteLine($"[fans] Handed back on {why}"); }
+        catch (Exception ex) { Console.WriteLine($"[fans] Hand-back on {why} failed: {ex.Message}"); }
+    }
+
     // ── Closing for the installer ──────────────────────────────────────────────
     // The installer writes this file and gives Vexis a few seconds to close by itself
     // (fans handed back, recording closed, no "didn't close properly" banner next time)
@@ -1207,7 +1210,7 @@ public class MainForm : Form
 
     private void ExitForInstaller()
     {
-        try { File.Delete(ExitRequestPath); } catch { }
+        try { File.Delete(ExitRequestPath); } catch { }   // not there: nothing to remove
         Console.WriteLine("[exit] Closing for the installer");
         _tray.Visible = false;
         Application.Exit();
@@ -1361,13 +1364,14 @@ public class MainForm : Form
         if (t < limit - 5) _alertActive.Remove(name);
         return _alertActive.Contains(name) ? $"{state} cooling" : $"{state} ok";
     }
+    // Minimising hides the window to the tray instead of the taskbar
     private void OnResize(object? s, EventArgs e) { if (WindowState==FormWindowState.Minimized) Hide(); }
 
     protected override void Dispose(bool disposing)
     {
         if (disposing)
         {
-            try { _fans?.RestoreAll(); } catch { }
+            try { _fans?.RestoreAll(); } catch (Exception ex) { Console.WriteLine($"[fans] Couldn't hand the fans back on close: {ex.Message}"); }
             _recorder.Dispose();
             _blinkTimer.Dispose();
             _pollTimer.Dispose(); _sensor?.Dispose(); _tray.Dispose(); _webView.Dispose();
@@ -1377,6 +1381,8 @@ public class MainForm : Form
     }
 }
 
+// The shape of every sendToHost({...}) message from the pages. One class for all of them:
+// each message type only fills the fields it needs and the rest stay null.
 public class IncomingMessage
 {
     public string?                     type     { get; set; }

@@ -6,7 +6,7 @@
     <AssemblyName>Vexis</AssemblyName>
     <Product>Vexis Hardware Monitoring</Product>
     <!-- Bump this for every release. build-installer.bat reads it for the installer too. -->
-    <Version>2.12.1</Version>
+    <Version>2.13.0</Version>
     <ApplicationIcon>vexis.ico</ApplicationIcon>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -42,10 +42,6 @@
     </Content>
     <!-- PawnIO sensor driver installer (downloaded by build-installer.bat; redistributable unmodified) -->
     <Content Include="PawnIO_setup.exe" Condition="Exists('PawnIO_setup.exe')">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </Content>
-    <Content Include="hidapi.dll" Condition="Exists('hidapi.dll')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>

@@ -1,16 +1,23 @@
+// V was here ✌  As of 2.13.0, 80% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame.
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+// ─── Pop-out window ─────────────────────────────────────────────────────────────
+// One page of the app in its own window (the ⧉ button in the side menu). It's a second
+// WebView2 showing the same local page with ?popout=1. MainForm keeps a list of these and
+// pushes them the same sensor JSON as the main window every poll.
 public class PopoutForm : Form
 {
     private readonly WebView2        _webView   = new();
     private readonly AppConfig       _config;
     private readonly string          _pageName;
     private readonly Action<string>? _onMessage; // routes popout messages back to MainForm
-    private bool                     _ready     = false;
+    private bool                     _ready     = false; // page script loaded; data pushes before this are skipped
 
+    // Same settings as MainForm: keep the C# property names as-is (cpu_temp, not cpuTemp) and
+    // allow NaN / Infinity, which some sensors report, instead of throwing
     private static readonly JsonSerializerOptions _json = new()
     {
         PropertyNamingPolicy   = null,
@@ -20,6 +27,7 @@ public class PopoutForm : Form
 
     private static readonly string AppDir = AppDomain.CurrentDomain.BaseDirectory;
 
+    // Page id (as used by nav.js) → file, window title and starting size
     private static readonly Dictionary<string, (string file, string title, System.Drawing.Size size)> PageMap = new()
     {
         ["home"]        = ("home.html",     "HOME",          new(500, 700)),
@@ -64,10 +72,11 @@ public class PopoutForm : Form
 
     private async void OnLoad(object? s, EventArgs e)
     {
-        var webViewOptsP = new Microsoft.Web.WebView2.Core.CoreWebView2EnvironmentOptions(
-            additionalBrowserArguments: "--disable-web-security --allow-running-insecure-content");
+        var webViewOptsP = WebViewSecurity.EnvironmentOptions();
         var webViewEnv = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync(
             browserExecutableFolder: null,
+            // Each pop-out page gets its own browser profile folder, so it starts without
+            // waiting on the main window's browser process
             userDataFolder: Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                 "Vexis", $"WebView2Cache_popout_{_pageName}"),
@@ -76,11 +85,10 @@ public class PopoutForm : Form
         _webView.ZoomFactor = ZoomHelper.Parse(_config.Settings); // start at the main window's zoom
         _webView.ZoomFactorChanged += (_, _) =>
             _webView.CoreWebView2?.ExecuteScriptAsync(ZoomHelper.Script(_webView.ZoomFactor));
-        _webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
-        _webView.CoreWebView2.Settings.IsStatusBarEnabled            = false;
-        _webView.CoreWebView2.Settings.AreDevToolsEnabled            = true;
+        WebViewSecurity.Apply(_webView.CoreWebView2);
         _webView.CoreWebView2.WebMessageReceived += OnWebMessage;
 
+        // https://vexis.local/ → the install folder, same as the main window
         _webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
             "vexis.local", AppDir, CoreWebView2HostResourceAccessKind.Allow);
 
@@ -114,7 +122,7 @@ public class PopoutForm : Form
                     return;
                 }
             }
-            catch { }
+            catch { }   // page still loading: try again next round
         }
         Console.WriteLine($"[popout:{_pageName}] page ready timeout after 20s");
     }
@@ -134,15 +142,16 @@ public class PopoutForm : Form
             await _webView.CoreWebView2.ExecuteScriptAsync(
                 $"typeof onConfigReceived==='function'&&onConfigReceived({json})");
         }
-        catch { }
+        catch (Exception ex) { Console.WriteLine($"[popout] Couldn't send settings: {ex.Message}"); }
     }
 
     private void OnWebMessage(object? s, CoreWebView2WebMessageReceivedEventArgs e)
     {
         try
         {
+            if (!SafeLinks.IsAppPage(e.Source)) return;   // only Vexis's own pages
             string raw = e.TryGetWebMessageAsString();
-            // Always handle config requests locally
+            // Always handle config requests locally (a quick text check before parsing anything)
             if (raw.Contains("\"requestConfig\"")) { _ = SendConfig(); return; }
             // Zoom buttons zoom this window, not the main one
             if (raw.Contains("\"zoom\""))
@@ -158,7 +167,7 @@ public class PopoutForm : Form
             // Route everything else back to MainForm via the callback
             _onMessage?.Invoke(raw);
         }
-        catch { }
+        catch (Exception ex) { Console.WriteLine($"[popout] Bad message from the page: {ex.Message}"); }
     }
 
     // Called by MainForm to push sensor data into the popout page
@@ -170,7 +179,7 @@ public class PopoutForm : Form
             await _webView.CoreWebView2.ExecuteScriptAsync(
                 $"typeof receiveData==='function'&&receiveData({sensorJson})");
         }
-        catch { }
+        catch { }   // window closing: the next push goes to a live page
     }
 
     // Called by MainForm to send script results back into the popout (e.g. OpenRGB proxy responses)
@@ -178,6 +187,6 @@ public class PopoutForm : Form
     {
         if (!_ready || IsDisposed) return;
         try { await _webView.CoreWebView2.ExecuteScriptAsync(script); }
-        catch { }
+        catch { }   // window closing
     }
 }

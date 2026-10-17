@@ -105,12 +105,36 @@ public static class UpdateManager
     public static async Task<bool> DownloadAndRunAsync(ReleaseInfo r, string appVersion, Action<int, string> progress, bool restartMinimized = false)
     {
         if (Busy || r.InstallerUrl == null) return false;
+        // Every release built by the GitHub workflow publishes a checksum. Without one there's
+        // nothing to check the download against, so it isn't installed automatically.
+        if (r.ChecksumUrl == null)
+        {
+            Console.WriteLine($"[update] {r.Tag} has no SHA-256 checksum — not installing automatically");
+            progress(-1, "This release has no checksum to check it against. Download it from the release page instead.");
+            return false;
+        }
         Busy = true;
         try
         {
-            string dir  = Path.Combine(Path.GetTempPath(), "Vexis-Update");
+            // Folders left by earlier updates (the installer can't delete the folder it runs from)
+            foreach (var old in Directory.EnumerateDirectories(Path.GetTempPath(), "Vexis-Update*"))
+            {
+                try { Directory.Delete(old, true); }
+                catch (Exception ex) { Console.WriteLine($"[update] Couldn't remove old {old}: {ex.Message}"); }
+            }
+
+            // A new folder with a random name for each update, and a file that must not exist yet,
+            // so nothing planted in %TEMP% beforehand can be used.
+            string dir  = Path.Combine(Path.GetTempPath(), "Vexis-Update-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(dir);
             string file = Path.Combine(dir, $"VexisHM-Setup-{r.Tag}.exe");
+
+            // Fetch the expected checksum first, so a release with a broken checksum file
+            // isn't downloaded for nothing
+            string? expected;
+            using (var http = NewClient(appVersion, TimeSpan.FromSeconds(30)))
+                expected = ParseChecksum(await http.GetStringAsync(r.ChecksumUrl), r.InstallerName);
+            if (expected == null) throw new Exception("the release's checksum file couldn't be read");
 
             progress(0, "Downloading " + r.Tag);
             using (var http = NewClient(appVersion, TimeSpan.FromMinutes(10)))
@@ -119,7 +143,7 @@ public static class UpdateManager
                 resp.EnsureSuccessStatusCode();
                 long total = resp.Content.Headers.ContentLength ?? r.InstallerSize;
                 await using var src = await resp.Content.ReadAsStreamAsync();
-                await using var dst = File.Create(file);
+                await using var dst = new FileStream(file, FileMode.CreateNew, FileAccess.Write, FileShare.None);
                 var buf = new byte[81920];
                 long done = 0; int lastPct = -1, n;
                 while ((n = await src.ReadAsync(buf)) > 0)
@@ -131,38 +155,31 @@ public static class UpdateManager
                 }
             }
 
-            // Sanity checks: complete download and a Windows executable
-            var info = new FileInfo(file);
-            if (r.InstallerSize > 0 && info.Length != r.InstallerSize)
-                throw new Exception($"download incomplete ({info.Length} of {r.InstallerSize} bytes)");
-            using (var fs = File.OpenRead(file))
-                if (fs.ReadByte() != 'M' || fs.ReadByte() != 'Z')
+            // Re-open the file read-only and keep it open until the installer has started.
+            // While this handle is open, nothing else can write to, rename or delete the file,
+            // so the bytes that are checked below are exactly the bytes that get run.
+            // (Other programs can still read it, which the installer itself needs to.)
+            progress(100, "Checking the download");
+            using (var held = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                // Sanity checks: complete download and a Windows executable
+                if (r.InstallerSize > 0 && held.Length != r.InstallerSize)
+                    throw new Exception($"download incomplete ({held.Length} of {r.InstallerSize} bytes)");
+                if (held.ReadByte() != 'M' || held.ReadByte() != 'Z')
                     throw new Exception("downloaded file is not an installer");
 
-            // Checksum: releases built by the GitHub workflow publish one. If it's there, the
-            // installer must match it exactly or it is deleted instead of run.
-            if (r.ChecksumUrl != null)
-            {
-                progress(100, "Checking the download");
-                using var http = NewClient(appVersion, TimeSpan.FromSeconds(30));
-                string? expected = ParseChecksum(await http.GetStringAsync(r.ChecksumUrl), r.InstallerName);
-                if (expected == null) throw new Exception("the release's checksum file couldn't be read");
-                string actual;
-                using (var fs = File.OpenRead(file))
-                    actual = Convert.ToHexString(await System.Security.Cryptography.SHA256.HashDataAsync(fs)).ToLowerInvariant();
+                // The installer must match the release's SHA-256 exactly, or it isn't run
+                held.Position = 0;
+                string actual = Convert.ToHexString(await System.Security.Cryptography.SHA256.HashDataAsync(held)).ToLowerInvariant();
                 if (actual != expected)
-                {
-                    try { File.Delete(file); } catch { }
                     throw new Exception("the download doesn't match the release's SHA-256 checksum, so it wasn't installed");
-                }
                 Console.WriteLine($"[update] SHA-256 verified: {actual}");
-            }
-            else Console.WriteLine("[update] This release has no checksum file; size and file type were checked.");
 
-            progress(100, "Installing — Vexis will restart");
-            string args = "/S /UPDATE" + (restartMinimized ? " /MINIMIZED" : "");
-            Console.WriteLine($"[update] Running {file} {args}");
-            Process.Start(new ProcessStartInfo { FileName = file, Arguments = args, UseShellExecute = true });
+                progress(100, "Installing — Vexis will restart");
+                string args = "/S /UPDATE" + (restartMinimized ? " /MINIMIZED" : "");
+                Console.WriteLine($"[update] Running {file} {args}");
+                Process.Start(new ProcessStartInfo { FileName = file, Arguments = args, UseShellExecute = true });
+            }
             return true;
         }
         catch (Exception ex)

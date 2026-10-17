@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- V was here ✌  As of 2.13.0, 50% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame. -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -193,7 +194,7 @@
   </div>
 </div>
 
-<script src="/nav.js?v=24" data-page="info"></script>
+<script src="/nav.js?v=25" data-page="info"></script>
 <script>
 // Update state comes from the host (UpdateManager), which also does the install
 function setStatus(text, col, dotCls) {
@@ -214,7 +215,7 @@ window.onUpdateInfo = function(info) {
     setStatus('UPDATE AVAILABLE', '#ffaa00', 'new');
     document.getElementById('update-btn-wrap').style.display = 'block';
     const btn = document.getElementById('update-install');
-    if (!info.canInstall) { btn.disabled = true; btn.textContent = 'No installer attached to this release'; }
+    if (!info.canInstall) { btn.disabled = true; btn.textContent = 'Can\'t install this one automatically: use the release page'; }
     if (info.notes) { notes.textContent = info.notes; notes.style.display = 'block'; }
   } else if (info.latest) {
     setStatus('UP TO DATE', '#44aa66', 'ok');
@@ -259,7 +260,7 @@ async function loadChangelog() {
 }
 function renderChangelog() {
   if (!CHLOG) return;
-  const esc = t => String(t).replace(/[&<>]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[c]));
+  const esc = escHtml;
   const ver = window.NAV_APP_VERSION;
   if (!CHLOG.length) { document.getElementById('chlog').style.display = 'none'; return; }
   // The installed version's notes; if it isn't listed, the newest entry

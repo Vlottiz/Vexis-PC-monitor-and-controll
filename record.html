@@ -156,7 +156,7 @@
   </div>
 </div>
 
-<script src="/nav.js?v=24" data-page="record"></script>
+<script src="/nav.js?v=25" data-page="record"></script>
 <script>
 // ── Recorder options ─────────────────────────────────────────────────────────
 const GROUPS = [
@@ -172,7 +172,7 @@ try { Object.assign(OPTS, JSON.parse(localStorage.getItem('pcm-record-opts') || 
 let REC = { active:false };
 
 function $(id) { return document.getElementById(id); }
-function esc(t) { return String(t).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c])); }
+const esc = escHtml;
 
 function buildOpts() {
   $('grp-grid').innerHTML = GROUPS.map(g => `<label class="grp"><input type="checkbox" value="${g.id}" ${OPTS.groups.includes(g.id) ? 'checked' : ''} onchange="saveOpts()">
@@ -226,9 +226,9 @@ window.onRecordings = function(list) {
   if (!list || !list.length) { body.innerHTML = '<tr><td class="m">No recordings yet — press START RECORDING.</td></tr>'; return; }
   body.innerHTML = list.map(f => `<tr data-name="${esc(f.name)}">
       <td>${esc(f.name)}</td><td class="m">${esc(f.modified)}</td><td class="m">${fmtSize(f.size)}</td>
-      <td class="a"><button class="btn btn-primary mini" onclick="viewFile('${esc(f.name)}')">VIEW</button>
-        <button class="btn btn-ghost mini" onclick="sendToHost({type:'showRecording',file:'${esc(f.name)}'})">SHOW</button>
-        <button class="btn btn-ghost mini" onclick="delFile('${esc(f.name)}')" title="Delete">&#x2715;</button></td></tr>`).join('');
+      <td class="a"><button class="btn btn-primary mini" onclick="viewFile(this.closest('tr').dataset.name)">VIEW</button>
+        <button class="btn btn-ghost mini" onclick="sendToHost({type:'showRecording',file:this.closest('tr').dataset.name})">SHOW</button>
+        <button class="btn btn-ghost mini" onclick="delFile(this.closest('tr').dataset.name)" title="Delete">&#x2715;</button></td></tr>`).join('');
   showRecState(REC);
 };
 function viewFile(name) { $('v-info').textContent = 'Loading…'; sendToHost({ type:'readRecording', file:name }); }

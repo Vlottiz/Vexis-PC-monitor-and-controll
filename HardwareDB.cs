@@ -1,3 +1,4 @@
+// V was here ✌  As of 2.13.0, 96% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame.
 using System.Management;
 
 /// <summary>
@@ -9,6 +10,10 @@ using System.Management;
 ///   4. SMBIOS/WMI  Board, BIOS, chassis type — zero-driver universal fallback
 ///
 /// Priority: monitoring accuracy → fan control → RGB identification → cosmetics
+///
+/// NOTE: nothing in the app calls this class yet. It was written as a lookup layer for
+/// when LibreHardwareMonitor can't name a device, and is kept for that. SensorService,
+/// FanController and StorageReader currently do their own detection.
 /// </summary>
 public static class HardwareDB
 {
@@ -24,7 +29,7 @@ public static class HardwareDB
         // ── AMD Radeon RX 6000 (RDNA 2) ─────────────────────────────────
         ["1002:73bf"] = "Radeon RX 6900 XT",
         ["1002:73a5"] = "Radeon RX 6950 XT",
-        ["1002:73bf"] = "Radeon RX 6900 XT",
+        ["1002:73bf"] = "Radeon RX 6900 XT",   // listed twice; the indexer just overwrites, so it's harmless
         ["1002:73a3"] = "Radeon RX 6800 XT",
         ["1002:73ab"] = "Radeon RX 6800",
         ["1002:73df"] = "Radeon RX 6700 XT",
@@ -283,7 +288,9 @@ public static class HardwareDB
     {
         if (string.IsNullOrEmpty(chipName)) return null;
         if (ChipConfigs.TryGetValue(chipName.Trim(), out var exact)) return exact;
-        // Partial match — LHM sometimes appends rev codes
+        // Partial match — LHM sometimes appends rev codes ("NCT6687D-R").
+        // The second test compares only the last word of the name, so a vague name
+        // can match the wrong chip; treat the result as a hint, not a fact.
         foreach (var kv in ChipConfigs)
             if (chipName.Contains(kv.Key, StringComparison.OrdinalIgnoreCase) ||
                 kv.Key.Contains(chipName.Split(' ').LastOrDefault() ?? "", StringComparison.OrdinalIgnoreCase))
@@ -368,7 +375,7 @@ public static class HardwareDB
                 board    = o["Product"]?.ToString()?.Trim() ?? "";
                 break;
             }
-        } catch { }
+        } catch (Exception ex) { Console.WriteLine($"[hwdb] WMI lookup failed: {ex.Message}"); }
 
         try
         {
@@ -379,7 +386,7 @@ public static class HardwareDB
                 bios = o["SMBIOSBIOSVersion"]?.ToString()?.Trim() ?? "";
                 break;
             }
-        } catch { }
+        } catch (Exception ex) { Console.WriteLine($"[hwdb] WMI lookup failed: {ex.Message}"); }
 
         try
         {
@@ -392,7 +399,7 @@ public static class HardwareDB
                     chassis = ct;
                 break;
             }
-        } catch { }
+        } catch (Exception ex) { Console.WriteLine($"[hwdb] WMI lookup failed: {ex.Message}"); }
 
         try
         {
@@ -403,7 +410,7 @@ public static class HardwareDB
                 family = o["SystemFamily"]?.ToString()?.Trim() ?? "";
                 break;
             }
-        } catch { }
+        } catch (Exception ex) { Console.WriteLine($"[hwdb] WMI lookup failed: {ex.Message}"); }
 
         // Battery presence = laptop/tablet
         try
@@ -413,16 +420,18 @@ public static class HardwareDB
             hasBattery = q.Get().Count > 0;
             if (hasBattery && chassis == ChassisType.Unknown)
                 chassis = ChassisType.Laptop;
-        } catch { }
+        } catch (Exception ex) { Console.WriteLine($"[hwdb] WMI lookup failed: {ex.Message}"); }
 
         // RAM slot topology
+        // NOTE: MemoryType is the wrong column for a slot count (it's a memory type code).
+        // Win32_PhysicalMemoryArray.MemoryDevices holds the number of slots.
         try
         {
             using var q = new ManagementObjectSearcher(
                 "SELECT MemoryType FROM Win32_PhysicalMemoryArray");
             foreach (ManagementObject o in q.Get())
                 memSlots += Convert.ToInt32(o["MemoryType"] ?? 0);
-        } catch { }
+        } catch (Exception ex) { Console.WriteLine($"[hwdb] WMI lookup failed: {ex.Message}"); }
 
         try
         {
@@ -430,24 +439,25 @@ public static class HardwareDB
                 "SELECT Capacity FROM Win32_PhysicalMemory");
             foreach (ManagementObject o in q.Get())
                 if (Convert.ToInt64(o["Capacity"] ?? 0) > 0) memSlotsUsed++;
-        } catch { }
+        } catch (Exception ex) { Console.WriteLine($"[hwdb] WMI lookup failed: {ex.Message}"); }
 
         return new SmBiosInfo(board, boardMfr, bios, family,
                               chassis, hasBattery, memSlots, memSlotsUsed);
     }
 
     // ════════════════════════════════════════════════════════════════════════
-    // WMI fallback helpers — used by SensorService when LHM finds nothing
+    // WMI fallback helpers — for when LHM finds nothing
+    // (SensorService has its own WMI / performance-counter fallback and doesn't call this)
     // ════════════════════════════════════════════════════════════════════════
 
     public record WmiFallbackData(
-        float?  CpuTempC,      // Win32_PerfFormattedData_Counters_ThermalZoneInformation
+        float?  CpuTempC,      // read from MSAcpi_ThermalZoneTemperature (an ACPI zone: often the board, not the CPU)
         float?  CpuLoadPct,    // Win32_Processor.LoadPercentage
-        float?  GpuTempC,      // Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine (Win11)
-        float?  GpuLoadPct,    // same source
+        float?  GpuTempC,      // planned: Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine (Win11) — not read yet, always null
+        float?  GpuLoadPct,    // planned: same source — not read yet, always null
         string  CpuName,       // Win32_Processor.Name
         string  GpuName,       // Win32_VideoController.Caption
-        int     GpuVramMb,     // Win32_VideoController.AdapterRAM
+        int     GpuVramMb,     // Win32_VideoController.AdapterRAM (a 32-bit value: tops out at 4 GB)
         float   RamUsedGb,     // Win32_OperatingSystem free vs total
         float   RamTotalGb
     );
@@ -476,7 +486,7 @@ public static class HardwareDB
                     cpuLoad = Convert.ToSingle(o["LoadPercentage"]);
                 break;
             }
-        } catch { }
+        } catch (Exception ex) { Console.WriteLine($"[hwdb] WMI lookup failed: {ex.Message}"); }
 
         // CPU temp via ACPI thermal zone (unreliable on many systems, but works on some laptops)
         try
@@ -486,12 +496,13 @@ public static class HardwareDB
             float best = 0;
             foreach (ManagementObject o in q.Get())
             {
+                // Reported in tenths of a kelvin
                 float raw = Convert.ToSingle(o["CurrentTemperature"]);
                 float c = (raw / 10f) - 273.15f;
                 if (c > 20 && c < 115 && c > best) best = c;
             }
             if (best > 0) cpuTemp = best;
-        } catch { }
+        } catch (Exception ex) { Console.WriteLine($"[hwdb] WMI lookup failed: {ex.Message}"); }
 
         // GPU info and VRAM
         try
@@ -512,7 +523,7 @@ public static class HardwareDB
                     gpuVram  = (int)(vram / (1024L * 1024));
                 }
             }
-        } catch { }
+        } catch (Exception ex) { Console.WriteLine($"[hwdb] WMI lookup failed: {ex.Message}"); }
 
         // RAM usage
         try
@@ -527,7 +538,7 @@ public static class HardwareDB
                 ramUsed  = (totalKb - freeKb) / (1024f * 1024f);
                 break;
             }
-        } catch { }
+        } catch (Exception ex) { Console.WriteLine($"[hwdb] WMI lookup failed: {ex.Message}"); }
 
         return new WmiFallbackData(cpuTemp, cpuLoad, gpuTemp, gpuLoad,
                                    cpuName, gpuName, gpuVram, ramUsed, ramTotal);
@@ -540,7 +551,7 @@ public static class HardwareDB
 
     public static string GuessChipFamily(string boardMfr) => boardMfr.ToLowerInvariant() switch
     {
-        var s when s.Contains("msi")      => "ITE",      // MSI almost exclusively uses ITE
+        var s when s.Contains("msi")      => "ITE",      // older MSI boards; newer ones (X870E, B650, Z790) use Nuvoton NCT6687D
         var s when s.Contains("asrock")   => "ITE",      // ASRock uses ITE for most boards
         var s when s.Contains("asus")     => "Nuvoton",  // ASUS uses Nuvoton NCT6xxx
         var s when s.Contains("gigabyte") => "Nuvoton",  // Gigabyte uses Nuvoton NCT6xxx

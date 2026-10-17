@@ -45,7 +45,7 @@ public sealed class SplashForm : Form
         TopMost         = false;
         Text            = "Vexis — starting";
         DoubleBuffered  = true;
-        try { Icon = new Icon(Path.Combine(AppContext.BaseDirectory, "vexis.ico")); } catch { }
+        try { Icon = new Icon(Path.Combine(AppContext.BaseDirectory, "vexis.ico")); } catch { }   // default icon
 
         _picture.SetBounds(20, 16, WindowWidth - 40, ImageHeight);
         _picture.SizeMode  = PictureBoxSizeMode.Zoom;
@@ -160,6 +160,6 @@ public sealed class SplashForm : Form
     {
         var f = _current;
         if (f == null || f.IsDisposed || !f.IsHandleCreated) return;
-        try { f.BeginInvoke(() => { if (!f.IsDisposed) action(f); }); } catch { }
+        try { f.BeginInvoke(() => { if (!f.IsDisposed) action(f); }); } catch { }   // splash already closed
     }
 }

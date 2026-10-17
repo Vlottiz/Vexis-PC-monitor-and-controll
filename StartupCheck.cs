@@ -116,10 +116,6 @@ public static class StartupCheck
         }
         catch (Exception ex) { Add("Device drivers", "warn", "check failed: " + ex.Message); }
 
-        // 5. Optional components shipped next to Vexis.exe
-        if (!File.Exists(Path.Combine(AppContext.BaseDirectory, "hidapi.dll")))
-            Add("MSI RGB library", "warn", "hidapi.dll missing — MSI motherboard RGB unavailable (reinstall Vexis)");
-
         Results = results;
         RanAt   = DateTime.Now;
         Console.WriteLine($"[check] Done — {Problems} problem(s).");

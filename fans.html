@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- V was here ✌  As of 2.13.0, 72% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame. -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -97,7 +98,7 @@
     <div id="fans-list"></div>
   </div>
 </div>
-<script src="/nav.js?v=24" data-page="fans"></script>
+<script src="/nav.js?v=25" data-page="fans"></script>
 <script>
 // ── State ─────────────────────────────────────────────────────────────────────
 const fanStates = {};
@@ -113,6 +114,8 @@ window.onFanProfile = function(p) {
   document.querySelectorAll('.preset-note b').forEach(b => b.textContent = PROFILE_NAMES[PROFILE].toUpperCase());
 };
 
+// Per-fan page state (mode, speed, curve points...), created with defaults the first time.
+// The default curve: quiet at idle, 100% from 85 °C
 function gs(name) {
   if (!fanStates[name]) fanStates[name] = {
     mode:'auto', pct:50, tempSrc:'cpu', hyst:5, min:0,
@@ -121,9 +124,13 @@ function gs(name) {
   return fanStates[name];
 }
 
-function sid(name) { return name.replace(/[\s#\-]/g,'_'); }
+function sid(name) { return String(name).replace(/[^A-Za-z0-9_]/g,'_'); }
+// Inline handlers name a fan as FAN_NAMES[n], never by its text (see escHtml in nav.js)
+const FAN_NAMES = [];
+function fanArg(name) { let i = FAN_NAMES.indexOf(name); if (i < 0) { i = FAN_NAMES.length; FAN_NAMES.push(name); } return `FAN_NAMES[${i}]`; }
 
 // ── Mode ──────────────────────────────────────────────────────────────────────
+// ✌ V was here — 95% of this section is still my original code
 function setMode(name, mode) {
   const s = gs(name), id = sid(name);
   if (PROFILE !== 'custom') onFanProfile('custom');   // the host switches back to Custom too
@@ -149,6 +156,7 @@ function applyManual(name) {
 }
 
 // ── Health check ──────────────────────────────────────────────────────────────
+// ✌ V was here — 100% of this section is still my original code
 function runHealth(name) {
   const id  = sid(name);
   const btn = document.getElementById(`hbtn-${id}`);
@@ -159,9 +167,11 @@ function runHealth(name) {
 }
 
 // ── Curve editor ──────────────────────────────────────────────────────────────
+// ✌ V was here — 80% of this section is still my original code
 const PAD = {l:6,r:6,t:8,b:8};
 const TMIN=20, TMAX=100;
 
+// Curve graph maths: temperature (x) and speed % (y) ↔ pixels inside the padded plot area
 function ptToPx(W, H, t, s) {
   const iw = W - PAD.l - PAD.r;
   const ih = H - PAD.t - PAD.b;
@@ -180,6 +190,8 @@ function pxToPt(W, H, px, py) {
   };
 }
 
+// Same straight-line interpolation as AppConfig.InterpolateCurve in the app, so the
+// preview on the graph matches what the fan will really do
 function interp(pts, t) {
   const s = [...pts].sort((a,b)=>a.t-b.t);
   if (t <= s[0].t) return s[0].s;
@@ -193,6 +205,7 @@ function interp(pts, t) {
   return 50;
 }
 
+// Draws the curve as SVG: grid, line, draggable points and the current-temperature marker
 function renderCurve(name) {
   const id  = sid(name);
   const svg = document.getElementById(`csvg-${id}`);
@@ -257,9 +270,9 @@ function renderCurve(name) {
     const {x,y} = ptToPx(W,H,p.t,p.s);
     out += `<circle cx="${x}" cy="${y}" r="${6*fs}" fill="var(--header-title,#ffcc00)"
       stroke="var(--bg,#000)" stroke-width="1.5" style="cursor:grab"
-      class="cpt" data-n="${name}" data-i="${i}"
-      onmousedown="startDrag(event,'${name}',${i})"
-      oncontextmenu="delPt(event,'${name}',${i})"/>`;
+      class="cpt" data-n="${escHtml(name)}" data-i="${i}"
+      onmousedown="startDrag(event,${fanArg(name)},${i})"
+      oncontextmenu="delPt(event,${fanArg(name)},${i})"/>`;
     const ly = y - 10*fs < 12*fs ? y + 18*fs : y - 10*fs;   // keep the label inside the graph
     out += `<text x="${Math.min(W - 30*fs, Math.max(30*fs, x))}" y="${ly}" text-anchor="middle"
       font-size="${10*fs}" fill="var(--label,#aa7700)">${p.t}°/${p.s}%</text>`;
@@ -270,6 +283,7 @@ function renderCurve(name) {
 
 // Drag
 let _drag = null;
+// Dragging a curve point: start / move (clamped to the graph) / release
 function startDrag(e, name, i) {
   e.stopPropagation(); e.preventDefault();
   _drag = {name, i};
@@ -293,6 +307,7 @@ function onUp() {
   document.removeEventListener('mousemove', onMove);
   document.removeEventListener('mouseup',   onUp);
 }
+// Right-click a point to delete it (a curve keeps at least two)
 function delPt(e, name, i) {
   e.preventDefault();
   const pts = gs(name).pts;
@@ -325,6 +340,7 @@ function resetCurve(name) {
   renderCurve(name);
 }
 
+// Sends the curve to the app, which saves it in config.json and starts using it
 function saveCurve(name) {
   const s = gs(name);
   if (PROFILE !== 'custom') onFanProfile('custom');
@@ -339,6 +355,14 @@ function saveCurve(name) {
 }
 
 // ── Card HTML ─────────────────────────────────────────────────────────────────
+const PUMP_MIN = 50;   // FanController.PumpMinPct
+function setPump(name, on) {
+  sendToHost({type:'setFanPump', fanName:name, enabled:on});
+  _built = false;   // rebuild the cards on the next update so the slider floor changes too
+}
+
+// One card per fan: name, RPM gauge, mode buttons and the manual / curve controls.
+// Fan names come from hardware, so they go through escHtml and fanArg, never straight into code
 function buildCard(fan) {
   // GPU fans follow the GPU temperature unless a saved curve says otherwise
   if (!fanStates[fan.name]) {
@@ -356,11 +380,15 @@ function buildCard(fan) {
   <div class="card" id="fc-${id}" style="margin-bottom:10px">
     <div class="row-between" style="margin-bottom:8px">
       <div>
-        <div class="card-title">${fan.name}${fan.isGpu?' <span class="badge badge-dim" style="margin-left:6px">GPU</span>':''}</div>
+        <div class="card-title">${escHtml(fan.name)}${fan.isGpu?' <span class="badge badge-dim" style="margin-left:6px">GPU</span>':''}</div>
         <div class="stat-sub" style="margin-top:3px">${fan.isGpu
           ? (fan.hasControl?'Controlled through the graphics driver · AUTO hands it back to the driver':'Graphics driver controlled only')
           : (fan.hasControl?'Software controllable':'BIOS controlled only')}</div>
-        <div class="stat-sub" id="fs-${id}" style="margin-top:3px;color:var(--temp-hot);display:${fan.failsafe?'block':'none'}">&#x26A0; GPU too hot &#x2014; forced to 100% until it cools down</div>
+        ${!fan.isGpu && fan.hasControl ? `<label class="stat-sub" style="margin-top:5px;display:flex;align-items:center;gap:6px;cursor:${fan.pumpByName?'default':'pointer'}"
+          title="${fan.pumpByName?'Detected as a pump from its name':'Tick this if a pump or AIO is plugged into this header'}">
+          <input type="checkbox" ${fan.isPump?'checked':''} ${fan.pumpByName?'disabled':''} onchange="setPump(${fanArg(fan.name)},this.checked)">
+          Pump or AIO on this header (never below ${PUMP_MIN}%)</label>` : ''}
+        <div class="stat-sub" id="fs-${id}" style="margin-top:3px;color:var(--temp-hot);display:${fan.failsafe?'block':'none'}">&#x26A0; ${fan.isGpu?'GPU':'CPU'} too hot &#x2014; forced to 100% until it cools down</div>
       </div>
       <div style="text-align:right">
         <span class="fan-rpm-big" id="rpm-${id}">${Math.round(fan.rpm)}</span>
@@ -373,9 +401,9 @@ function buildCard(fan) {
     ${fan.hasControl ? `
     <div class="preset-note">Following the <b>${PROFILE_NAMES[PROFILE].toUpperCase()}</b> fan profile. Pick a mode below to control this fan yourself (switches to Custom).</div>
     <div class="mode-tabs">
-      <button class="mode-tab ${s.mode==='auto'?'active':''}"   data-mode="auto"   onclick="setMode('${fan.name}','auto')">AUTO</button>
-      <button class="mode-tab ${s.mode==='manual'?'active':''}" data-mode="manual" onclick="setMode('${fan.name}','manual')">MANUAL</button>
-      <button class="mode-tab ${s.mode==='curve'?'active':''}"  data-mode="curve"  onclick="setMode('${fan.name}','curve')">CURVE</button>
+      <button class="mode-tab ${s.mode==='auto'?'active':''}"   data-mode="auto"   onclick="setMode(${fanArg(fan.name)},'auto')">AUTO</button>
+      <button class="mode-tab ${s.mode==='manual'?'active':''}" data-mode="manual" onclick="setMode(${fanArg(fan.name)},'manual')">MANUAL</button>
+      <button class="mode-tab ${s.mode==='curve'?'active':''}"  data-mode="curve"  onclick="setMode(${fanArg(fan.name)},'curve')">CURVE</button>
     </div>
 
     <div class="manual-wrap ${s.mode==='manual'?'show':''}" id="mw-${id}">
@@ -387,7 +415,7 @@ function buildCard(fan) {
         oninput="document.getElementById('sv-${id}').textContent=this.value+'%'">
       ${fan.minPct?`<div class="stat-sub" style="margin-top:4px">Pumps stay at ${fan.minPct}% or more: a slow pump heats the CPU quickly.</div>`:''}
       <div style="margin-top:10px">
-        <button class="btn btn-primary" onclick="applyManual('${fan.name}')"
+        <button class="btn btn-primary" onclick="applyManual(${fanArg(fan.name)})"
           style="width:100%;justify-content:center">APPLY</button>
       </div>
     </div>
@@ -396,7 +424,7 @@ function buildCard(fan) {
       <div class="curve-src-row">
         <label>TEMP SOURCE</label>
         <select class="select" id="tsrc-${id}"
-          onchange="gs('${fan.name}').tempSrc=this.value;renderCurve('${fan.name}')">
+          onchange="gs(${fanArg(fan.name)}).tempSrc=this.value;renderCurve(${fanArg(fan.name)})">
           <option value="cpu"  ${s.tempSrc==='cpu' ?'selected':''}>CPU Package</option>
           <option value="gpu"  ${s.tempSrc==='gpu' ?'selected':''}>GPU Core</option>
           <option value="gpu_hotspot" ${s.tempSrc==='gpu_hotspot'?'selected':''}>GPU Hot Spot</option>
@@ -411,7 +439,7 @@ function buildCard(fan) {
         </div>
         <svg id="csvg-${id}" class="curve-graph" viewBox="0 0 300 110"
           xmlns="http://www.w3.org/2000/svg"
-          onclick="svgClick(event,'${fan.name}')"></svg>
+          onclick="svgClick(event,${fanArg(fan.name)})"></svg>
       </div>
       <div class="curve-axis-x">
         <span>20°</span><span>40°</span><span>60°</span><span>80°</span><span>100°</span>
@@ -419,22 +447,22 @@ function buildCard(fan) {
       <div class="curve-hint">Click to add point · Right-click point to remove · Drag to move · Orange line = current temp</div>
       <div class="curve-opts">
         <label title="Fans speed up straight away, but only slow down once the temperature has dropped this many degrees. Stops fans revving up and down when a temperature hovers around a curve point.">
-          HYSTERESIS <input type="number" min="0" max="15" step="1" value="${s.hyst}" oninput="setCurveOpt('${fan.name}','hyst',this.value,0,15)"> °C</label>
+          HYSTERESIS <input type="number" min="0" max="15" step="1" value="${s.hyst}" oninput="setCurveOpt(${fanArg(fan.name)},'hyst',this.value,0,15)"> °C</label>
         <label title="The fan never runs slower than this, even when the curve says lower.">
-          MINIMUM SPEED <input type="number" min="0" max="80" step="5" value="${s.min}" oninput="setCurveOpt('${fan.name}','min',this.value,0,80)"> %</label>
+          MINIMUM SPEED <input type="number" min="0" max="80" step="5" value="${s.min}" oninput="setCurveOpt(${fanArg(fan.name)},'min',this.value,0,80)"> %</label>
         <small>Hover a setting for what it does</small>
       </div>
       <div class="curve-btns">
-        <button class="btn btn-primary" id="csave-${id}" onclick="saveCurve('${fan.name}')"
+        <button class="btn btn-primary" id="csave-${id}" onclick="saveCurve(${fanArg(fan.name)})"
           style="flex:1;justify-content:center">SAVE CURVE</button>
-        <button class="btn btn-ghost" onclick="resetCurve('${fan.name}')"
+        <button class="btn btn-ghost" onclick="resetCurve(${fanArg(fan.name)})"
           style="padding:7px 14px">RESET</button>
       </div>
     </div>` : `<div class="no-ctrl">No software control — managed by BIOS</div>`}
 
     ${fan.hasControl ? `
     <div class="health-row">
-      <button class="btn btn-ghost" id="hbtn-${id}" onclick="runHealth('${fan.name}')"
+      <button class="btn btn-ghost" id="hbtn-${id}" onclick="runHealth(${fanArg(fan.name)})"
         style="padding:6px 12px;font-size:calc(9px*var(--fs-base,1))">⚕ Health Check</button>
       <span class="health-status" id="hres-${id}"></span>
     </div>` : ''}
@@ -442,6 +470,7 @@ function buildCard(fan) {
 }
 
 // ── Data ──────────────────────────────────────────────────────────────────────
+// ✌ V was here — 91% of this section is still my original code
 function receiveData(data) {
   _latestData = data;
   const fans = data.fans;
@@ -487,6 +516,7 @@ function receiveData(data) {
 }
 
 
+// Saved curves arrive with the settings; load them into the page state
 function onConfigReceived(cfg) {
   // Load saved fan curves into state
   if (cfg.fanCurves && cfg.fanCurves.length) {

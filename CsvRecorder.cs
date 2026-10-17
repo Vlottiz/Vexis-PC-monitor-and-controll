@@ -249,7 +249,7 @@ public sealed class CsvRecorder : IDisposable
             if (_format == "pretty") WritePrettySummary();
             _writer.Dispose();
         }
-        catch { }
+        catch (Exception ex) { Console.WriteLine($"[csv] Couldn't finish the recording file: {ex.Message}"); }
         _writer = null;
         LastFile = _path;
         Console.WriteLine($"[record] Stopped — {_rows} rows in {_path}");
@@ -294,6 +294,9 @@ public sealed class CsvRecorder : IDisposable
     public static string? ResolveFile(string? name)
     {
         if (string.IsNullOrWhiteSpace(name) || name != Path.GetFileName(name)) return null;
+        // Only Vexis's own recordings, the same files the list shows
+        if (!name.StartsWith("vexis-", StringComparison.OrdinalIgnoreCase) ||
+            !(name.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))) return null;
         string path = Path.Combine(Folder, name);
         return File.Exists(path) ? path : null;
     }

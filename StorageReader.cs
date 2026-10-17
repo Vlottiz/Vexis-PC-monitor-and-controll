@@ -101,7 +101,7 @@ public static class StorageReader
                     kinds[n] = bus == 17 ? "NVMe SSD" : bus == 7 ? "USB " + (m.Length > 0 ? m : "drive") : $"{b} {m}".Trim();
                 }
             }
-            catch { }
+            catch { }   // runs every refresh: drives just show without a type
 
             using var drives = new ManagementObjectSearcher("SELECT DeviceID, Model FROM Win32_DiskDrive");
             foreach (ManagementObject drive in drives.Get())
