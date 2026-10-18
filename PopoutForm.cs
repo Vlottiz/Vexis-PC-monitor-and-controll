@@ -27,6 +27,9 @@ public class PopoutForm : Form
 
     private static readonly string AppDir = AppDomain.CurrentDomain.BaseDirectory;
 
+    /// <summary>Only Vexis's own pages can be popped out (the id also names a folder).</summary>
+    public static bool IsKnownPage(string? page) => page != null && PageMap.ContainsKey(page);
+
     // Page id (as used by nav.js) → file, window title and starting size
     private static readonly Dictionary<string, (string file, string title, System.Drawing.Size size)> PageMap = new()
     {
@@ -70,7 +73,20 @@ public class PopoutForm : Form
         Load += OnLoad;
     }
 
+    // async void: an exception here would take the whole app down, so a pop-out that can't
+    // start its browser just says so and closes
     private async void OnLoad(object? s, EventArgs e)
+    {
+        try { await LoadPage(); }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[popout:{_pageName}] couldn't start: {ex.Message}");
+            MessageBox.Show(this, "This window couldn't load: " + ex.Message, "Vexis", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            Close();
+        }
+    }
+
+    private async Task LoadPage()
     {
         var webViewOptsP = WebViewSecurity.EnvironmentOptions();
         var webViewEnv = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync(

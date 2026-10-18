@@ -9,6 +9,27 @@ for the installed version on Info → Version, and the release workflow uses it 
 the GitHub release notes.
 -->
 
+## 2.14.0 — 2026-10-18
+- Fans: a missing or impossible temperature no longer counts as cool. A fan on a curve or profile with no usable reading runs at 100 %, and a CPU or GPU sensor that stops working turns that over-temperature guard on (it used to read as 0 °C and could switch the guard off)
+- Fans: if sensor readings stop arriving altogether (a stuck driver), fans under Vexis's control go to full speed after a few seconds
+- Fans: each graphics card has its own over-temperature guard and its fans follow its own temperature (with two GPUs, both used to follow the first)
+- Fans: a health check is refused while the fan's guard is on, and stops at once (fan to 100 %) if it gets too hot during the check
+- Fans: one failing fan can no longer stop the others (or the guards) from being updated; speeds are re-sent every 10 s in case the board took control back after sleep
+- Fans: two fans with the same name (e.g. two "GPU Fan"s) are told apart, and each control is paired with only one fan
+- Fan page: when a fan is held at 100 % it says why (too hot, or no temperature reading)
+- Starting Vexis while it's already running asks the old copy to close properly (handing the fans back) instead of killing it
+- Settings: config.json is saved safely (a power cut mid-save can't corrupt it; the previous file is kept as a backup), and broken values in it are fixed on load
+- Security: Windows tools (sc, schtasks, explorer, taskkill) are started by full path; links open through Explorer so the browser doesn't get admin rights; the Start with Windows task file can't be swapped while it's imported
+- Security: pages have a content security policy (no outside scripts or connections) and form autofill is off; only Vexis's own pages can be popped out
+- Security: updates only ever pick the VexisHM-Setup installer from a release, never another .exe; old update folders are cleaned up only if Vexis made them
+- Security: the OpenRGB connection limits packet size and can't hang forever waiting for an answer
+- Duplicate finder: folders reached through junctions or links are resolved first, so the same file can't show up twice and be removed as its own duplicate; files are only recycled if a copy that stays still matches
+- End task checks the process is still the one you picked (Windows reuses process numbers)
+- WinRing0 cleanup only removes the service if an old Vexis installed it (other monitoring tools use the same name)
+- Installer: the install folder must be called Vexis, since uninstalling removes the whole folder
+- Builds: GitHub Actions pinned to exact commits, NSIS must be 3.09 or newer, and the local build checks the WebView2 installer's Microsoft signature
+- debug.log stops growing at 20 MB; LICENSE.txt credits LibreHardwareMonitor's MPL-2.0 license correctly
+
 ## 2.13.0 — 2026-10-16
 - Security: the interface's browser now runs with its normal security on (the old flags that turned it off are gone), only loads Vexis's own pages, and only accepts commands from them. Developer tools are off in released builds
 - Security: names from outside Vexis (process names, recordings, fan, drive and device names) can no longer be read as code by the pages. A program with a crafted name could do that on the Processes page before

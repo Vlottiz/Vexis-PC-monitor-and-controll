@@ -251,6 +251,10 @@ public sealed class ProcessMonitor : IDisposable
             if (pid is int id) targets.Add(Process.GetProcessById(id));
             else if (!string.IsNullOrEmpty(exe)) targets.AddRange(Process.GetProcessesByName(exe));
             if (targets.Count == 0) return (false, "Process not found — it may have already closed.");
+            // Windows reuses process numbers. If the one picked on the page has closed since and
+            // the number now belongs to a different program, don't end that program.
+            if (pid != null && !string.IsNullOrEmpty(exe) && !string.Equals(targets[0].ProcessName, exe, StringComparison.OrdinalIgnoreCase))
+                return (false, "That process has closed (its number now belongs to another program). Refresh the list and try again.");
             foreach (var p in targets)
             {
                 if (p.Id <= 4 || p.Id == SelfPid || Critical.Contains(p.ProcessName))

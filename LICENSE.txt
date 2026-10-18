@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2025 your-handle
+Copyright (c) 2025 Vlottiz
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -23,11 +23,18 @@ SOFTWARE.
 ---------------------------------------------------------------------------
 This software uses the following open source components:
 
-LibreHardwareMonitor  — MIT License
+LibreHardwareMonitor  — Mozilla Public License 2.0 (MPL-2.0)
   https://github.com/LibreHardwareMonitor/LibreHardwareMonitor
+  (with its own dependencies, e.g. HidSharp and RAMSPDToolkit)
+
+PawnIO                — signed sensor driver, bundled unmodified
+  https://pawnio.eu
 
 Microsoft WebView2    — https://developer.microsoft.com/en-us/microsoft-edge/webview2/
   Included with Windows 11, free to distribute
 
 System.Management     — MIT License
   https://github.com/dotnet/runtime
+
+OpenRGB is not included; Vexis talks to it if you install it yourself (GPL-2.0)
+  https://gitlab.com/CalcProgrammer1/OpenRGB

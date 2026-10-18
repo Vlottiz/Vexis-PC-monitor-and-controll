@@ -52,16 +52,35 @@ internal sealed class TeeWriter : TextWriter
     public TeeWriter(TextWriter file) { _file = file; }
     public override System.Text.Encoding Encoding => _file.Encoding;
 
+    // debug.log stops growing at this size (days of uptime with RGB effects could otherwise
+    // fill gigabytes). The live view in the Security tab keeps going.
+    private const long MaxFileBytes = 20 * 1024 * 1024;
+    private long _written;
+    private bool _full;
+
     public override void WriteLine(string? value)
     {
         string ts  = DateTime.Now.ToString("HH:mm:ss.fff");
         string line = $"[{ts}] {value ?? ""}";
-        _file.WriteLine(line);
+        lock (this) WriteFile(line + Environment.NewLine);
         AppLog.Append(line);
     }
 
+    private void WriteFile(string text)
+    {
+        if (_full) return;
+        _written += text.Length;
+        if (_written > MaxFileBytes)
+        {
+            _full = true;
+            _file.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] [log] debug.log reached {MaxFileBytes / 1048576} MB — not writing more until Vexis restarts");
+            return;
+        }
+        _file.Write(text);
+    }
+
     // Partial writes (no newline) go to the file only: the live view works line by line
-    public override void Write(string? value)          { _file.Write(value); }
+    public override void Write(string? value)          { if (value != null) lock (this) WriteFile(value); }
     public override void Flush()                       { _file.Flush(); }
     protected override void Dispose(bool d) { if (d) _file.Dispose(); base.Dispose(d); }
 }
@@ -119,10 +138,27 @@ internal static class Program
         {
             try { using var old = Process.GetProcessById(oldPid); old.WaitForExit(10000); } catch { }   // already gone
         }
-        foreach (var p in Process.GetProcessesByName(current.ProcessName))
+        // Ask the running copy to close by itself first (the same exit.request the installer
+        // uses), so it hands the fans back to the BIOS. Only if it hasn't gone after 5 s is it
+        // killed — a killed copy leaves the fans at whatever speed it last set.
+        var others = Process.GetProcessesByName(current.ProcessName).Where(p => p.Id != current.Id).ToList();
+        if (others.Count > 0)
         {
-            if (p.Id == current.Id) continue;
-            try { p.Kill(); p.WaitForExit(3000); replacedOther = true; } catch { }   // already gone, or not ours to stop
+            try
+            {
+                string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Vexis");
+                Directory.CreateDirectory(dir);
+                File.WriteAllText(Path.Combine(dir, "exit.request"), "new launch");
+            }
+            catch { }   // can't write it: fall through to the kill below
+            var until = DateTime.Now.AddSeconds(5);
+            foreach (var p in others)
+                try { p.WaitForExit((int)Math.Max(0, (until - DateTime.Now).TotalMilliseconds)); } catch { }   // already gone
+            replacedOther = true;
+        }
+        foreach (var p in others)
+        {
+            try { if (!p.HasExited) { p.Kill(); p.WaitForExit(3000); } } catch { }   // already gone, or not ours to stop
         }
 
         // ── Did the last session end badly? (must run before the log is truncated) ──

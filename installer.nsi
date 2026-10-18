@@ -43,6 +43,9 @@ VIAddVersionKey   "LegalCopyright"   "MIT License"
 ; ── Pages ─────────────────────────────────────────────────────────────────────
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE       "LICENSE.txt"
+; The folder must be called Vexis: uninstalling deletes the whole folder, so it must never be
+; a shared one like D:\Games (see .onVerifyInstDir)
+!define MUI_DIRECTORYPAGE_TEXT_TOP "Vexis will be installed in the folder below. The folder's name must be Vexis, because uninstalling removes it and everything in it."
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
@@ -60,7 +63,7 @@ VIAddVersionKey   "LegalCopyright"   "MIT License"
   FileOpen $9 "$APPDATA\Vexis\exit.request" w
   FileClose $9
   Sleep 3000
-  nsExec::ExecToLog 'taskkill /IM Vexis.exe /F'
+  nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /IM Vexis.exe /F'
   Delete "$APPDATA\Vexis\exit.request"
 !macroend
 
@@ -166,6 +169,14 @@ SectionEnd
 
 ; In-app updates run this installer with /S /UPDATE (silent, so there is no
 ; finish page) — start the new version once the files are in place.
+; Next is greyed out until the chosen folder is called Vexis
+Function .onVerifyInstDir
+  StrCpy $0 "$INSTDIR" "" -6
+  ${If} $0 != "\Vexis"
+    Abort
+  ${EndIf}
+FunctionEnd
+
 Function .onInstSuccess
   ${GetParameters} $R0
   ClearErrors
@@ -189,10 +200,21 @@ Section "Uninstall"
   !insertmacro CloseVexis
 
   ; Remove the "Start with Windows" logon task, if the user turned it on
-  nsExec::ExecToLog 'schtasks /Delete /TN "Vexis" /F'
+  nsExec::ExecToLog '"$SYSDIR\schtasks.exe" /Delete /TN "Vexis" /F'
 
-  ; Remove files
-  RMDir /r "$INSTDIR"
+  ; Remove files. The whole folder only if it's a Vexis folder; an install from before 2.14
+  ; into a shared folder only loses Vexis's own top-level files
+  StrCpy $0 "$INSTDIR" "" -6
+  ${If} $0 == "\Vexis"
+    RMDir /r "$INSTDIR"
+  ${Else}
+    Delete "$INSTDIR\Vexis.exe"
+    Delete "$INSTDIR\Uninstall.exe"
+    Delete "$INSTDIR\*.html"
+    Delete "$INSTDIR\nav.js"
+    Delete "$INSTDIR\ui.css"
+    DetailPrint "Vexis was installed in a shared folder ($INSTDIR); only its main files were removed."
+  ${EndIf}
 
   ; Remove shortcuts
   RMDir /r "$SMPROGRAMS\Vexis"

@@ -88,7 +88,7 @@ public static class CrashHelper
     public static void OpenLog()
     {
         string file = File.Exists(PreviousLogPath) ? PreviousLogPath : LogPath;
-        try { Process.Start("explorer.exe", $"/select,\"{file}\""); } catch { }   // Explorer didn't open: the path is shown in the banner
+        SysTools.RevealFile(file);
     }
 
     /// <summary>Opens a new GitHub issue with version, system and error details filled in.</summary>
@@ -112,12 +112,14 @@ public static class CrashHelper
         body.AppendLine();
         body.AppendLine("**Details**");
         body.AppendLine("```");
-        body.AppendLine(r?.summary.Length > 1500 ? r.summary[..1500] + "…" : r?.summary ?? "");
+        // Escaped, every character can become 3; links over ~2,000 characters may not open,
+        // so the summary is kept short (the full details are in debug-previous.log)
+        body.AppendLine(r?.summary.Length > 500 ? r.summary[..500] + "…" : r?.summary ?? "");
         body.AppendLine("```");
         body.AppendLine();
         body.AppendLine("Please drag `debug-previous.log` from `%AppData%\\Vexis` into this issue (the Open log button shows it).");
         string url = $"https://github.com/{UpdateManager.Repo}/issues/new?title={Uri.EscapeDataString(title)}&body={Uri.EscapeDataString(body.ToString())}";
-        try { Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true }); } catch { }   // no browser: the user can copy the link
+        SysTools.OpenUrl(url);
     }
 
     public static void Dismiss()

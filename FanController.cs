@@ -13,7 +13,8 @@ public class FanInfo
     public string  mode       { get; set; } = "auto";  // auto | manual | curve | profile
     public string? healthStatus { get; set; }
     public bool    isGpu      { get; set; }     // graphics-card fan (driver control)
-    public bool    failsafe   { get; set; }     // forced to 100% by the GPU or CPU over-temperature guard
+    public bool    failsafe   { get; set; }     // forced to 100% (over-temperature guard or no usable temperature)
+    public string? failsafeWhy { get; set; }    // why, for the page
     public int     minPct     { get; set; }     // lowest speed Vexis will set (pumps: FanController.PumpMinPct)
     public bool    isPump     { get; set; }
     public bool    pumpByName { get; set; }     // detected from the name (can't be unmarked)
@@ -34,6 +35,11 @@ internal class FanEntry
     public float    CurveTemp    { get; set; }
     public int      LastSent     { get; set; } = -1;
     public bool     Testing      { get; set; }   // health check running: the poll loop leaves it alone
+    public bool     AbortTest    { get; set; }   // set by the poll when a guard trips during a health check
+    public long     LastSentAt   { get; set; }   // when LastSent was written (the speed is re-sent every ResendMs)
+    public bool     Guarded      { get; set; }   // forced to 100% by an over-temperature guard this tick
+    public bool     NoTemp       { get; set; }   // on a curve/profile with no usable temperature → 100%
+    public long     LastErrorAt  { get; set; }   // rate-limits the error log for this fan
 
     // A pump gets the 50% floor, the pump curves and pump health-check steps. Detected
     // from the header name, or marked by the user on the Fan Control page.
@@ -118,30 +124,21 @@ public class FanController
                 Console.WriteLine($"[fans]   [{h.HardwareType}] {h.Name} — {fc} fan sensor(s)");
         }
 
+        var names = new HashSet<string>(StringComparer.Ordinal);
         foreach (var hw in allHw)
         {
             // Fan RPM sensors
             var fanSensors  = hw.Sensors.Where(s => s.SensorType == SensorType.Fan).ToList();
             // Control sensors (0–100%)
             var ctrlSensors = hw.Sensors.Where(s => s.SensorType == SensorType.Control).ToList();
+            var used = new HashSet<ISensor>();   // each control drives one fan only
 
             foreach (var fan in fanSensors)
             {
                 // Try to match a control sensor by name similarity.
                 // LHM names them in pairs like "Fan #2" (RPM) / "Fan Control #2" or "Fan #2" (%),
-                // so drop "fan" and "#" and compare what's left.
-                ISensor? ctrl = null;
-                foreach (var c in ctrlSensors)
-                {
-                    string fn = fan.Name.ToLower().Replace("fan", "").Replace("#", "").Trim();
-                    string cn = c.Name.ToLower().Replace("fan", "").Replace("#", "").Trim();
-                    if (fn == cn || fan.Name == c.Name ||
-                        fan.Name.Replace("Fan", "").Trim() == c.Name.Replace("Fan", "").Trim())
-                    {
-                        ctrl = c;
-                        break;
-                    }
-                }
+                // so drop "fan", "control", "#" and spaces and compare what's left.
+                ISensor? ctrl = ctrlSensors.FirstOrDefault(c => !used.Contains(c) && Key(c.Name) == Key(fan.Name));
 
                 // Fallback: match by index if names don't align. The Nth RPM sensor usually
                 // belongs to the Nth control on the same chip, but this is a guess — the
@@ -149,18 +146,24 @@ public class FanController
                 if (ctrl == null)
                 {
                     int idx = fanSensors.IndexOf(fan);
-                    if (idx < ctrlSensors.Count)
+                    if (idx < ctrlSensors.Count && !used.Contains(ctrlSensors[idx]))
                         ctrl = ctrlSensors[idx];
                 }
+                if (ctrl != null) used.Add(ctrl);
+
+                // Names identify fans everywhere (saved curves, page commands), so they must be
+                // unique. Two "GPU Fan"s on two cards, or "Fan #1" on two chips, get the chip's name added.
+                string name = fan.Name;
+                if (!names.Add(name)) { name = $"{fan.Name} ({hw.Name})"; for (int n = 2; !names.Add(name); n++) name = $"{fan.Name} ({hw.Name} {n})"; }
 
                 found.Add(new FanEntry
                 {
-                    Name      = fan.Name,
+                    Name      = name,
                     RpmSensor = fan,
                     CtrlSensor= ctrl
                 });
 
-                Console.WriteLine($"[fans] {fan.Name} — control: {(ctrl != null ? ctrl.Name : "none")}");
+                Console.WriteLine($"[fans] {name} — control: {(ctrl != null ? ctrl.Name : "none")}");
             }
         }
 
@@ -205,21 +208,76 @@ public class FanController
     // ─── Per-cycle update ──────────────────────────────────────────────────────
     // GPU over-temperature guard: a GPU fan under manual or curve control is forced
     // to 100% when the core or hot spot gets this hot, and released 8 °C below.
+    // Each graphics card has its own guard, fed by its own sensors.
     public const float GpuCoreLimit = 90f, GpuHotspotLimit = 100f, GpuGuardRelease = 8f;
-    private bool _gpuGuard;
+    private sealed class GpuGuard { public bool On; public readonly TempTrack Core = new(), Hot = new(); }
+    private readonly Dictionary<string, GpuGuard> _gpuGuards = new();
 
     // CPU over-temperature guard: case, CPU and pump fans under manual, curve or profile
     // control go to 100% at 95 °C (AMD's limit, a few degrees under Intel's) and are
     // released at 85 °C. Fans on auto are already the BIOS's job.
     public const float CpuLimit = 95f, CpuGuardRelease = 10f;
     private bool _cpuGuard;
+    private readonly TempTrack _cpuTrack = new();
+
+    // ─── Temperatures the fans can trust ─────────────────────────────────────
+    // A reading only counts if it's a real number in a believable range and the
+    // snapshot it came from is fresh. A sensor that worked and then stops (driver
+    // unloaded, sensor poll stuck) is "lost" after LostAfterMs, and lost counts as
+    // hot: when Vexis can't see the temperature, full speed is the safe answer.
+    // StaleAfterMs is longer than SensorService.PausePoll's 5 s (while OpenRGB scans the RAM
+    // bus), so starting OpenRGB doesn't send every fan to full speed.
+    internal const long StaleAfterMs = 8000, LostAfterMs = 2000;
+
+    internal static float? Usable(float? t) =>
+        t is float v && float.IsFinite(v) && v > 0f && v < 150f ? v : null;
+
+    /// <summary>Remembers whether a sensor has ever worked and how long it has been missing.</summary>
+    internal sealed class TempTrack
+    {
+        public bool Seen;
+        private long _badSince = -1;
+        public GuardReading Read(float? temp, float limit, long now)
+        {
+            if (temp != null) { Seen = true; _badSince = -1; return new(temp, limit, true, false); }
+            if (!Seen) return new(null, limit, false, false);          // this PC never had it
+            if (_badSince < 0) _badSince = now;
+            return new(null, limit, true, now - _badSince >= LostAfterMs);
+        }
+    }
+
+    /// <param name="Seen">the sensor has worked before (so a missing value means it was lost)</param>
+    /// <param name="Lost">missing for longer than LostAfterMs</param>
+    internal readonly record struct GuardReading(float? Temp, float Limit, bool Seen = true, bool Lost = false);
 
     /// <summary>
-    /// Guard state with hysteresis: switches on when any reading reaches its limit, and off
-    /// only when every reading is <paramref name="release"/> °C under its limit.
+    /// Guard state with hysteresis: switches on when any reading reaches its limit or a
+    /// sensor is lost, and off only when every reading that exists is
+    /// <paramref name="release"/> °C under its limit. While on, a reading that is
+    /// briefly missing keeps it on.
     /// </summary>
+    internal static bool NextGuard(bool on, float release, params GuardReading[] r) => on
+        ? r.Any(x => x.Lost || (x.Temp is float t ? t >= x.Limit - release : x.Seen))
+        : r.Any(x => x.Lost || x.Temp >= x.Limit);
+
     internal static bool NextGuard(bool on, float release, params (float temp, float limit)[] readings) =>
-        readings.Any(r => r.temp >= (on ? r.limit - release : r.limit));
+        NextGuard(on, release, readings.Select(x => new GuardReading(x.temp, x.limit)).ToArray());
+
+    // A GPU fan follows the card it sits on; only if that card has no core sensor of
+    // its own does it fall back to the main GPU's readings
+    private static float? OwnGpuTemp(FanEntry fan, string sensorName)
+    {
+        foreach (var s in fan.RpmSensor.Hardware.Sensors)
+            if (s.SensorType == SensorType.Temperature && s.Name == sensorName) return s.Value;
+        return null;
+    }
+    private static bool HasOwnGpuCore(FanEntry fan) =>
+        fan.RpmSensor.Hardware.Sensors.Any(s => s.SensorType == SensorType.Temperature && s.Name == "GPU Core");
+
+    private bool GuardOn(FanEntry fan) =>
+        fan.IsGpu ? _gpuGuards.TryGetValue(fan.RpmSensor.Hardware.Identifier.ToString(), out var g) && g.On : _cpuGuard;
+
+    private bool _wasStale;
 
     private AppConfig? _config;
 
@@ -233,59 +291,122 @@ public class FanController
         _config = config;
         RescanIfNewFans();
 
-        float gCore = sensorData.gpu?.temp_core ?? sensorData.gpu_temp ?? 0f;
-        float gHot  = sensorData.gpu?.temp_hotspot ?? 0f;
-        bool wasGuard = _gpuGuard;
-        _gpuGuard = NextGuard(_gpuGuard, GpuGuardRelease, (gCore, GpuCoreLimit), (gHot, GpuHotspotLimit));
-        if (_gpuGuard != wasGuard)
-            Console.WriteLine(_gpuGuard
-                ? $"[fans] GPU over-temperature guard ON (core {gCore:F0}°C, hot spot {gHot:F0}°C) — GPU fans at 100%."
-                : "[fans] GPU over-temperature guard off — GPU fans back to their setting.");
+        // No sensor reading yet (the first moments after start): leave the fans as they are
+        if (sensorData.taken_ms == 0) return;
+        long now = Environment.TickCount64;
+        bool stale = now - sensorData.taken_ms > StaleAfterMs;
+        if (stale != _wasStale)
+        {
+            Console.WriteLine(stale ? "[fans] Sensor data is more than 8 s old — treating temperatures as missing."
+                                    : "[fans] Sensor data is fresh again.");
+            _wasStale = stale;
+        }
+        float? T(float? v) => stale ? null : Usable(v);
 
-        float cpu = sensorData.cpu_temp ?? 0f;
+        // CPU guard
         bool wasCpuGuard = _cpuGuard;
-        _cpuGuard = NextGuard(_cpuGuard, CpuGuardRelease, (cpu, CpuLimit));
+        var cpuR = _cpuTrack.Read(T(sensorData.cpu_temp), CpuLimit, now);
+        _cpuGuard = NextGuard(_cpuGuard, CpuGuardRelease, cpuR);
         if (_cpuGuard != wasCpuGuard)
             Console.WriteLine(_cpuGuard
-                ? $"[fans] CPU over-temperature guard ON ({cpu:F0}°C) — case, CPU and pump fans at 100%."
+                ? (cpuR.Lost ? "[fans] CPU temperature lost — case, CPU and pump fans at 100% until it's back."
+                             : $"[fans] CPU over-temperature guard ON ({cpuR.Temp:F0}°C) — case, CPU and pump fans at 100%.")
                 : "[fans] CPU over-temperature guard off — fans back to their setting.");
+
+        // One guard per graphics card
+        foreach (var hw in _fans.Where(f => f.IsGpu).Select(f => f.RpmSensor.Hardware).DistinctBy(h => h.Identifier.ToString()))
+        {
+            string key = hw.Identifier.ToString();
+            if (!_gpuGuards.TryGetValue(key, out var g)) _gpuGuards[key] = g = new GpuGuard();
+            var probe = _fans.First(f => f.IsGpu && f.RpmSensor.Hardware == hw);
+            bool own = HasOwnGpuCore(probe);
+            float? core = T(own ? OwnGpuTemp(probe, "GPU Core")     : sensorData.gpu?.temp_core ?? sensorData.gpu_temp);
+            float? hot  = T(own ? OwnGpuTemp(probe, "GPU Hot Spot") : sensorData.gpu?.temp_hotspot);
+            var cr = g.Core.Read(core, GpuCoreLimit, now);
+            var hr = g.Hot.Read(hot, GpuHotspotLimit, now);
+            bool was = g.On;
+            g.On = NextGuard(g.On, GpuGuardRelease, cr, hr);
+            if (g.On != was)
+                Console.WriteLine(g.On
+                    ? (cr.Lost || hr.Lost ? $"[fans] {hw.Name}: temperature lost — its fans at 100% until it's back."
+                                          : $"[fans] {hw.Name}: over-temperature guard ON (core {cr.Temp:F0}°C, hot spot {hr.Temp:F0}°C) — its fans at 100%.")
+                    : $"[fans] {hw.Name}: over-temperature guard off — fans back to their setting.");
+        }
 
         string profile = FanProfiles.Normalize(config.FanProfile);
         foreach (var fan in _fans)
         {
-            if (fan.CtrlSensor?.Control == null || fan.RpmSensor.Hardware.HardwareType == HardwareType.GpuIntel) continue;
-            if (fan.Testing) continue;
-            if (fan.IsGpu && fan.Mode != "auto")
+            // One fan failing (sensor gone after a driver reset, ...) must not stop the
+            // guards from reaching the fans after it
+            try { UpdateFan(fan, sensorData, config, profile, stale); }
+            catch (Exception ex)
             {
-                if (_gpuGuard) { Send(fan, 100); continue; }
-                if (wasGuard && fan.Mode == "manual") Send(fan, (int)fan.ManualPct);
+                if (now - fan.LastErrorAt > 60_000) { Console.WriteLine($"[fans] {fan.Name}: {ex.Message}"); fan.LastErrorAt = now; }
             }
-            if (!fan.IsGpu && fan.Mode != "auto")
-            {
-                if (_cpuGuard) { Send(fan, 100); continue; }
-                if (wasCpuGuard && fan.Mode == "manual") Send(fan, (int)fan.ManualPct);
-            }
-
-            FanCurve? curve = fan.Mode switch
-            {
-                "profile" => FanProfiles.CurveFor(profile, fan.Name, fan.IsGpu, fan.IsPump),
-                "curve"   => config.GetCurve(fan.Name) is { Enabled: true } c && c.Points.Count > 0 ? c : null,
-                _         => null
-            };
-            if (curve == null) continue;
-            Send(fan, CurveSpeed(fan, curve, SourceTemp(curve.TempSource, sensorData)));
         }
     }
 
-    private static float SourceTemp(string? source, SensorData d) => source switch
+    private void UpdateFan(FanEntry fan, SensorData sensorData, AppConfig config, string profile, bool stale)
     {
-        "ccd0"        => d.ccd0_temp ?? d.cpu_temp ?? 50f,
-        "ccd1"        => d.ccd1_temp ?? d.cpu_temp ?? 50f,
-        "gpu"         => d.gpu?.temp_core ?? d.gpu_temp ?? 50f,
-        "gpu_hotspot" => d.gpu?.temp_hotspot ?? d.gpu_temp ?? 50f,
-        "gpu_mem"     => d.gpu?.temp_mem ?? d.gpu_temp ?? 50f,
-        _             => d.cpu_temp ?? 50f
-    };
+        if (fan.CtrlSensor?.Control == null || fan.RpmSensor.Hardware.HardwareType == HardwareType.GpuIntel) return;
+        bool hot = GuardOn(fan);
+
+        // A health check is running: it owns the fan, unless its guard trips. Then the
+        // check is stopped and the fan goes to full speed straight away.
+        if (fan.Testing)
+        {
+            if (hot && !fan.AbortTest)
+            {
+                fan.AbortTest = true;
+                lock (_hwLock) fan.CtrlSensor.Control.SetSoftware(100);
+                Console.WriteLine($"[fans] {fan.Name}: too hot during the health check — stopped, fan at 100%.");
+            }
+            return;
+        }
+        if (fan.Mode == "auto") { fan.Guarded = fan.NoTemp = false; return; }   // the BIOS / driver's job
+
+        bool wasGuarded = fan.Guarded;
+        fan.Guarded = hot;
+        if (hot) { Send(fan, 100); return; }
+        if (wasGuarded && fan.Mode == "manual") Send(fan, (int)fan.ManualPct);
+
+        FanCurve? curve = fan.Mode switch
+        {
+            "profile" => FanProfiles.CurveFor(profile, fan.Name, fan.IsGpu, fan.IsPump),
+            "curve"   => config.GetCurve(fan.Name) is { Enabled: true } c && c.Points is { Count: > 0 } ? c : null,
+            _         => null
+        };
+        if (curve == null) { fan.NoTemp = false; if (fan.Mode == "manual") Send(fan, (int)fan.ManualPct); return; }
+
+        float? temp = SourceTemp(curve.TempSource, sensorData, fan, stale);
+        if (temp == null)
+        {
+            if (!fan.NoTemp) Console.WriteLine($"[fans] {fan.Name}: no usable '{curve.TempSource ?? "cpu"}' temperature — running at 100% until it's back.");
+            fan.NoTemp = true;
+            Send(fan, 100);
+            return;
+        }
+        if (fan.NoTemp) { fan.NoTemp = false; fan.CurveSpeed = -1; }
+        Send(fan, CurveSpeed(fan, curve, temp.Value));
+    }
+
+    // The temperature a curve follows, or null if there's no usable reading
+    // (the caller then runs the fan at 100%)
+    private static float? SourceTemp(string? source, SensorData d, FanEntry fan, bool stale)
+    {
+        if (stale) return null;
+        bool own = fan.IsGpu && HasOwnGpuCore(fan);
+        float? v = source switch
+        {
+            "ccd0"        => Usable(d.ccd0_temp) ?? d.cpu_temp,
+            "ccd1"        => Usable(d.ccd1_temp) ?? d.cpu_temp,
+            "gpu"         => own ? OwnGpuTemp(fan, "GPU Core")     : d.gpu?.temp_core ?? d.gpu_temp,
+            "gpu_hotspot" => own ? OwnGpuTemp(fan, "GPU Hot Spot") ?? OwnGpuTemp(fan, "GPU Core") : d.gpu?.temp_hotspot ?? d.gpu_temp,
+            "gpu_mem"     => d.gpu?.temp_mem ?? d.gpu_temp,
+            _             => d.cpu_temp
+        };
+        return Usable(v);
+    }
 
     /// <summary>
     /// Curve speed with hysteresis and a minimum speed. Speeding up happens at once;
@@ -318,13 +439,17 @@ public class FanController
         return isPump ? Math.Max(p, PumpMinPct) : p;
     }
 
-    // Every speed Vexis sets goes through here: made safe, and only sent when it changes
+    // Every speed Vexis sets goes through here: made safe, and sent when it changes.
+    // It's also re-sent every ResendMs, in case the board took control back (sleep /
+    // resume, or another fan program) without Vexis knowing.
+    internal const long ResendMs = 10_000;
     private static void Send(FanEntry fan, int pct)
     {
         pct = SafeSpeed(pct, fan.IsPump);
-        if (pct == fan.LastSent) return;
+        long now = Environment.TickCount64;
+        if (pct == fan.LastSent && now - fan.LastSentAt < ResendMs) return;
         lock (_hwLock) fan.CtrlSensor?.Control?.SetSoftware(pct);
-        fan.LastSent = pct;
+        fan.LastSent = pct; fan.LastSentAt = now;
     }
 
     /// <summary>
@@ -341,9 +466,13 @@ public class FanController
             if (fan.CtrlSensor?.Control == null || fan.RpmSensor.Hardware.HardwareType == HardwareType.GpuIntel) continue;
             fan.CurveSpeed = -1; fan.LastSent = -1;
             if (profile != "custom") { fan.Mode = "profile"; continue; }
-            if (fan.Mode == "manual") { Send(fan, (int)fan.ManualPct); continue; }
-            if (config.GetCurve(fan.Name) is { Enabled: true } c && c.Points.Count > 0) fan.Mode = "curve";
-            else { fan.Mode = "auto"; try { lock (_hwLock) fan.CtrlSensor.Control.SetDefault(); } catch (Exception ex) { Console.WriteLine($"[fans] {fan.Name}: couldn't hand control back to the BIOS: {ex.Message}"); } }
+            try
+            {
+                if (fan.Mode == "manual") { Send(fan, (int)fan.ManualPct); continue; }
+                if (config.GetCurve(fan.Name) is { Enabled: true } c && c.Points is { Count: > 0 }) fan.Mode = "curve";
+                else { fan.Mode = "auto"; lock (_hwLock) fan.CtrlSensor.Control.SetDefault(); }
+            }
+            catch (Exception ex) { Console.WriteLine($"[fans] {fan.Name}: couldn't apply its setting: {ex.Message}"); }
         }
         Console.WriteLine($"[fans] Profile: {profile}");
     }
@@ -376,7 +505,7 @@ public class FanController
             if (fanSensors <= _fans.Count) return;
 
             Console.WriteLine($"[fans] {fanSensors - _fans.Count} new fan sensor(s) appeared — rescanning.");
-            var previous = _fans.ToDictionary(f => f.Name);
+            var previous = _fans.GroupBy(f => f.Name).ToDictionary(g => g.Key, g => g.First());
             Discover(_hardware);
             var fresh = new List<FanEntry>();
             foreach (var f in _fans)
@@ -395,7 +524,7 @@ public class FanController
                 {
                     if (f.CtrlSensor?.Control == null || f.RpmSensor.Hardware.HardwareType == HardwareType.GpuIntel) continue;
                     if (profile != "custom") f.Mode = "profile";
-                    else if (_config.GetCurve(f.Name) is { Enabled: true } c && c.Points.Count > 0) f.Mode = "curve";
+                    else if (_config.GetCurve(f.Name) is { Enabled: true } c && c.Points is { Count: > 0 }) f.Mode = "curve";
                 }
             }
         }
@@ -451,23 +580,40 @@ public class FanController
         if (fan.CtrlSensor?.Control == null)
             return new FanHealthResult { FanName = fanName, Status = "NO_CONTROL", Message = "Fan has no software control — BIOS controlled only." };
 
+        // Not while its over-temperature guard has the fan at full speed
+        if (GuardOn(fan))
+            return new FanHealthResult { FanName = fanName, Status = "SKIPPED", Message = "Too hot to test right now: the fan is at full speed until it cools down." };
+
         var readings = new List<(int SetPct, float MeasuredRpm)>();
 
         // Three steps, low to full. Pumps start at their floor, never lower. The poll
         // loop skips the fan while Testing is set, so the two don't fight over it.
         int[] steps = fan.IsPump ? new[] { PumpMinPct, 75, 100 } : new[] { 30, 60, 100 };
+        // If the guard trips during the check, the poll sets AbortTest and puts the fan at
+        // 100%; the check then stops before writing another step.
+        fan.AbortTest = false;
         fan.Testing = true;
         try
         {
             foreach (int step in steps)
             {
                 int pct = SafeSpeed(step, fan.IsPump);
-                lock (_hwLock) fan.CtrlSensor.Control.SetSoftware(pct);
-                Thread.Sleep(2000);  // worker thread: give the fan time to settle
+                lock (_hwLock)
+                {
+                    if (fan.AbortTest) throw new TooHotException();
+                    fan.CtrlSensor.Control.SetSoftware(pct);
+                }
+                // worker thread: give the fan 2 s to settle, checking for the guard as it goes
+                for (int w = 0; w < 8; w++) { Thread.Sleep(250); if (fan.AbortTest) throw new TooHotException(); }
                 float rpm = fan.RpmSensor.Value ?? 0f;
                 readings.Add((pct, rpm));
                 Console.WriteLine($"[health] {fanName} @ {pct}% → {rpm:F0} RPM");
             }
+        }
+        catch (TooHotException)
+        {
+            fan.HealthStatus = null;
+            return new FanHealthResult { FanName = fanName, Status = "STOPPED", Message = "Stopped: it got too hot during the check, so the fan went to full speed." };
         }
         catch (Exception ex)
         {
@@ -483,7 +629,8 @@ public class FanController
             fan.LastSent = -1; fan.CurveSpeed = -1;
             try
             {
-                if (fan.Mode == "auto") { lock (_hwLock) fan.CtrlSensor.Control.SetDefault(); }
+                if (fan.AbortTest && fan.Mode != "auto") Send(fan, 100);       // the guard takes it from here
+                else if (fan.Mode == "auto") { lock (_hwLock) fan.CtrlSensor.Control.SetDefault(); }
                 else if (fan.Mode == "manual") Send(fan, (int)fan.ManualPct);
             }
             catch (Exception ex) { Console.WriteLine($"[health] {fanName} restore failed: {ex.Message}"); }
@@ -544,7 +691,10 @@ public class FanController
             minPct      = f.IsPump ? PumpMinPct : 0,
             isPump      = f.IsPump,
             pumpByName  = f.PumpByName,
-            failsafe    = f.Mode != "auto" && !f.Testing && (f.IsGpu ? _gpuGuard : _cpuGuard),
+            failsafe    = !f.Testing && (f.Guarded || f.NoTemp),
+            failsafeWhy = f.NoTemp ? "No temperature reading — running at 100% until it's back"
+                        : f.Guarded ? (f.IsGpu ? "GPU too hot — forced to 100% until it cools down" : "CPU too hot — forced to 100% until it cools down")
+                        : null,
             curveActive = f.Mode == "curve",
             mode        = f.Mode,
             healthStatus= f.HealthStatus
@@ -598,6 +748,10 @@ public class FanController
     public bool IsDiscovered => _discovered;
     public List<string> FanNames => _fans.Select(f => f.Name).ToList();
 
+    // "Fan Control #2" and "Fan #2" → "2"; "GPU Fan" → "gpu"
+    internal static string Key(string sensorName) =>
+        new string(sensorName.ToLowerInvariant().Replace("fan", "").Replace("control", "").Where(ch => ch != '#' && !char.IsWhiteSpace(ch)).ToArray());
+
     private FanEntry? Find(string name) =>
         _fans.FirstOrDefault(f => f.Name == name);
 }
@@ -617,3 +771,5 @@ public class HealthReading
     public int   Pct { get; set; }
     public float Rpm { get; set; }
 }
+
+internal sealed class TooHotException : Exception { }

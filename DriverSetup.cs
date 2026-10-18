@@ -108,7 +108,8 @@ public static class DriverSetup
         try
         {
             using var p = Process.Start(new ProcessStartInfo
-            { FileName = setup, Arguments = args, UseShellExecute = false, CreateNoWindow = true });
+            { FileName = setup, Arguments = args, UseShellExecute = false, CreateNoWindow = true,
+              WorkingDirectory = Environment.SystemDirectory });
             if (p == null) return "failed to start";
             p.WaitForExit(60_000);
             return $"exit code {p.ExitCode}";
@@ -126,7 +127,17 @@ public static class DriverSetup
         {
             using var svc = Registry.LocalMachine.OpenSubKey(
                 @"SYSTEM\CurrentControlSet\Services\WinRing0_1_2_0");
-            if (svc != null)
+            // Other monitoring tools register a service with the same name. Only remove it if
+            // its driver file is one an old Vexis put there (in a folder with Vexis in it)
+            string image = Environment.ExpandEnvironmentVariables(svc?.GetValue("ImagePath") as string ?? "")
+                .Replace(@"\??\", "").Trim('"');
+            string? imageDir = Path.GetDirectoryName(image);
+            bool ours = imageDir != null && (
+                string.Equals(Path.GetFullPath(imageDir).TrimEnd('\\'), AppContext.BaseDirectory.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase) ||
+                File.Exists(Path.Combine(imageDir, "Vexis.exe")));
+            if (svc != null && !ours)
+                Console.WriteLine($"[hw] A WinRing0 service exists but belongs to another program ({image}) — left alone.");
+            if (svc != null && ours)
             {
                 RunHidden("sc.exe", "stop WinRing0_1_2_0");
                 RunHidden("sc.exe", "delete WinRing0_1_2_0");
@@ -188,20 +199,6 @@ public static class DriverSetup
         catch { return null; }
     }
 
-    private static string RunHidden(string file, string args)
-    {
-        try
-        {
-            using var p = Process.Start(new ProcessStartInfo
-            {
-                FileName = file, Arguments = args, UseShellExecute = false, CreateNoWindow = true,
-                RedirectStandardOutput = true
-            });
-            if (p == null) return "";
-            string output = p.StandardOutput.ReadToEnd();
-            p.WaitForExit(5000);
-            return output;
-        }
-        catch { return ""; }
-    }
+    // sc.exe and friends by full path, with a timeout that really applies (see SysTools)
+    private static string RunHidden(string file, string args) => SysTools.Run(file, args, 5000).output;
 }

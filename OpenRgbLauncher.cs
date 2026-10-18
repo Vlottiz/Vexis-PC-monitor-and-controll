@@ -39,7 +39,7 @@ public static class OpenRgbLauncher
         {
             Console.WriteLine("[rgb] OpenRGB isn't installed in Program Files — opening the download page. " +
                               "A portable copy elsewhere has to be started by hand with --server.");
-            Process.Start(new ProcessStartInfo { FileName = "https://openrgb.org", UseShellExecute = true });
+            SysTools.OpenUrl("https://openrgb.org");
             return;
         }
         try

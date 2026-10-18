@@ -100,11 +100,7 @@ public class MainForm : Form
                 "Open the download page now? (Choose \"Evergreen Bootstrapper\", install it, then start Vexis again.)",
                 "Vexis — WebView2 required", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
             if (answer == DialogResult.Yes)
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = "https://developer.microsoft.com/microsoft-edge/webview2/",
-                    UseShellExecute = true
-                });
+                SysTools.OpenUrl("https://developer.microsoft.com/microsoft-edge/webview2/");
             Application.Exit();
             return;
         }
@@ -662,7 +658,7 @@ public class MainForm : Form
                 case "showRecording":
                 {
                     var path = CsvRecorder.ResolveFile(msg.file);
-                    if (path != null) System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{path}\"");
+                    if (path != null) SysTools.RevealFile(path);
                     break;
                 }
 
@@ -680,7 +676,7 @@ public class MainForm : Form
 
                 case "openLogFolder":
                     Directory.CreateDirectory(CsvRecorder.Folder);
-                    System.Diagnostics.Process.Start("explorer.exe", $"\"{CsvRecorder.Folder}\"");
+                    System.Diagnostics.Process.Start(SysTools.Explorer, $"\"{CsvRecorder.Folder}\"");
                     break;
 
                 case "clearAlerts":
@@ -775,7 +771,8 @@ public class MainForm : Form
                     break;
 
                 case "popOut":
-                    if (msg.page != null) Invoke(() => OpenPopout(msg.page));
+                    if (PopoutForm.IsKnownPage(msg.page)) Invoke(() => OpenPopout(msg.page!));
+                    else Console.WriteLine($"[msg] popOut refused (unknown page): {msg.page}");
                     break;
 
                 case "checkUpdate":                 // enabled:true = "check again" button
@@ -790,8 +787,7 @@ public class MainForm : Form
                     // Shell-execute opens whatever it's given — a web page, but also a program
                     // or a file. Only hand it https:// links so a page can never start anything else.
                     if (SafeLinks.IsWebLink(msg.url, out var link))
-                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                        { FileName = link, UseShellExecute = true });
+                        SysTools.OpenUrl(link);   // via Explorer, so the browser doesn't get admin rights
                     else
                         Console.WriteLine($"[msg] openUrl refused (not an https link): {msg.url}");
                     break;
@@ -896,7 +892,7 @@ public class MainForm : Form
                 case "dupReveal":
                     // Only files the last scan found, never an arbitrary path from the page
                     if (_dupes.IsInResults(msg.file) && File.Exists(msg.file))
-                        System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{msg.file}\"");
+                        SysTools.RevealFile(msg.file);
                     break;
 
                 case "crashOpenLog":  CrashHelper.OpenLog(); break;

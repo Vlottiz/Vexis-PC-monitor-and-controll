@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
 <meta http-equiv="Cache-Control" content="no-cache, no-store">
 <title>PC Monitor — Processes</title>
 <link rel="stylesheet" href="/ui.css?v=12">
@@ -177,7 +178,8 @@ function askEnd() {
   $('c-text').textContent = (one ? 'This process will be closed immediately.' : `All ${g.count} process${g.count > 1 ? 'es' : ''} of ${g.name} will be closed immediately.`) +
     ' Unsaved work in it will be lost.' + (g.type === 'win' ? ' This is part of Windows — ending it may make Windows unstable.' : '');
   $('confirm').style.display = 'flex';
-  $('c-ok').onclick = () => { closeConfirm(); sendToHost(one ? { type:'endTask', pid:one.pid } : { type:'endTask', file:g.key }); };
+  // The name goes with the PID, so the app can tell if Windows reused the number for another program
+  $('c-ok').onclick = () => { closeConfirm(); sendToHost(one ? { type:'endTask', pid:one.pid, file:g.key } : { type:'endTask', file:g.key }); };
 }
 function closeConfirm() { $('confirm').style.display = 'none'; }
 document.addEventListener('keydown', e => {

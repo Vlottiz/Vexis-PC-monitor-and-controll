@@ -18,7 +18,7 @@ public static class StartupManager
 
     public static bool IsEnabled()
     {
-        var (exit, _) = Run("schtasks.exe", $"/Query /TN \"{TaskName}\"");
+        var (exit, _) = SysTools.Run("schtasks.exe", $"/Query /TN \"{TaskName}\"");
         return exit == 0;
     }
 
@@ -29,7 +29,7 @@ public static class StartupManager
         {
             if (!enabled)
             {
-                var (exit, output) = Run("schtasks.exe", $"/Delete /TN \"{TaskName}\" /F");
+                var (exit, output) = SysTools.Run("schtasks.exe", $"/Delete /TN \"{TaskName}\" /F");
                 Console.WriteLine($"[startup] Start with Windows off (schtasks exit {exit}) {output.Trim()}");
                 return IsEnabled();
             }
@@ -74,10 +74,24 @@ public static class StartupManager
                 </Task>
                 """;
 
-            string file = Path.Combine(Path.GetTempPath(), "vexis-startup-task.xml");
-            File.WriteAllText(file, xml, Encoding.Unicode); // matches encoding="UTF-16"
-            var (code, text) = Run("schtasks.exe", $"/Create /TN \"{TaskName}\" /XML \"{file}\" /F");
-            try { File.Delete(file); } catch { }   // temp file: Windows cleans it up
+            // The task runs Vexis elevated at every sign-in, so the XML must be exactly what was
+            // written here. It goes in a new random folder (nothing can be planted beforehand),
+            // is read back through a read-only handle that stays open while schtasks imports it
+            // (nothing can change it in between), and is only imported if it reads back the same.
+            string dir  = Path.Combine(Path.GetTempPath(), "Vexis-Task-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            string file = Path.Combine(dir, "task.xml");
+            int code; string text;
+            try
+            {
+                using (var w = new FileStream(file, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                using (var sw = new StreamWriter(w, Encoding.Unicode)) sw.Write(xml);   // matches encoding="UTF-16"
+                using var held = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read);
+                using (var sr = new StreamReader(held, Encoding.Unicode, false, 4096, leaveOpen: true))
+                    if (sr.ReadToEnd() != xml) throw new IOException("the task file changed before it was imported");
+                (code, text) = SysTools.Run("schtasks.exe", $"/Create /TN \"{TaskName}\" /XML \"{file}\" /F");
+            }
+            finally { try { Directory.Delete(dir, true); } catch { } }   // a locked leftover goes with %TEMP% cleanup
             Console.WriteLine($"[startup] Start with Windows on (schtasks exit {code}) {text.Trim()}");
         }
         catch (Exception ex)
@@ -87,20 +101,4 @@ public static class StartupManager
         return IsEnabled();
     }
 
-    private static (int exit, string output) Run(string file, string args)
-    {
-        try
-        {
-            using var p = Process.Start(new ProcessStartInfo
-            {
-                FileName = file, Arguments = args, UseShellExecute = false, CreateNoWindow = true,
-                RedirectStandardOutput = true, RedirectStandardError = true
-            });
-            if (p == null) return (-1, "");
-            string output = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
-            p.WaitForExit(10_000);
-            return (p.ExitCode, output);
-        }
-        catch (Exception ex) { return (-1, ex.Message); }
-    }
 }

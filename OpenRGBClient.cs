@@ -48,10 +48,19 @@ public class OpenRGBClient : IDisposable
 
     public OpenRGBClient(int port = 6742) { _port = port; }
 
+    // Limits for what the other end of the socket can make Vexis do. Port 6742 is only on
+    // this PC, but any local program could be listening there instead of OpenRGB.
+    private const uint MaxPacketBytes = 8 * 1024 * 1024;   // the biggest real device description is well under 1 MB
+    private static readonly TimeSpan IoTimeout = TimeSpan.FromSeconds(8);
+
     public async Task ConnectAsync()
     {
+        // Close any old socket first, so a reconnect never leaks one
+        try { _ns?.Dispose(); _tcp?.Dispose(); } catch { }   // already closed
+        _ns = null;
         _tcp = new TcpClient();
-        await _tcp.ConnectAsync("127.0.0.1", _port);
+        using (var cts = new CancellationTokenSource(IoTimeout))
+            await _tcp.ConnectAsync("127.0.0.1", _port, cts.Token);
         // Device data can take a few seconds while OpenRGB is still scanning hardware
         _tcp.ReceiveTimeout = 8000;
         _tcp.SendTimeout    = 5000;
@@ -99,9 +108,13 @@ public class OpenRGBClient : IDisposable
         buf[14] = (byte)((dl >> 16) & 0xFF);
         buf[15] = (byte)((dl >> 24) & 0xFF);
         data.CopyTo(buf, 16);
-        // Logs every packet header in hex — handy for protocol bugs, but chatty during effects
+        // Every packet header in hex — handy for protocol bugs, but it filled debug.log during
+        // effects, so only in Debug builds
+#if DEBUG
         Console.WriteLine($"[orgb] SEND hdr: devIdx={devIdx} pktId={pktId} dataLen={dl} | bytes: {string.Join(' ', buf.Take(16).Select(b => b.ToString("X2")))}");
-        await _ns!.WriteAsync(buf);
+#endif
+        using (var cts = new CancellationTokenSource(IoTimeout))
+            await _ns!.WriteAsync(buf, cts.Token);
     }
 
     private async Task<(uint devIdx, uint pktId, byte[] data)> RecvAsync()
@@ -113,6 +126,7 @@ public class OpenRGBClient : IDisposable
         uint devIdx = Read32(hdr, 4);
         uint pktId  = Read32(hdr, 8);
         uint len    = Read32(hdr, 12);
+        if (len > MaxPacketBytes) throw new IOException($"OpenRGB packet too large ({len} bytes)");
         var data = new byte[len];
         if (len > 0) await ReadExactAsync(data, (int)len);
         return (devIdx, pktId, data);
@@ -136,7 +150,11 @@ public class OpenRGBClient : IDisposable
         int got = 0;
         while (got < count)
         {
-            int n = await _ns!.ReadAsync(buf.AsMemory(got, count - got));
+            // ReceiveTimeout doesn't apply to async reads, so each read gets its own deadline
+            using var cts = new CancellationTokenSource(IoTimeout);
+            int n;
+            try { n = await _ns!.ReadAsync(buf.AsMemory(got, count - got), cts.Token); }
+            catch (OperationCanceledException) { throw new IOException("OpenRGB stopped answering"); }
             if (n == 0) throw new IOException("OpenRGB closed the connection");
             got += n;
         }
@@ -446,7 +464,6 @@ public class OpenRGBClient : IDisposable
     private static uint   Read32 (byte[] d, int off)       => BitConverter.ToUInt32(d, off);
     private static uint   Read32 (byte[] d, ref int p)     { var v=BitConverter.ToUInt32(d,p); p+=4; return v; }
     private static int    ReadU16(byte[] d, ref int p)     { var v=BitConverter.ToUInt16(d,p); p+=2; return v; }
-    private static void   Write32(byte[] b, int off, uint v) => BitConverter.TryWriteBytes(b.AsSpan(off, 4), v);
 
     private static string ReadStr(byte[] d, ref int p)
     {

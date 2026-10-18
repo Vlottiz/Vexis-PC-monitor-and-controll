@@ -90,6 +90,15 @@ Fan control is the part that can do real harm, so it's the most defensive:
   fans on manual or curve go to 100 % until both are 8 °C under. If the CPU reaches 95 °C, the case,
   CPU and pump fans on manual, curve or profile do the same until it's 10 °C under. Fans on auto are
   left to the BIOS. The on/off rule is one tested function, `NextGuard`.
+- **No temperature is not "cool".** A reading only counts if it's a real number, in a believable
+  range, from a snapshot under 8 s old. A curve or profile with no usable reading runs at 100 %. A
+  sensor that worked and then stops for 2 s is "lost", and lost counts as hot for the guards. A
+  sensor this PC never had is ignored. This is `Usable`, `TempTrack` and `NextGuard`, all tested.
+- **Per graphics card.** Each GPU has its own guard fed by its own sensors, and its fans follow it.
+- **Guards beat the health check.** A check won't start while its guard is on; if the guard trips
+  mid-check, the poll sets the fan to 100 % and the check stops before writing another step.
+- **One fan failing doesn't stop the rest.** Each fan is updated in its own try/catch, and each
+  hardware device is read in its own try/catch in `SensorService`.
 - **One writer at a time.** The poll runs on the UI thread, the health check on a worker thread.
   Every write to the fan chip takes the same lock, and a fan being health-checked is skipped by the
   poll. The health check uses the same safe speeds (pumps from 50 %) and puts the fan back in the
@@ -98,7 +107,8 @@ Fan control is the part that can do real harm, so it's the most defensive:
   a factory reset), and `RestoreFansSafely` also tries it on an unhandled crash or when Windows ends
   the process, so fans don't stay stuck at a manual speed. A hard kill (Task Manager → End task) or
   power loss can't run any code; then the BIOS takes over again at the next boot.
-- **Writes only on change.** Speeds are only sent to the hardware when they change (`LastSent`).
+- **Writes on change, plus a heartbeat.** Speeds are sent when they change (`LastSent`) and again every
+  10 s, in case the board took control back after sleep or another fan program changed it.
 
 ## Other pieces
 

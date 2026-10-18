@@ -92,7 +92,8 @@ Each release built by GitHub Actions ([`release.yml`](.github/workflows/release.
   Get-FileHash .\VexisHM-Setup.exe
   ```
   The in-app updater checks this automatically. It won't run an installer that doesn't match, and it
-  won't install a release that has no checksum at all. It downloads into a new folder each time and
+  won't install a release that has no checksum at all, and only ever picks the `VexisHM-Setup` installer
+  from a release, never another .exe. It downloads into a new folder each time and
   keeps the file locked from the check until the installer has started, so it can't be swapped in
   between.
 - **Build provenance.** GitHub signs a record of which commit and which workflow run built the
@@ -100,6 +101,8 @@ Each release built by GitHub Actions ([`release.yml`](.github/workflows/release.
   ```powershell
   gh attestation verify VexisHM-Setup.exe -R Vlottiz/Vexis-PC-monitor-and-controll
   ```
+- **Pinned build tools.** The release workflow uses GitHub Actions pinned to exact commits, a pinned
+  PawnIO installer (by SHA-256), a WebView2 installer that must be signed by Microsoft, and NSIS 3.09 or newer.
 - **Build information.** The exact source commit, build date, toolchain, and a link to the public
   Actions run that built it. The unit tests have to pass before anything is released.
 - **The commit inside the app.** **Info → About → Build** shows the commit the copy you're running
@@ -136,6 +139,11 @@ end tasks, recycle files and change fan speeds, the browser around them is locke
 - Developer tools are only available in Debug builds, and no app objects are exposed to the pages.
 - Names and text that come from outside Vexis (process names, file names, device and sensor names,
   log lines) are escaped before they're shown, and are never put into the pages' own code.
+- Pages carry a content security policy: they can't load scripts from or send data to anywhere
+  outside Vexis. Form autofill and password saving are off.
+- Windows tools (`sc`, `schtasks`, `explorer`, `taskkill`) are started by their full System32 path,
+  never by bare name, so a program planted in the current folder can't run in their place with
+  admin rights. Web links open through Explorer, so the browser runs as you, not as administrator.
 - OpenRGB is only started from `Program Files` (or the Vexis folder), which only administrators can
   change. Vexis runs elevated, so it never starts an `OpenRGB.exe` from Downloads, the desktop or `PATH`.
 - File paths a page sends are checked by the app: the duplicate finder only scans real folders and
