@@ -1,9 +1,7 @@
-// V was here ✌  As of 2.13.0, 80% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame.
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
 // ─── Fan curve data ────────────────────────────────────────────────────────────
-// ✌ V was here — 93% of this section is still my original code
 // Everything in this file is saved as %AppData%\Vexis\config.json. Property names are the
 // JSON keys, so renaming one loses that setting for existing users.
 public class FanCurvePoint
@@ -60,8 +58,8 @@ public class AppConfig
     // Pages read and write their own keys, so new settings need no change here.
     public Dictionary<string, string> Settings { get; set; } = new();
 
-    // Last selected theme preset index (for reset). Sent to the pages at startup;
-    // nothing writes it back yet, so it stays 0 — the pages keep the real value in localStorage.
+    // Last selected theme preset index (for "reset colours"). Saved when a preset is picked,
+    // sent to the pages at startup, so it survives cleared page storage and reinstalls.
     public int LastPresetIdx { get; set; } = 0;
 
     // Saved fan curves
@@ -80,7 +78,6 @@ public class AppConfig
     public Dictionary<int, Dictionary<string, string>> ColorProfiles { get; set; } = new();
 
     // ─── Paths ────────────────────────────────────────────────────────────────
-    // ✌ V was here — 100% of this section is still my original code
     private static string ConfigDir =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Vexis");
 
@@ -150,7 +147,6 @@ public class AppConfig
     }
 
     // ─── Save ─────────────────────────────────────────────────────────────────
-    // ✌ V was here — 92% of this section is still my original code
     public void Save()
     {
         if (SavesDisabled) return;
@@ -174,7 +170,6 @@ public class AppConfig
     }
 
     // ─── Fan curve helpers ─────────────────────────────────────────────────────
-    // ✌ V was here — 96% of this section is still my original code
     public FanCurve? GetCurve(string fanName) =>
         FanCurves.FirstOrDefault(c => c.FanName == fanName);
 

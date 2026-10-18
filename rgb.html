@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-<!-- V was here ✌  As of 2.13.0, 44% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame. -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -171,7 +170,7 @@
     </div>
   </div>
 </div>
-<script src="/nav.js?v=25" data-page="rgb"></script>
+<script src="/nav.js?v=26" data-page="rgb"></script><script src="/nav-theme.js?v=26"></script><script src="/nav-panel.js?v=26"></script><script src="/nav-styles.js?v=26"></script><script src="/nav-boot.js?v=26"></script>
 <script>
 const ORGB_PORT=localStorage.getItem('pcm-rgb-port')||'6742';
 let _devices=[],_connected=false,_callCounter=0;
@@ -277,7 +276,6 @@ async function ensureDirect(devIdx){
 function cleanMode(raw,idx){if(!raw)return'Mode '+idx;const c=raw.replace(/[^\x20-\x7E]/g,'').trim();return(c&&c.length<=32)?c:'Mode '+idx;}
 
 // ── Per-LED painter ──────────────────────────────────────────────────────────
-// ✌ V was here — 100% of this section is still my original code
 const _lc={},_exp=new Set();
 let _pt=false,_pd=-1;
 document.addEventListener('mouseup',()=>{_pt=false;_pd=-1;});
@@ -293,7 +291,6 @@ function fillAll(i){const{r,g,b}=hexRgb(pickH(i));getLC(i).fill({r,g,b});renderG
 async function sendLC(i){const btn=document.getElementById('lp-send-'+i);if(btn){btn.textContent='SENDING\u2026';btn.disabled=true;}try{await setDC(i,getLC(i),null);if(btn)btn.textContent='SENT \u2713';setTimeout(()=>{if(btn){btn.textContent='SEND \u25B6';btn.disabled=false;}},1200);}catch(e){if(btn){btn.textContent='ERROR';btn.disabled=false;}}}
 
 // ── RAM sync ─────────────────────────────────────────────────────────────────
-// ✌ V was here — 83% of this section is still my original code
 let _ramSync=localStorage.getItem('pcm-ram-sync')!=='0';
 // RAM sync: colour one RAM stick and the others follow
 function toggleSync(){_ramSync=!_ramSync;localStorage.setItem('pcm-ram-sync',_ramSync?'1':'0');document.querySelectorAll('.rsd').forEach(e=>e.classList.toggle('off',!_ramSync));document.querySelectorAll('.rsl').forEach(e=>e.textContent=_ramSync?'RAM STICKS SYNCED':'RAM STICKS UNLINKED');}
@@ -741,7 +738,6 @@ function bestColours(i){
 function updateModeChips(devIdx,am){document.querySelectorAll('#dev-modes-'+devIdx+' .mode-chip').forEach((c,mi)=>c.classList.toggle('active',mi===am));}
 
 // ── Status ────────────────────────────────────────────────────────────────────
-// ✌ V was here — 91% of this section is still my original code
 function stopAllAnims(){Object.keys(_devAnim).forEach(i=>stopDevAnim(Number(i)));updateAnimBtn();}
 
 // Open OpenRGB in full GUI mode for plugin/effect configuration.

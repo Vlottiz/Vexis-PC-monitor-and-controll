@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-<!-- V was here ✌  As of 2.13.0, 71% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame. -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -253,12 +252,11 @@ body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;backgr
 
 <div id="status">LIVE</div>
 
-<script src="/nav.js?v=25" data-page="performance"></script>
+<script src="/nav.js?v=26" data-page="performance"></script><script src="/nav-theme.js?v=26"></script><script src="/nav-panel.js?v=26"></script><script src="/nav-styles.js?v=26"></script><script src="/nav-boot.js?v=26"></script>
 <script>
 // ══════════════════════════════════════════════════════════════════════════════
 // WEBVIEW2 IPC — IS_WEBVIEW and sendToHost defined in nav.js
 // ══════════════════════════════════════════════════════════════════════════════
-// ✌ V was here — 100% of this section is still my original code
 
 // Set up message listener (nav.js already defined IS_WEBVIEW + sendToHost)
 if (IS_WEBVIEW) {
@@ -302,7 +300,6 @@ function persistSettings() {
 // ══════════════════════════════════════════════════════════════════════════════
 // HW INFO AUTO-FILL
 // ══════════════════════════════════════════════════════════════════════════════
-// ✌ V was here — 96% of this section is still my original code
 let _hwApplied = false;
 // Static CPU details (name, cores, socket...) — only changes once, so not redrawn every tick
 function applyHwInfo(info) {
@@ -363,7 +360,6 @@ function applyHwInfo(info) {
 // ══════════════════════════════════════════════════════════════════════════════
 // COLOR SYSTEM
 // ══════════════════════════════════════════════════════════════════════════════
-// ✌ V was here — 92% of this section is still my original code
 const COLOR_DEFAULTS={bg:'#0a0808',cardBg:'#120e08',border:'#443300',label:'#aa7700',dividerLine:'#443300',dividerLbl:'#ffcc00',headerTitle:'#ffcc00',headerSub:'#aa8800',headerAcc:'#00ffcc',headerTime:'#776600',titleGlow:'#ffcc00',glowCol:'#ffcc00',lineCol1:'#ffcc00',lineCol2:'#00ffcc',ccdLbl:'#ffcc00',coreLbl:'#aa8800',barBg:'#120a00',barStart:'#221100',barLow:'#443300',barMid:'#886600',barHigh:'#ffaa00',barBoost:'#ffcc00',tempCold:'#007799',tempMid:'#00ccaa',tempHot:'#00ffcc',tempVal:'#00ddaa',tempLow:'#00aacc',tempWarn:'#00ffcc',sumLbl:'#aa7700',peakCol:'#ffcc00',avgCol:'#00ffcc',pwrCol:'#ff6600',gpuAcc:'#00ffcc',memAcc:'#ffaa00',cardTitle:'#aa7700'};
 const VAR_MAP={bg:'--bg',cardBg:'--card-bg',border:'--border',label:'--label',dividerLine:'--divider-line',dividerLbl:'--divider-lbl',headerTitle:'--header-title',headerSub:'--header-sub',headerAcc:'--header-acc',headerTime:'--header-time',titleGlow:'--title-glow',glowCol:'--glow-col',lineCol1:'--line-col1',lineCol2:'--line-col2',ccdLbl:'--ccd-lbl',coreLbl:'--core-lbl',barBg:'--bar-bg',tempVal:'--temp-val',tempLow:'--temp-low',tempWarn:'--temp-warn',sumLbl:'--sum-lbl',peakCol:'--peak-col',avgCol:'--avg-col',pwrCol:'--pwr-col',gpuAcc:'--gpu-acc',memAcc:'--mem-acc',cardTitle:'--card-title'};
 let COLORS={...COLOR_DEFAULTS};
@@ -399,7 +395,8 @@ function setClockScale(baseMhz){if(baseMhz>1000){STOCK=baseMhz;MAX=Math.max(MAX,
 function trackMaxClock(clk){if(clk>MAX)MAX=Math.ceil(clk*1.02);}
 function clkEnd(clk){return clk>=MAX*0.94?COLORS.barBoost:clk>=STOCK*1.05?COLORS.barHigh:clk>=STOCK*0.8?COLORS.barMid:COLORS.barLow;}
 function barGrad(clk){return`linear-gradient(90deg,${COLORS.barStart} 0%,${clkEnd(clk)} 100%)`;}
-function tempCol(t){if(t==null)return COLORS.tempVal;return t<60?COLORS.tempLow:t<78?COLORS.tempWarn:COLORS.tempHot;}
+// This page has its own colour set, but the same bands as every other page (nav.js)
+function tempCol(t){if(t==null)return COLORS.tempVal;return t<NAV_TEMP_WARN?COLORS.tempLow:t<NAV_TEMP_HOT?COLORS.tempWarn:COLORS.tempHot;}
 // Dynamic core metadata — built from first data receive
 let CORES_META = [];
 let _barsBuilt = false;
@@ -666,7 +663,6 @@ function applyData(data){
 }
 
 // ── Boot ───────────────────────────────────────────────────────────────────
-// ✌ V was here — 80% of this section is still my original code
 applyAllColors();updateTempBars();updateAvgLabel();
 buildBars();startApplyTimer();setInterval(updateClock,1000);updateClock();
 </script>

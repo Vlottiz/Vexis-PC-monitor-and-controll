@@ -29,6 +29,12 @@ the GitHub release notes.
 - Installer: the install folder must be called Vexis, since uninstalling removes the whole folder
 - Builds: GitHub Actions pinned to exact commits, NSIS must be 3.09 or newer, and the local build checks the WebView2 installer's Microsoft signature
 - debug.log stops growing at 20 MB; LICENSE.txt credits LibreHardwareMonitor's MPL-2.0 license correctly
+- Fans: a watchdog on its own thread sends every fan Vexis controls to 100 % if fan updates stop for 10 s (e.g. the window hangs), and hands back normal control when they resume
+- Temperature colours are the same on every page (60 °C warm, 78 °C hot); they used to differ between the Temperatures, GPU, Thread Viewer and Home pages
+- End task also checks the process's start time, so a reused process number can't end the wrong program
+- Uninstalling from a shared folder (an install from before 2.14) only removes Vexis's own files, never files with common names
+- OpenRGB: one time limit for each whole reply, so a connection that trickles data can't keep Vexis waiting
+- Code: MainForm and nav.js are split into files by area, and a test checks every message a page sends has a handler
 
 ## 2.13.0 — 2026-10-16
 - Security: the interface's browser now runs with its normal security on (the old flags that turned it off are gone), only loads Vexis's own pages, and only accepts commands from them. Developer tools are off in released builds

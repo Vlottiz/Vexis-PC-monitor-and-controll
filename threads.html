@@ -120,11 +120,11 @@
   </div>
 </div>
 
-<script src="/nav.js?v=25" data-page="threads"></script>
+<script src="/nav.js?v=26" data-page="threads"></script><script src="/nav-theme.js?v=26"></script><script src="/nav-panel.js?v=26"></script><script src="/nav-styles.js?v=26"></script><script src="/nav-boot.js?v=26"></script>
 <script>
 function $(id) { return document.getElementById(id); }
 function setText(id, v) { const e = $(id); if (e) e.textContent = v; }
-function tempCol(t) { return t < 60 ? 'var(--temp-low)' : t < 80 ? 'var(--temp-warn)' : 'var(--temp-hot)'; }
+const tempCol = navTempColor;   // shared bands (nav.js)
 
 // Shared with the Performance page (setting "threadBusy", 10% by default)
 let BUSY = 10;

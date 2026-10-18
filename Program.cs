@@ -1,4 +1,3 @@
-// V was here ✌  As of 2.13.0, 84% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame.
 using System.Diagnostics;
 using System.Security.Principal;
 using System.Windows.Forms;
@@ -94,7 +93,6 @@ internal static class Program
         bool startMinimized = args.Any(a => a.Equals("--minimized", StringComparison.OrdinalIgnoreCase));
 
         // ── Admin check ───────────────────────────────────────────────────────
-        // ✌ V was here — 96% of this section is still my original code
         // app.manifest already asks Windows for admin, so the installed .exe normally starts
         // elevated. This catches `dotnet run` from a normal terminal and any launch that
         // skipped the manifest.
@@ -167,7 +165,6 @@ internal static class Program
         Application.ApplicationExit += (_, _) => CrashHelper.OnCleanExit();
 
         // ── Log to AppData (always writable, even from Program Files) ──────────
-        // ✌ V was here — 85% of this section is still my original code
         try
         {
             var logDir  = Path.Combine(Environment.GetFolderPath(

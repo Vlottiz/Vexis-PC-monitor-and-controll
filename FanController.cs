@@ -1,4 +1,3 @@
-// V was here ✌  As of 2.13.0, 48% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame.
 using LibreHardwareMonitor.Hardware;
 using System.Management;
 
@@ -34,8 +33,10 @@ internal class FanEntry
     public int      CurveSpeed   { get; set; } = -1;
     public float    CurveTemp    { get; set; }
     public int      LastSent     { get; set; } = -1;
-    public bool     Testing      { get; set; }   // health check running: the poll loop leaves it alone
-    public bool     AbortTest    { get; set; }   // set by the poll when a guard trips during a health check
+    // Shared between the poll (UI thread) and the health-check worker, hence volatile
+    private volatile bool _testing, _abortTest;
+    public bool     Testing      { get => _testing;   set => _testing = value; }     // health check running: the poll loop leaves it alone
+    public bool     AbortTest    { get => _abortTest; set => _abortTest = value; }   // set by the poll when a guard trips during a health check
     public long     LastSentAt   { get; set; }   // when LastSent was written (the speed is re-sent every ResendMs)
     public bool     Guarded      { get; set; }   // forced to 100% by an over-temperature guard this tick
     public bool     NoTemp       { get; set; }   // on a curve/profile with no usable temperature → 100%
@@ -97,7 +98,6 @@ public class FanController
     private readonly List<string> _wmiFanNames = new();
 
     // ─── Discovery ─────────────────────────────────────────────────────────────
-    // ✌ V was here — 92% of this section is still my original code
     /// <summary>
     /// Scan all hardware for fan + control sensor pairs.
     /// Called after LHM Computer is open and updated, and again by RescanIfNewFans
@@ -172,7 +172,6 @@ public class FanController
         Console.WriteLine($"[fans] Discovered {_fans.Count} fan(s) total.");
 
         // ── WMI fallback for boards whose SuperIO LHM doesn't support ──────────
-        // ✌ V was here — 96% of this section is still my original code
         // If the SuperIO chip can't be read, motherboard fan headers show up with
         // zero sensors. Win32_Fan gives read-only RPM data (no software control)
         // but is better than showing nothing.
@@ -344,6 +343,9 @@ public class FanController
                 if (now - fan.LastErrorAt > 60_000) { Console.WriteLine($"[fans] {fan.Name}: {ex.Message}"); fan.LastErrorAt = now; }
             }
         }
+        // Tell the watchdog this pass completed
+        Volatile.Write(ref _lastUpdateAt, Environment.TickCount64);
+        if (_watchdogTripped) { _watchdogTripped = false; Console.WriteLine("[fans] Watchdog: fan updates running again — normal speeds restored."); }
     }
 
     private void UpdateFan(FanEntry fan, SensorData sensorData, AppConfig config, string profile, bool stale)
@@ -736,6 +738,7 @@ public class FanController
     /// Called on exit so a GPU fan is never left at a fixed speed.</summary>
     public void RestoreAll()
     {
+        StopWatchdog();   // fans are being handed back on purpose
         foreach (var f in _fans)
         {
             if (f.Mode == "auto" && !f.Testing) continue;
@@ -744,6 +747,50 @@ public class FanController
         }
         Console.WriteLine("[fans] Fan control handed back to BIOS / driver.");
     }
+
+    // ─── Watchdog ──────────────────────────────────────────────────────────────
+    // Update() runs on the UI thread (MainForm's poll timer). If that thread hangs — a stuck
+    // WebView2 call, a modal dialog, a deadlock — no fan code runs at all, guards included.
+    // This timer runs on its own thread: if Update hasn't completed for WatchdogMs, every fan
+    // Vexis controls goes to 100% until Update runs again (which re-sends the normal speeds).
+    internal const long WatchdogMs = 10_000;
+    private System.Threading.Timer? _watchdog;
+    private long _lastUpdateAt;      // Environment.TickCount64 of the last full Update
+    private volatile bool _watchdogTripped;
+
+    /// <summary>Starts the watchdog. Call once fans are discovered and the profile is applied.</summary>
+    public void StartWatchdog()
+    {
+        Volatile.Write(ref _lastUpdateAt, Environment.TickCount64);   // the first Update gets the full 10 s
+        _watchdog ??= new System.Threading.Timer(_ => WatchdogTick(), null, 1000, 1000);
+    }
+
+    private void StopWatchdog() { _watchdog?.Dispose(); _watchdog = null; }
+
+    /// <summary>True when fans should be forced to full speed: no completed Update for too long.</summary>
+    internal static bool WatchdogShouldTrip(long lastUpdateAt, long now) => now - lastUpdateAt > WatchdogMs;
+
+    private void WatchdogTick()
+    {
+        try
+        {
+            if (_watchdogTripped || !WatchdogShouldTrip(Volatile.Read(ref _lastUpdateAt), Environment.TickCount64)) return;
+            _watchdogTripped = true;
+            Console.WriteLine("[fans] WATCHDOG: fan updates stopped for 10 s — every fan Vexis controls set to 100%.");
+            foreach (var f in _fans.ToList())   // a copy: rediscovery may swap the list
+            {
+                if (f.Mode == "auto" && !f.Testing) continue;   // the BIOS / driver has it
+                if (f.CtrlSensor?.Control == null) continue;
+                try { lock (_hwLock) f.CtrlSensor.Control.SetSoftware(100); }
+                catch (Exception ex) { Console.WriteLine($"[fans] WATCHDOG: {f.Name}: {ex.Message}"); }
+                f.LastSent = -1;   // the next Update re-sends the real speed
+            }
+        }
+        catch (Exception ex) { Console.WriteLine($"[fans] WATCHDOG error: {ex.Message}"); }
+    }
+
+    // Tests: run the controller on fake fans (no hardware)
+    internal void UseFansForTest(IEnumerable<FanEntry> fans) { _fans = fans.ToList(); _discovered = true; }
 
     public bool IsDiscovered => _discovered;
     public List<string> FanNames => _fans.Select(f => f.Name).ToList();
@@ -757,7 +804,6 @@ public class FanController
 }
 
 // ─── Health check result ───────────────────────────────────────────────────────
-// ✌ V was here — 100% of this section is still my original code
 public class FanHealthResult
 {
     public string           FanName  { get; set; } = "";

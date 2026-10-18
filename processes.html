@@ -83,7 +83,7 @@
 <div id="confirm"><div class="box"><h3 id="c-title">END TASK?</h3><p id="c-text"></p>
   <div class="btns"><button class="btn btn-ghost" onclick="closeConfirm()">CANCEL</button><button class="btn btn-primary end-btn" id="c-ok">END TASK</button></div></div></div>
 
-<script src="/nav.js?v=25" data-page="processes"></script>
+<script src="/nav.js?v=26" data-page="processes"></script><script src="/nav-theme.js?v=26"></script><script src="/nav-panel.js?v=26"></script><script src="/nav-styles.js?v=26"></script><script src="/nav-boot.js?v=26"></script>
 <script>
 function $(id) { return document.getElementById(id); }
 const esc = escHtml;
@@ -178,8 +178,8 @@ function askEnd() {
   $('c-text').textContent = (one ? 'This process will be closed immediately.' : `All ${g.count} process${g.count > 1 ? 'es' : ''} of ${g.name} will be closed immediately.`) +
     ' Unsaved work in it will be lost.' + (g.type === 'win' ? ' This is part of Windows — ending it may make Windows unstable.' : '');
   $('confirm').style.display = 'flex';
-  // The name goes with the PID, so the app can tell if Windows reused the number for another program
-  $('c-ok').onclick = () => { closeConfirm(); sendToHost(one ? { type:'endTask', pid:one.pid, file:g.key } : { type:'endTask', file:g.key }); };
+  // The name and start time go with the PID, so the app can tell if Windows reused the number for another program
+  $('c-ok').onclick = () => { closeConfirm(); sendToHost(one ? { type:'endTask', pid:one.pid, started:one.started, file:g.key } : { type:'endTask', file:g.key }); };
 }
 function closeConfirm() { $('confirm').style.display = 'none'; }
 document.addEventListener('keydown', e => {

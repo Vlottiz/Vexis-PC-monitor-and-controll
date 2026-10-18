@@ -1,4 +1,3 @@
-// V was here ✌  As of 2.13.0, 47% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame.
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json.Nodes;
@@ -117,10 +116,10 @@ public class OpenRGBClient : IDisposable
             await _ns!.WriteAsync(buf, cts.Token);
     }
 
-    private async Task<(uint devIdx, uint pktId, byte[] data)> RecvAsync()
+    private async Task<(uint devIdx, uint pktId, byte[] data)> RecvAsync(CancellationToken ct)
     {
         var hdr = new byte[16];
-        await ReadExactAsync(hdr, 16);
+        await ReadExactAsync(hdr, 16, ct);
         uint magic = Read32(hdr, 0);
         if (magic != MAGIC) throw new Exception($"Bad magic: 0x{magic:X8}");
         uint devIdx = Read32(hdr, 4);
@@ -128,33 +127,37 @@ public class OpenRGBClient : IDisposable
         uint len    = Read32(hdr, 12);
         if (len > MaxPacketBytes) throw new IOException($"OpenRGB packet too large ({len} bytes)");
         var data = new byte[len];
-        if (len > 0) await ReadExactAsync(data, (int)len);
+        if (len > 0) await ReadExactAsync(data, (int)len, ct);
         return (devIdx, pktId, data);
     }
 
     // OpenRGB also sends unsolicited packets (e.g. DEVICE_LIST_UPDATED, id 100, while it
     // is still detecting hardware). Skip anything that isn't the reply we asked for.
+    // One deadline covers the whole reply — header, payload and any packets skipped on the
+    // way — so a peer that trickles a byte at a time can't keep Vexis waiting past IoTimeout.
     private async Task<byte[]> RecvReplyAsync(uint expectedPktId)
     {
-        for (int skipped = 0; ; skipped++)
+        using var cts = new CancellationTokenSource(IoTimeout);
+        try
         {
-            var (_, pktId, data) = await RecvAsync();
-            if (pktId == expectedPktId) return data;
-            Console.WriteLine($"[orgb] skipped unsolicited packet id={pktId} len={data.Length}");
-            if (skipped > 50) throw new IOException("no reply from OpenRGB");
+            for (int skipped = 0; ; skipped++)
+            {
+                var (_, pktId, data) = await RecvAsync(cts.Token);
+                if (pktId == expectedPktId) return data;
+                Console.WriteLine($"[orgb] skipped unsolicited packet id={pktId} len={data.Length}");
+                if (skipped > 50) throw new IOException("no reply from OpenRGB");
+            }
         }
+        catch (OperationCanceledException) { throw new IOException("OpenRGB stopped answering"); }
     }
 
-    private async Task ReadExactAsync(byte[] buf, int count)
+    // ReceiveTimeout doesn't apply to async reads; the caller's token is the deadline
+    private async Task ReadExactAsync(byte[] buf, int count, CancellationToken ct)
     {
         int got = 0;
         while (got < count)
         {
-            // ReceiveTimeout doesn't apply to async reads, so each read gets its own deadline
-            using var cts = new CancellationTokenSource(IoTimeout);
-            int n;
-            try { n = await _ns!.ReadAsync(buf.AsMemory(got, count - got), cts.Token); }
-            catch (OperationCanceledException) { throw new IOException("OpenRGB stopped answering"); }
+            int n = await _ns!.ReadAsync(buf.AsMemory(got, count - got), ct);
             if (n == 0) throw new IOException("OpenRGB closed the connection");
             got += n;
         }
@@ -460,7 +463,6 @@ public class OpenRGBClient : IDisposable
     }
 
     // ── Binary helpers ────────────────────────────────────────────────────────
-    // ✌ V was here — 79% of this section is still my original code
     private static uint   Read32 (byte[] d, int off)       => BitConverter.ToUInt32(d, off);
     private static uint   Read32 (byte[] d, ref int p)     { var v=BitConverter.ToUInt32(d,p); p+=4; return v; }
     private static int    ReadU16(byte[] d, ref int p)     { var v=BitConverter.ToUInt16(d,p); p+=2; return v; }

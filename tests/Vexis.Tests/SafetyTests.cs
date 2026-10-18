@@ -313,3 +313,25 @@ public class DuplicateRootTests
         finally { Directory.Delete(root, true); }
     }
 }
+
+public class WatchdogTests
+{
+    [Fact]
+    public void Trips_only_after_fan_updates_stop_for_the_limit()
+    {
+        Assert.False(FanController.WatchdogShouldTrip(lastUpdateAt: 1_000, now: 1_000 + FanController.WatchdogMs));
+        Assert.True (FanController.WatchdogShouldTrip(lastUpdateAt: 1_000, now: 1_001 + FanController.WatchdogMs));
+    }
+}
+
+public class ProcessIdentityTests
+{
+    [Theory]
+    [InlineData(1_700_000_000_000, 1_700_000_000_000, true)]    // same process
+    [InlineData(1_700_000_000_000, 1_700_000_000_001, true)]    // rounding
+    [InlineData(1_700_000_000_000, 1_700_000_090_000, false)]   // PID reused by a newer process
+    [InlineData(0, 1_700_000_000_000, true)]                    // page didn't know: name check decides
+    [InlineData(1_700_000_000_000, 0, true)]                    // Windows won't say now: name check decides
+    public void A_reused_pid_is_caught_by_its_start_time(long shown, long now, bool same) =>
+        Assert.Equal(same, ProcessMonitor.SameStart(shown, now));
+}

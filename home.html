@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-<!-- V was here ✌  As of 2.13.0, 68% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame. -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -213,7 +212,7 @@
   </div>
 </div>
 
-<script src="/nav.js?v=25" data-page="home"></script>
+<script src="/nav.js?v=26" data-page="home"></script><script src="/nav-theme.js?v=26"></script><script src="/nav-panel.js?v=26"></script><script src="/nav-styles.js?v=26"></script><script src="/nav-boot.js?v=26"></script>
 <script>
 setInterval(()=>{ const e=document.getElementById('htime'); if(e)e.textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}); },1000);
 
@@ -258,8 +257,8 @@ function applyHwInfo(info){
 }
 
 // Temperature → colour: under 60 °C cool, under 78 °C warm, above that hot
-function tc(t){if(t==null)return'var(--label)'; return t<60?'var(--temp-low)':t<78?'var(--temp-warn)':'var(--temp-hot)';}
-function tempBadge(t){if(t==null)return'badge-dim'; return t<60?'badge-ok':t<78?'badge-warn':'badge-hot';}
+const tc = navTempColor;   // shared bands (nav.js)
+function tempBadge(t){if(t==null)return'badge-dim'; return t<NAV_TEMP_WARN?'badge-ok':t<NAV_TEMP_HOT?'badge-warn':'badge-hot';}
 function sv(id,v){const e=document.getElementById(id);if(e)e.textContent=v;}
 function sc(id,c){const e=document.getElementById(id);if(e)e.style.color=c;}
 function sw(id,w){const e=document.getElementById(id);if(e)e.style.width=w+'%';}

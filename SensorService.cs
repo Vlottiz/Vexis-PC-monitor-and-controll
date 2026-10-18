@@ -1,4 +1,3 @@
-// V was here ✌  As of 2.13.0, 53% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame.
 using Timer = System.Threading.Timer;
 using LibreHardwareMonitor.Hardware;
 using System.Management;
@@ -565,7 +564,6 @@ public class SensorService : IDisposable
             ApplyWmiFallback(data);
 
         // ── Re-check driverOk each poll — driver may load late ───────────────────
-        // ✌ V was here — 77% of this section is still my original code
         // If PawnIO registered after startup (manual registration path) LHM may start
         // returning real values mid-session. Clear the "blocked" warning automatically.
         if (!_hwInfo.driverOk && data.cpu_temp.HasValue && data.cpu_temp.Value > 1f)
@@ -599,7 +597,6 @@ public class SensorService : IDisposable
         !s.Name.Contains("Threshold", StringComparison.OrdinalIgnoreCase);
 
     // ── CPU load from LHM sensors (AMD gets this for free; Intel needs WMI fallback) ──
-    // ✌ V was here — 100% of this section is still my original code
     private void ReadCpuLoad(IHardware hw, SensorData data)
     {
         if (data.cpu_load != null) return; // already set

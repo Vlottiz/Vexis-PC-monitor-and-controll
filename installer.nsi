@@ -1,4 +1,3 @@
-; V was here  As of 2.13.0, 45% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame.
 ; Vexis Installer
 ; Build: run build-installer.bat (it publishes the app and passes the version)
 ; Manual: makensis /DVERSION=2.1.0 installer.nsi  |  Requires .\publish\ folder
@@ -12,7 +11,6 @@
 !include "FileFunc.nsh"
 
 ; ── Metadata ──────────────────────────────────────────────────────────────────
-; V was here - 100% of this section is still my original code
 Name              "Vexis Hardware Monitoring"
 OutFile           "VexisHM-Setup.exe"
 !define MUI_ICON                     "vexis.ico"
@@ -194,7 +192,6 @@ Function .onInstSuccess
 FunctionEnd
 
 ; ── Uninstall ─────────────────────────────────────────────────────────────────
-; V was here - 78% of this section is still my original code
 Section "Uninstall"
   ; Stop running instance
   !insertmacro CloseVexis
@@ -208,12 +205,19 @@ Section "Uninstall"
   ${If} $0 == "\Vexis"
     RMDir /r "$INSTDIR"
   ${Else}
+    ; Only files that are unmistakably Vexis's. Its page files (index.html, nav.js, ...) have
+    ; names other programs use too, so in a shared folder they are left alone, never deleted
+    ; by wildcard or by a generic name.
     Delete "$INSTDIR\Vexis.exe"
+    Delete "$INSTDIR\Vexis.dll"
+    Delete "$INSTDIR\Vexis.deps.json"
+    Delete "$INSTDIR\Vexis.runtimeconfig.json"
+    Delete "$INSTDIR\Vexis.pdb"
+    Delete "$INSTDIR\vexis.ico"
     Delete "$INSTDIR\Uninstall.exe"
-    Delete "$INSTDIR\*.html"
-    Delete "$INSTDIR\nav.js"
-    Delete "$INSTDIR\ui.css"
-    DetailPrint "Vexis was installed in a shared folder ($INSTDIR); only its main files were removed."
+    DetailPrint "Vexis was installed in a shared folder ($INSTDIR). Only Vexis.* files were removed;"
+    DetailPrint "its other files (pages, libraries) have common names and were left in place."
+    MessageBox MB_OK|MB_ICONINFORMATION "Vexis was installed in a shared folder:$\r$\n$INSTDIR$\r$\n$\r$\nTo protect other programs' files, only Vexis's own program files were removed. You can delete its remaining files (pages, .dll libraries) by hand if you know they're not used by anything else."
   ${EndIf}
 
   ; Remove shortcuts

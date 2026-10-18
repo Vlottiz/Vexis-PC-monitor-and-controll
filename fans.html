@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-<!-- V was here ✌  As of 2.13.0, 72% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame. -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -99,7 +98,7 @@
     <div id="fans-list"></div>
   </div>
 </div>
-<script src="/nav.js?v=25" data-page="fans"></script>
+<script src="/nav.js?v=26" data-page="fans"></script><script src="/nav-theme.js?v=26"></script><script src="/nav-panel.js?v=26"></script><script src="/nav-styles.js?v=26"></script><script src="/nav-boot.js?v=26"></script>
 <script>
 // ── State ─────────────────────────────────────────────────────────────────────
 const fanStates = {};
@@ -131,7 +130,6 @@ const FAN_NAMES = [];
 function fanArg(name) { let i = FAN_NAMES.indexOf(name); if (i < 0) { i = FAN_NAMES.length; FAN_NAMES.push(name); } return `FAN_NAMES[${i}]`; }
 
 // ── Mode ──────────────────────────────────────────────────────────────────────
-// ✌ V was here — 95% of this section is still my original code
 function setMode(name, mode) {
   const s = gs(name), id = sid(name);
   if (PROFILE !== 'custom') onFanProfile('custom');   // the host switches back to Custom too
@@ -157,7 +155,6 @@ function applyManual(name) {
 }
 
 // ── Health check ──────────────────────────────────────────────────────────────
-// ✌ V was here — 100% of this section is still my original code
 function runHealth(name) {
   const id  = sid(name);
   const btn = document.getElementById(`hbtn-${id}`);
@@ -168,7 +165,6 @@ function runHealth(name) {
 }
 
 // ── Curve editor ──────────────────────────────────────────────────────────────
-// ✌ V was here — 80% of this section is still my original code
 const PAD = {l:6,r:6,t:8,b:8};
 const TMIN=20, TMAX=100;
 
@@ -471,7 +467,6 @@ function buildCard(fan) {
 }
 
 // ── Data ──────────────────────────────────────────────────────────────────────
-// ✌ V was here — 91% of this section is still my original code
 function receiveData(data) {
   _latestData = data;
   const fans = data.fans;
