@@ -486,10 +486,31 @@ public class SensorService : IDisposable
 
     private readonly HashSet<string> _hwErrorLogged = new();   // log each failing device once
 
+    // RAM sticks' own temperature chips (SPD hubs) sit on the same SMBus as RAM RGB. Reading
+    // them 8 times a second collides with OpenRGB writing colours to the sticks (colours that
+    // don't show, garbled stick names). RAM temperature changes slowly: every 5 s is plenty.
+    private const long DimmEveryMs = 5000;
+    private readonly Dictionary<string, long> _dimmReadAt = new();
+
+    internal static bool IsDimm(HardwareType type, string name) =>
+        type == HardwareType.Memory &&
+        !name.Contains("Virtual Memory", StringComparison.OrdinalIgnoreCase) &&
+        !name.Contains("Total Memory", StringComparison.OrdinalIgnoreCase) &&
+        !name.Contains("Generic Memory", StringComparison.OrdinalIgnoreCase);
+
     private void ReadHardware(IHardware hw, SensorData data)
     {
+        bool dimm = IsDimm(hw.HardwareType, hw.Name);
+        bool dimmDue = true;
+        if (dimm)
         {
-            hw.Update();
+            string key = hw.Identifier.ToString();
+            long now = Environment.TickCount64;
+            dimmDue = !_dimmReadAt.TryGetValue(key, out var at) || now - at >= DimmEveryMs;
+            if (dimmDue) _dimmReadAt[key] = now;
+        }
+        {
+            if (!dimm || dimmDue) hw.Update();   // between reads, a stick's last values are used
             // The CPU is updated twice per poll (as in ScanHardware). This comes from the
             // original code; whether the second read still matters hasn't been tested
             // on hardware, so it stays until it has.
@@ -513,7 +534,7 @@ public class SensorService : IDisposable
             // so tell them apart by hardware name (Virtual Memory is listed first).
             if (hw.HardwareType == HardwareType.Memory)
             {
-                hw.Update();
+                if (!dimm) hw.Update();   // system memory: a second read as before; never extra bus reads for sticks
                 bool isVirtual = hw.Name.Contains("Virtual", StringComparison.OrdinalIgnoreCase);
                 foreach (var s in hw.Sensors)
                 {

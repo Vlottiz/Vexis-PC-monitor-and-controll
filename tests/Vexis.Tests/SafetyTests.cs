@@ -335,3 +335,14 @@ public class ProcessIdentityTests
     public void A_reused_pid_is_caught_by_its_start_time(long shown, long now, bool same) =>
         Assert.Equal(same, ProcessMonitor.SameStart(shown, now));
 }
+
+public class DimmPollingTests
+{
+    [Theory]
+    [InlineData("G Skill Intl - F5-6000J3038F16G (#3)", true)]    // a RAM stick: read every 5 s
+    [InlineData("Virtual Memory", false)]                          // system memory: every poll
+    [InlineData("Total Memory", false)]
+    [InlineData("Generic Memory", false)]
+    public void Only_ram_sticks_are_read_less_often(string name, bool dimm) =>
+        Assert.Equal(dimm, SensorService.IsDimm(LibreHardwareMonitor.Hardware.HardwareType.Memory, name));
+}

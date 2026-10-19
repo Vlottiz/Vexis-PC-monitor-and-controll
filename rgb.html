@@ -257,7 +257,7 @@ function isRam(i){const d=_devices[i];if(!d)return false;const n=(d.name||'').to
 // otherwise their hardware animation keeps running and each LED update restarts it
 // (the RAM symptom). Devices with only mode-specific colours (often GPUs: "Static")
 // take the colour through the mode itself.
-const _modeReady={};                      // devIdx → custom mode already set this session
+const _modeReady={};                      // devIdx → 'direct' | 'static': which colour mode is already set
 function colorModeIdx(d){                 // mode that takes a single colour
   const ms=d?.modes||[];
   let i=ms.findIndex(m=>m.color_mode===2&&/static/i.test(m.name||''));
@@ -269,10 +269,26 @@ function supportsColor(d){return !!d&&!d.skip&&((d.per_led&&d.num_leds>0)||color
 function canColor(d){return supportsColor(d)&&!isReleasedDev(d);}
 async function ensureDirect(devIdx){
   const d=_devices[devIdx];
-  if(!d||!d.per_led||_modeReady[devIdx])return;
+  if(!d||!d.per_led||_modeReady[devIdx]==='direct')return;
   delete _hwMode[devIdx];
   await orgbPut('/devices/'+devIdx+'/mode',{custom:true});
-  _modeReady[devIdx]=true;
+  _modeReady[devIdx]='direct';
+}
+// RAM (ENE and similar SMBus RGB): a plain colour goes through the stick's own per-LED
+// "Static" mode rather than Direct. Direct needs many slow bus writes for every change (and
+// Vexis re-sending it), and on some kits it doesn't show at all while the hardware modes
+// do. In Static the colour is stored on the stick, so it needs no re-sending.
+// Software effects still use Direct (they need its fast refresh).
+function ramStaticIdx(devIdx){
+  if(!isRam(devIdx))return -1;
+  const ms=_devices[devIdx]?.modes||[];
+  return ms.findIndex(m=>m.color_mode===1&&/static/i.test(m.name||''));
+}
+async function ensureStatic(devIdx,mi){
+  if(_modeReady[devIdx]==='static')return;
+  delete _hwMode[devIdx];
+  await orgbPut('/devices/'+devIdx+'/mode',{mode:mi});
+  _modeReady[devIdx]='static';
 }
 function cleanMode(raw,idx){if(!raw)return'Mode '+idx;const c=raw.replace(/[^\x20-\x7E]/g,'').trim();return(c&&c.length<=32)?c:'Mode '+idx;}
 
@@ -322,7 +338,13 @@ async function setDC(devIdx,leds,hex){
   if(_devAnim[devIdx]){stopDevAnim(devIdx);if(!Object.keys(_devAnim).length)stopFx();else updateAnimBtn();}
   delete _hwMode[devIdx];
   const dev=_devices[devIdx]||{};
-  if(dev.per_led){
+  const rs=ramStaticIdx(devIdx);
+  if(dev.per_led&&rs>=0){
+    // RAM: Static mode, colours stored on the stick (no 2 s re-send, less bus traffic)
+    clearHold(devIdx);
+    await ensureStatic(devIdx,rs);
+    await orgbPut('/devices/'+devIdx+'/leds',leds);
+  }else if(dev.per_led){
     await ensureDirect(devIdx);
     await orgbPut('/devices/'+devIdx+'/leds',leds);
     // Keep color alive — fires every 2 s for devices whose hardware may revert
