@@ -15,7 +15,8 @@
   /* Thread map: one box per core, one cell per thread coloured by load */
   .map-group { margin-bottom:12px; }
   .map-title { font-size:calc(9px*var(--fs-base,1)); color:var(--label-dim); letter-spacing:.16em; margin:0 0 6px; }
-  .map { display:grid; grid-template-columns:repeat(auto-fill,minmax(calc(92px*var(--fs-base,1)),1fr)); gap:8px; }
+  /* auto-fit (not auto-fill): no empty columns on the right — the core boxes stretch to fill the width */
+  .map { display:grid; grid-template-columns:repeat(auto-fit,minmax(calc(92px*var(--fs-base,1)),1fr)); gap:8px; }
   .core { border:1px solid var(--border); border-radius:4px; padding:6px 7px; background:var(--bar-bg); cursor:default; }
   .core.busy { border-color:var(--border-bright); }
   .core-head { display:flex; justify-content:space-between; align-items:baseline; font-family:monospace; margin-bottom:5px; }

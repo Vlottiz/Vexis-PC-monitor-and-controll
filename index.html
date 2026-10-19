@@ -506,6 +506,8 @@ window.setSparklines = function(on) {
   applySideLayout();
 };
 function toggleSparklines() { setSparklines(!SPARKLINES_VISIBLE); }
+// Sparklines change how tall each row is, so re-fit the bars after toggling them
+(function(){const f=window.setSparklines;window.setSparklines=function(on){f(on);fitBarsSoon();};})();
 
 // Keeps a short history per value and redraws its little line graph
 function pushSparkline(id, val) {
@@ -542,12 +544,13 @@ function buildBars(){
     const el=document.getElementById('ccd'+ci+'bars');
     CORES_META.filter(c=>c.ccd===ci).forEach(c=>{
       const wrap=document.createElement('div');
-      wrap.style.cssText='margin-bottom:7px;display:flex;align-items:center;gap:8px';
+      wrap.className='cbar-row';
+      wrap.style.cssText='margin-bottom:calc(7px*var(--bar-s,1));display:flex;align-items:center;gap:8px';
       wrap.innerHTML=`
         <div style="width:calc(30px*var(--fs-base,1)*var(--data-scale,1));text-align:right;font-size:calc(13px*var(--fs-base,1));color:var(--core-lbl);flex-shrink:0;font-weight:600;line-height:1">${c.rank===1?'★':''}${c.label||'C'+c.id}</div>
         <div class="thr" id="thr${c.id}"><span class="thr-dots"></span><span class="thr-n"></span></div>
         <div style="flex:1;display:flex;flex-direction:column;gap:1px">
-          <div style="height:14px;background:var(--bar-bg);border-radius:2px;overflow:hidden;border:1px solid var(--border);position:relative">
+          <div style="height:calc(14px*var(--bar-s,1));background:var(--bar-bg);border-radius:2px;overflow:hidden;border:1px solid var(--border);position:relative">
             <div id="bar${c.id}" style="position:absolute;inset:0;transition:background .4s,clip-path .4s,opacity .4s;opacity:0.15"></div>
           </div>
           <div class="spark-row" style="display:${SPARKLINES_VISIBLE?'block':'none'}">
@@ -559,7 +562,33 @@ function buildBars(){
       el.appendChild(wrap);
     });
   });
+  fitBars();
 }
+
+// The core bars grow (thicker bars, more space between) to use the height of the window,
+// so there's no empty band between them and the panels underneath. Up to 3× thicker.
+function fitBars(){
+  const box=document.getElementById('cores-center');if(!box)return;
+  const rows=box.querySelectorAll('.cbar-row').length;if(!rows)return;
+  // Height the content needs (scrollHeight can't tell: it never reports less than the box
+  // itself), measured to the bottom of the last visible child, skipping the end spacer
+  const used=()=>{const top=box.getBoundingClientRect().top;let bottom=top;
+    for(const ch of box.children){if(!ch.offsetParent||getComputedStyle(ch).flexGrow!=='0')continue;
+      bottom=Math.max(bottom,ch.getBoundingClientRect().bottom+(parseFloat(getComputedStyle(ch).marginBottom)||0));}
+    return bottom-top;};
+  // A row is a bit taller than bar + gap (labels, thread dots), so refine in a few passes
+  let s=1;box.style.setProperty('--bar-s','1');
+  for(let k=0;k<4;k++){
+    const spare=box.clientHeight-used()-4;
+    s=Math.max(1,Math.min(3,s+spare/(rows*21)));
+    box.style.setProperty('--bar-s',s.toFixed(3));
+  }
+  if(box.scrollHeight>box.clientHeight+1){s=Math.max(1,s-0.05);box.style.setProperty('--bar-s',s.toFixed(3));}   // never overflow
+}
+let _fitT=null;
+function fitBarsSoon(){clearTimeout(_fitT);_fitT=setTimeout(fitBars,60);}
+window.addEventListener('resize',fitBarsSoon);
+document.addEventListener('nav-scale',fitBarsSoon);
 
 let _lastPulseTime=0;
 function flashPulse(){const now=Date.now(),ms=_lastPulseTime>0?now-_lastPulseTime:0;_lastPulseTime=now;const el=document.getElementById('update-pulse');if(!el)return;el.textContent=ms>0?(ms<1000?ms+'ms':(ms/1000).toFixed(1)+'s'):'···';el.classList.remove('flash');void el.offsetWidth;el.classList.add('flash');}

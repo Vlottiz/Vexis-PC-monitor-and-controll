@@ -96,6 +96,12 @@ function boot() {
   if (NAV_IS_POPOUT) initPopoutBadge();
   else               initNav();
   navApplyStoredFontScale();
+  // Re-scale when the window is resized (debounced: resizing fires many events)
+  let resizeT = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeT);
+    resizeT = setTimeout(() => navSetFontScale(localStorage.getItem('pcm-font-scale') || '100'), 120);
+  });
   navWireCollapsibles();
   // Update state (the host caches it, so this only reaches GitHub once per launch)
   if (IS_WEBVIEW) setTimeout(() => sendToHost({ type: 'checkUpdate' }), 1200);

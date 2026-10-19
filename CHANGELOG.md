@@ -39,6 +39,9 @@ the GitHub release notes.
 - RGB: the GUI and stop buttons no longer close an OpenRGB you started yourself when Vexis can't start it again
 - RGB: RAM colours and brightness use the sticks' own Static mode instead of Direct. On some kits (e.g. G.Skill with ENE) Direct colours didn't show at all while the built-in animations did; Static stores the colour on the stick, so it also isn't re-sent every 2 s
 - RAM stick temperatures are read every 5 s instead of 8 times a second: they share a bus with RAM RGB, and the constant reads were colliding with OpenRGB's colour writes
+- The whole app scales with the window: in a big window text and boxes grow (up to 1.8×, on top of the text size slider) instead of leaving empty space. Small windows look as before. Switch: System → Scale with window
+- Performance: the core bars grow to use the window's height, so the info panels sit right under them with no empty gap
+- Thread Viewer: the thread map's core boxes stretch across the full width
 
 ## 2.13.0 — 2026-10-16
 - Security: the interface's browser now runs with its normal security on (the old flags that turned it off are gone), only loads Vexis's own pages, and only accepts commands from them. Developer tools are off in released builds

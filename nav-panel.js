@@ -173,6 +173,13 @@ function buildPanelHTML() {
     <div id="nvs-system" class="nv-section" style="display:none;padding:12px 10px">
       <div style="font-size:9px;color:#665500;letter-spacing:.1em;margin-bottom:10px">SYSTEM SETTINGS</div>
 
+      <!-- Scale with window -->
+      <div style="padding:8px 0;border-bottom:1px solid rgba(68,51,0,.2);display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:10px;color:var(--label)" title="In a big window, text and boxes grow with it instead of leaving empty space">Scale with window</span>
+        <label class="nv-switch"><input type="checkbox" id="nv-auto-scale" onchange="navSetAutoScale(this.checked)">
+          <span class="nv-switch-track"><span class="nv-switch-knob"></span></span></label>
+      </div>
+
       <!-- Page UI Font Size -->
       <div style="padding:8px 0;border-bottom:1px solid rgba(68,51,0,.2)">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
@@ -341,9 +348,24 @@ function buildPanelHTML() {
 
 // Text size slider: every page sizes its text as calc(Npx * var(--fs-base)), so one
 // CSS variable scales the whole UI. Saved per PC in localStorage
+// Scale with the window: pages size their text and boxes as N px × --fs-base, so growing
+// --fs-base with the window makes a big window fill up instead of showing empty space.
+// 1× up to 1280×800 (small windows never shrink), up to 1.8×; on top of the slider below.
+// Switch in System → "Scale with window".
+function navAutoScaleOn() { try { return localStorage.getItem('pcm-auto-scale') !== '0'; } catch { return true; } }
+function navAutoFactor() {
+  if (!navAutoScaleOn()) return 1;
+  return Math.max(1, Math.min(1.8, Math.min(window.innerWidth / 1280, window.innerHeight / 800)));
+}
+window.navSetAutoScale = function(on) {
+  try { localStorage.setItem('pcm-auto-scale', on ? '1' : '0'); } catch {}
+  navSetFontScale(localStorage.getItem('pcm-font-scale') || '100');
+};
+
 function navSetFontScale(pct) {
-  const scale = parseFloat(pct) / 100;
+  const scale = parseFloat(pct) / 100 * navAutoFactor();
   document.documentElement.style.setProperty('--fs-base', scale);
+  document.dispatchEvent(new Event('nav-scale'));   // pages that fit things to the space (Performance) re-fit
   localStorage.setItem('pcm-font-scale', pct);
   const val = document.getElementById('nv-font-val');
   if (val) val.textContent = pct + '%';
@@ -373,6 +395,8 @@ window.navSetNavScale = function(pct) {
 function navApplyStoredFontScale() {
   // Page UI font
   const stored = localStorage.getItem('pcm-font-scale') || '100';
+  const auto = document.getElementById('nv-auto-scale');
+  if (auto) auto.checked = navAutoScaleOn();
   const slider = document.getElementById('nv-font-slider');
   if (slider) slider.value = stored;
   navSetFontScale(stored);
