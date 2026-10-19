@@ -35,6 +35,8 @@ the GitHub release notes.
 - Uninstalling from a shared folder (an install from before 2.14) only removes Vexis's own files, never files with common names
 - OpenRGB: one time limit for each whole reply, so a connection that trickles data can't keep Vexis waiting
 - Code: MainForm and nav.js are split into files by area, and a test checks every message a page sends has a handler
+- RGB: OpenRGB is found anywhere under Program Files again, including the zip's own "OpenRGB Windows 64-bit" folder (2.13 only looked in Program Files\OpenRGB). If it's somewhere else, the RGB page now says where and what to do, instead of only opening the website
+- RGB: the GUI and stop buttons no longer close an OpenRGB you started yourself when Vexis can't start it again
 
 ## 2.13.0 — 2026-10-16
 - Security: the interface's browser now runs with its normal security on (the old flags that turned it off are gone), only loads Vexis's own pages, and only accepts commands from them. Developer tools are off in released builds

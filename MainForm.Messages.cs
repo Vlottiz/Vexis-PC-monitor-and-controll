@@ -346,6 +346,9 @@ public partial class MainForm
                 break;
 
             case "killOpenRGB":
+                // Only stop a copy Vexis can start again; one the user started by hand from
+                // elsewhere would otherwise be gone for good
+                if (OpenRgbLauncher.FindExe() == null) { Console.WriteLine("[rgb] Not stopping OpenRGB: Vexis couldn't start it again"); break; }
                 OpenRgbLauncher.StopAll();
                 _orgbClient?.ResetFailedDevices();
                 _orgbClient = null;
@@ -362,18 +365,21 @@ public partial class MainForm
 
             case "launchOpenRGB":
                 if (OpenRgbLauncher.IsRunning()) { Console.WriteLine("[rgb] OpenRGB already running"); break; }
-                _sensor.PausePoll(5000);   // OpenRGB scans the RAM bus at start; keep LHM off it meanwhile
-                OpenRgbLauncher.Start();
+                if (OpenRgbLauncher.FindExe() != null)
+                    _sensor.PausePoll(5000);   // OpenRGB scans the RAM bus at start; keep LHM off it meanwhile
+                ReportOpenRgbStart(OpenRgbLauncher.Start());
                 break;
 
             case "launchOpenRGBGui":
-                // Restart it so its window opens; wait off the UI thread while the old copy exits
+                // Restart it so its window opens; wait off the UI thread while the old copy exits.
+                // Not if Vexis can't start it again (see killOpenRGB)
+                if (OpenRgbLauncher.FindExe() == null) { ReportOpenRgbStart(OpenRgbLauncher.Start()); break; }
                 _orgbClient = null;
                 _ = Task.Run(async () =>
                 {
                     OpenRgbLauncher.StopAll();
                     await Task.Delay(800);
-                    OpenRgbLauncher.Start();
+                    ReportOpenRgbStart(OpenRgbLauncher.Start());
                 });
                 break;
             default: return false;

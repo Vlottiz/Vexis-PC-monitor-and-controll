@@ -115,6 +115,7 @@
       </div>
       <button class="btn btn-primary" onclick="sendToHost({type:'openUrl',url:'https://openrgb.org'})" style="width:100%;justify-content:center;margin-top:8px">&#x2197; Download OpenRGB</button>
       <button class="btn btn-ghost" onclick="if(!this._l){this._l=true;this.textContent='&#x25B6; Launching...';sendToHost({type:'launchOpenRGB'});setTimeout(()=>{this._l=false;this.textContent='&#x25B6; Launch OpenRGB (as Admin)';},6000);}" style="width:100%;justify-content:center;margin-top:6px">&#x25B6; Launch OpenRGB (as Admin)</button>
+      <div id="orgb-start-msg" class="stat-sub" style="display:none;margin-top:8px;color:var(--temp-warn);line-height:1.4"></div>
       <div style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:calc(10px*var(--fs-base,1));color:var(--label-dim)">
         <span>SDK Port:</span>
         <input type="number" value="6742" min="1024" max="65535" style="width:70px;background:var(--surface2);border:1px solid var(--border);color:var(--label);padding:3px 6px;border-radius:3px;font-family:monospace;font-size:calc(11px*var(--fs-base,1))" onchange="localStorage.setItem('pcm-rgb-port',this.value);location.reload()">
@@ -745,6 +746,15 @@ function stopAllAnims(){Object.keys(_devAnim).forEach(i=>stopDevAnim(Number(i)))
 // in server mode when the user closes OpenRGB.
 let _guiWatchInterval=null;
 // ⚙ GUI: opens OpenRGB's own window (with its SDK server on, so Vexis stays connected)
+// The app couldn't start OpenRGB: say why (where it was found, what to do)
+function onOpenRgbStart(msg){
+  const el=document.getElementById('orgb-start-msg');
+  if(el){el.textContent='\u26A0 '+msg;el.style.display='block';}
+  const sub=document.getElementById('rgb-sub');
+  if(sub)sub.textContent='OpenRGB not started — see below';
+  stopRetryLoop();
+  const rb=document.getElementById('retry-btn-txt'); if(rb)rb.textContent='RETRY';
+}
 function openRgbGui(){
   // Stop all active holds and animations so PCMonitor stops sending during GUI session
   Object.keys(_hold).forEach(i=>clearHold(Number(i)));

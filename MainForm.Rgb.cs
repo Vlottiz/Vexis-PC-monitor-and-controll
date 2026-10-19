@@ -69,4 +69,11 @@ public partial class MainForm
         }
         finally { _orgbLock.Release(); }
     }
+
+    // Tells the RGB page when OpenRGB couldn't be started, and why (where it was found, what to do)
+    private void ReportOpenRgbStart((bool ok, string message) r)
+    {
+        if (r.ok) return;
+        RunScriptEverywhere($"typeof onOpenRgbStart==='function'&&onOpenRgbStart({JsonSerializer.Serialize(r.message)})");
+    }
 }
