@@ -200,3 +200,149 @@ public sealed class PathCheckTests : IDisposable
     public void Only_vexis_recordings_can_be_opened(string name) =>
         Assert.Null(CsvRecorder.ResolveFile(name));
 }
+
+// Temperatures the fans can trust (FanController): a missing, impossible or stale reading
+// must never look "cool", and a sensor that stops working counts as hot.
+public class FailSafeTemperatureTests
+{
+    [Theory]
+    [InlineData(float.NaN)]
+    [InlineData(float.PositiveInfinity)]
+    [InlineData(0f)]
+    [InlineData(-5f)]
+    [InlineData(200f)]
+    public void Impossible_readings_are_not_used(float t) => Assert.Null(FanController.Usable(t));
+
+    [Fact]
+    public void Real_readings_are_used() => Assert.Equal(65f, FanController.Usable(65f));
+
+    [Fact]
+    public void A_sensor_that_stops_working_is_lost_after_a_short_wait()
+    {
+        var track = new FanController.TempTrack();
+        Assert.False(track.Read(60f, 95f, 0).Lost);
+        Assert.False(track.Read(null, 95f, 100).Lost);                              // one bad tick: not yet
+        Assert.True(track.Read(null, 95f, 100 + FanController.LostAfterMs).Lost);  // gone for 2 s: lost
+        Assert.False(track.Read(61f, 95f, 5000).Lost);                              // back again
+    }
+
+    [Fact]
+    public void A_sensor_this_PC_never_had_is_not_lost()
+    {
+        var track = new FanController.TempTrack();
+        var r = track.Read(null, 95f, 60_000);
+        Assert.False(r.Seen);
+        Assert.False(r.Lost);
+    }
+
+    [Fact]
+    public void A_lost_sensor_turns_the_guard_on() =>
+        Assert.True(FanController.NextGuard(false, 10f, new FanController.GuardReading(null, 95f, Seen: true, Lost: true)));
+
+    [Fact]
+    public void A_missing_reading_never_turns_the_guard_off() =>
+        // Before: a missing CPU temperature became 0 °C and released the guard
+        Assert.True(FanController.NextGuard(true, 10f, new FanController.GuardReading(null, 95f, Seen: true, Lost: false)));
+
+    [Fact]
+    public void A_sensor_this_PC_never_had_does_not_hold_the_guard() =>
+        // e.g. a GPU without a hot-spot sensor: the core reading alone decides
+        Assert.False(FanController.NextGuard(true, 8f,
+            new FanController.GuardReading(70f, 90f),
+            new FanController.GuardReading(null, 100f, Seen: false)));
+}
+
+public class FanPairingTests
+{
+    [Theory]
+    [InlineData("Fan #2", "Fan Control #2")]
+    [InlineData("Fan #2", "Fan #2")]
+    [InlineData("GPU Fan", "GPU Fan")]
+    public void Rpm_and_control_sensor_names_match(string rpm, string control) =>
+        Assert.Equal(FanController.Key(rpm), FanController.Key(control));
+
+    [Fact]
+    public void Different_headers_do_not_match() =>
+        Assert.NotEqual(FanController.Key("Fan #1"), FanController.Key("Fan Control #2"));
+}
+
+public class CurveValidationTests
+{
+    [Fact]
+    public void A_curve_with_null_points_becomes_an_empty_curve()
+    {
+        var c = System.Text.Json.JsonSerializer.Deserialize<FanCurve>("""{"FanName":"Fan #1","Enabled":true,"Points":null}""")!;
+        c.Normalized();
+        Assert.NotNull(c.Points);
+        Assert.Empty(c.Points);
+    }
+
+    [Fact]
+    public void Out_of_range_values_are_clamped()
+    {
+        var c = new FanCurve
+        {
+            TempSource = "toaster", Hysteresis = 500, MinSpeed = -3,
+            Points = new() { new() { Temp = -40, Speed = 250 }, new() { Temp = 999, Speed = -1 } }
+        }.Normalized();
+        Assert.Equal("cpu", c.TempSource);
+        Assert.Equal(20, c.Hysteresis);
+        Assert.Equal(0, c.MinSpeed);
+        Assert.Equal((0, 100), (c.Points[0].Temp, c.Points[0].Speed));
+        Assert.Equal((120, 0), (c.Points[1].Temp, c.Points[1].Speed));
+    }
+
+    [Fact]
+    public void At_most_16_points_are_kept() =>
+        Assert.Equal(16, new FanCurve { Points = Enumerable.Range(0, 40).Select(i => new FanCurvePoint { Temp = i, Speed = i }).ToList() }.Normalized().Points.Count);
+}
+
+public class DuplicateRootTests
+{
+    [Fact]
+    public void The_same_folder_twice_and_folders_inside_another_root_are_scanned_once()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "vexis-roots-" + Guid.NewGuid().ToString("N"));
+        string sub  = Path.Combine(root, "photos");
+        Directory.CreateDirectory(sub);
+        try
+        {
+            var roots = DuplicateFinder.DistinctRoots(new[] { root, root + Path.DirectorySeparatorChar, sub }, r => r);
+            Assert.Equal(new[] { root }, roots);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+}
+
+public class WatchdogTests
+{
+    [Fact]
+    public void Trips_only_after_fan_updates_stop_for_the_limit()
+    {
+        Assert.False(FanController.WatchdogShouldTrip(lastUpdateAt: 1_000, now: 1_000 + FanController.WatchdogMs));
+        Assert.True (FanController.WatchdogShouldTrip(lastUpdateAt: 1_000, now: 1_001 + FanController.WatchdogMs));
+    }
+}
+
+public class ProcessIdentityTests
+{
+    [Theory]
+    [InlineData(1_700_000_000_000, 1_700_000_000_000, true)]    // same process
+    [InlineData(1_700_000_000_000, 1_700_000_000_001, true)]    // rounding
+    [InlineData(1_700_000_000_000, 1_700_000_090_000, false)]   // PID reused by a newer process
+    [InlineData(0, 1_700_000_000_000, true)]                    // page didn't know: name check decides
+    [InlineData(1_700_000_000_000, 0, true)]                    // Windows won't say now: name check decides
+    public void A_reused_pid_is_caught_by_its_start_time(long shown, long now, bool same) =>
+        Assert.Equal(same, ProcessMonitor.SameStart(shown, now));
+}
+
+public class DimmPollingTests
+{
+    [Theory]
+    [InlineData("G Skill Intl - F5-6000J3038F16G (#3)", true)]    // a RAM stick: read every 5 s
+    [InlineData("Virtual Memory", false)]                          // system memory: every poll
+    [InlineData("Total Memory", false)]
+    [InlineData("Generic Memory", false)]
+    public void Only_ram_sticks_are_read_less_often(string name, bool dimm) =>
+        Assert.Equal(dimm, SensorService.IsDimm(LibreHardwareMonitor.Hardware.HardwareType.Memory, name));
+}

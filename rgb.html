@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- V was here ✌  As of 2.13.0, 44% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame. -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
 <meta http-equiv="Cache-Control" content="no-cache, no-store">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PC Monitor — RGB</title>
@@ -115,6 +115,7 @@
       </div>
       <button class="btn btn-primary" onclick="sendToHost({type:'openUrl',url:'https://openrgb.org'})" style="width:100%;justify-content:center;margin-top:8px">&#x2197; Download OpenRGB</button>
       <button class="btn btn-ghost" onclick="if(!this._l){this._l=true;this.textContent='&#x25B6; Launching...';sendToHost({type:'launchOpenRGB'});setTimeout(()=>{this._l=false;this.textContent='&#x25B6; Launch OpenRGB (as Admin)';},6000);}" style="width:100%;justify-content:center;margin-top:6px">&#x25B6; Launch OpenRGB (as Admin)</button>
+      <div id="orgb-start-msg" class="stat-sub" style="display:none;margin-top:8px;color:var(--temp-warn);line-height:1.4"></div>
       <div style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:calc(10px*var(--fs-base,1));color:var(--label-dim)">
         <span>SDK Port:</span>
         <input type="number" value="6742" min="1024" max="65535" style="width:70px;background:var(--surface2);border:1px solid var(--border);color:var(--label);padding:3px 6px;border-radius:3px;font-family:monospace;font-size:calc(11px*var(--fs-base,1))" onchange="localStorage.setItem('pcm-rgb-port',this.value);location.reload()">
@@ -170,7 +171,7 @@
     </div>
   </div>
 </div>
-<script src="/nav.js?v=25" data-page="rgb"></script>
+<script src="/nav.js?v=26" data-page="rgb"></script><script src="/nav-theme.js?v=26"></script><script src="/nav-panel.js?v=26"></script><script src="/nav-styles.js?v=26"></script><script src="/nav-boot.js?v=26"></script>
 <script>
 const ORGB_PORT=localStorage.getItem('pcm-rgb-port')||'6742';
 let _devices=[],_connected=false,_callCounter=0;
@@ -256,7 +257,7 @@ function isRam(i){const d=_devices[i];if(!d)return false;const n=(d.name||'').to
 // otherwise their hardware animation keeps running and each LED update restarts it
 // (the RAM symptom). Devices with only mode-specific colours (often GPUs: "Static")
 // take the colour through the mode itself.
-const _modeReady={};                      // devIdx → custom mode already set this session
+const _modeReady={};                      // devIdx → 'direct' | 'static': which colour mode is already set
 function colorModeIdx(d){                 // mode that takes a single colour
   const ms=d?.modes||[];
   let i=ms.findIndex(m=>m.color_mode===2&&/static/i.test(m.name||''));
@@ -268,15 +269,30 @@ function supportsColor(d){return !!d&&!d.skip&&((d.per_led&&d.num_leds>0)||color
 function canColor(d){return supportsColor(d)&&!isReleasedDev(d);}
 async function ensureDirect(devIdx){
   const d=_devices[devIdx];
-  if(!d||!d.per_led||_modeReady[devIdx])return;
+  if(!d||!d.per_led||_modeReady[devIdx]==='direct')return;
   delete _hwMode[devIdx];
   await orgbPut('/devices/'+devIdx+'/mode',{custom:true});
-  _modeReady[devIdx]=true;
+  _modeReady[devIdx]='direct';
+}
+// RAM (ENE and similar SMBus RGB): a plain colour goes through the stick's own per-LED
+// "Static" mode rather than Direct. Direct needs many slow bus writes for every change (and
+// Vexis re-sending it), and on some kits it doesn't show at all while the hardware modes
+// do. In Static the colour is stored on the stick, so it needs no re-sending.
+// Software effects still use Direct (they need its fast refresh).
+function ramStaticIdx(devIdx){
+  if(!isRam(devIdx))return -1;
+  const ms=_devices[devIdx]?.modes||[];
+  return ms.findIndex(m=>m.color_mode===1&&/static/i.test(m.name||''));
+}
+async function ensureStatic(devIdx,mi){
+  if(_modeReady[devIdx]==='static')return;
+  delete _hwMode[devIdx];
+  await orgbPut('/devices/'+devIdx+'/mode',{mode:mi});
+  _modeReady[devIdx]='static';
 }
 function cleanMode(raw,idx){if(!raw)return'Mode '+idx;const c=raw.replace(/[^\x20-\x7E]/g,'').trim();return(c&&c.length<=32)?c:'Mode '+idx;}
 
 // ── Per-LED painter ──────────────────────────────────────────────────────────
-// ✌ V was here — 100% of this section is still my original code
 const _lc={},_exp=new Set();
 let _pt=false,_pd=-1;
 document.addEventListener('mouseup',()=>{_pt=false;_pd=-1;});
@@ -292,7 +308,6 @@ function fillAll(i){const{r,g,b}=hexRgb(pickH(i));getLC(i).fill({r,g,b});renderG
 async function sendLC(i){const btn=document.getElementById('lp-send-'+i);if(btn){btn.textContent='SENDING\u2026';btn.disabled=true;}try{await setDC(i,getLC(i),null);if(btn)btn.textContent='SENT \u2713';setTimeout(()=>{if(btn){btn.textContent='SEND \u25B6';btn.disabled=false;}},1200);}catch(e){if(btn){btn.textContent='ERROR';btn.disabled=false;}}}
 
 // ── RAM sync ─────────────────────────────────────────────────────────────────
-// ✌ V was here — 83% of this section is still my original code
 let _ramSync=localStorage.getItem('pcm-ram-sync')!=='0';
 // RAM sync: colour one RAM stick and the others follow
 function toggleSync(){_ramSync=!_ramSync;localStorage.setItem('pcm-ram-sync',_ramSync?'1':'0');document.querySelectorAll('.rsd').forEach(e=>e.classList.toggle('off',!_ramSync));document.querySelectorAll('.rsl').forEach(e=>e.textContent=_ramSync?'RAM STICKS SYNCED':'RAM STICKS UNLINKED');}
@@ -323,7 +338,13 @@ async function setDC(devIdx,leds,hex){
   if(_devAnim[devIdx]){stopDevAnim(devIdx);if(!Object.keys(_devAnim).length)stopFx();else updateAnimBtn();}
   delete _hwMode[devIdx];
   const dev=_devices[devIdx]||{};
-  if(dev.per_led){
+  const rs=ramStaticIdx(devIdx);
+  if(dev.per_led&&rs>=0){
+    // RAM: Static mode, colours stored on the stick (no 2 s re-send, less bus traffic)
+    clearHold(devIdx);
+    await ensureStatic(devIdx,rs);
+    await orgbPut('/devices/'+devIdx+'/leds',leds);
+  }else if(dev.per_led){
     await ensureDirect(devIdx);
     await orgbPut('/devices/'+devIdx+'/leds',leds);
     // Keep color alive — fires every 2 s for devices whose hardware may revert
@@ -740,7 +761,6 @@ function bestColours(i){
 function updateModeChips(devIdx,am){document.querySelectorAll('#dev-modes-'+devIdx+' .mode-chip').forEach((c,mi)=>c.classList.toggle('active',mi===am));}
 
 // ── Status ────────────────────────────────────────────────────────────────────
-// ✌ V was here — 91% of this section is still my original code
 function stopAllAnims(){Object.keys(_devAnim).forEach(i=>stopDevAnim(Number(i)));updateAnimBtn();}
 
 // Open OpenRGB in full GUI mode for plugin/effect configuration.
@@ -748,6 +768,15 @@ function stopAllAnims(){Object.keys(_devAnim).forEach(i=>stopDevAnim(Number(i)))
 // in server mode when the user closes OpenRGB.
 let _guiWatchInterval=null;
 // ⚙ GUI: opens OpenRGB's own window (with its SDK server on, so Vexis stays connected)
+// The app couldn't start OpenRGB: say why (where it was found, what to do)
+function onOpenRgbStart(msg){
+  const el=document.getElementById('orgb-start-msg');
+  if(el){el.textContent='\u26A0 '+msg;el.style.display='block';}
+  const sub=document.getElementById('rgb-sub');
+  if(sub)sub.textContent='OpenRGB not started — see below';
+  stopRetryLoop();
+  const rb=document.getElementById('retry-btn-txt'); if(rb)rb.textContent='RETRY';
+}
 function openRgbGui(){
   // Stop all active holds and animations so PCMonitor stops sending during GUI session
   Object.keys(_hold).forEach(i=>clearHold(Number(i)));

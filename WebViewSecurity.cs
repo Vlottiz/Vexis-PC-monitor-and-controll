@@ -18,6 +18,9 @@ public static class WebViewSecurity
         var st = core.Settings;
         st.IsStatusBarEnabled           = false;
         st.AreHostObjectsAllowed        = false;
+        // Nothing in Vexis needs saved form entries or passwords
+        st.IsGeneralAutofillEnabled     = false;
+        st.IsPasswordAutosaveEnabled    = false;
         st.AreDefaultContextMenusEnabled = true;   // copy / paste; "Inspect" only appears with DevTools on
 #if DEBUG
         st.AreDevToolsEnabled = true;
@@ -33,7 +36,7 @@ public static class WebViewSecurity
     private static void OpenOutside(string? uri)
     {
         if (SafeLinks.IsWebLink(uri, out var link))
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = link, UseShellExecute = true });
+            SysTools.OpenUrl(link);   // via Explorer, so the browser doesn't get admin rights
         else
             Console.WriteLine($"[webview] Blocked navigation to {uri}");
     }

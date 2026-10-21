@@ -1,4 +1,3 @@
-// V was here ✌  As of 2.13.0, 53% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame.
 using Timer = System.Threading.Timer;
 using LibreHardwareMonitor.Hardware;
 using System.Management;
@@ -60,6 +59,7 @@ public class SensorData
     public List<DriveInfoData>?       storage   { get; set; }  // drives (Storage page), refreshed every 2 s
     public CrashHelper.Report?        crash     { get; set; }  // last session ended badly (set by MainForm)
     public string?                    alert_status { get; set; } // set by MainForm for the settings panel
+    public long                       taken_ms  { get; set; }  // Environment.TickCount64 when read; FanController treats old data as no data
 }
 
 /// <summary>
@@ -180,7 +180,8 @@ public class SensorService : IDisposable
     private void ScanHardware()
     {
         Console.WriteLine("[hw] Scanning hardware...");
-        string bestGpuName = "";
+        string bestGpuName = "", firstGpuName = "";
+        bool   firstGpuIsIntel = false;
         int    bestGpuVram = 0;
 
         foreach (var hw in _computer.Hardware)
@@ -275,14 +276,20 @@ public class SensorService : IDisposable
             bool isGpu = hw.HardwareType is HardwareType.GpuAmd or HardwareType.GpuNvidia or HardwareType.GpuIntel;
             if (isGpu)
             {
-                var vramSensor = hw.Sensors.FirstOrDefault(s => s.Name == "GPU Memory Total");
+                var vramSensor = hw.Sensors.FirstOrDefault(s => s.Name == "GPU Memory Total")
+                              ?? hw.Sensors.FirstOrDefault(s => s.Name == "D3D Dedicated Memory Total");
                 int vramMb = vramSensor?.Value.HasValue == true ? (int)vramSensor.Value.Value : 0;
                 Console.WriteLine($"[hw]   → GPU: {hw.Name}, VRAM: {vramMb} MB");
                 // The GPU with the most VRAM is the one shown, so a CPU's integrated graphics
                 // never wins over a graphics card
                 if (vramMb > bestGpuVram) { bestGpuVram = vramMb; bestGpuName = hw.Name; }
+                // No memory sensor at all (some Intel Arc / older cards): still show a GPU,
+                // preferring a graphics card over integrated graphics
+                if (firstGpuName == "" || (hw.HardwareType != HardwareType.GpuIntel && firstGpuIsIntel))
+                { firstGpuName = hw.Name; firstGpuIsIntel = hw.HardwareType == HardwareType.GpuIntel; }
             }
         }
+        if (bestGpuName == "") bestGpuName = firstGpuName;
 
         if (!string.IsNullOrEmpty(bestGpuName))
         {
@@ -466,8 +473,47 @@ public class SensorService : IDisposable
                 }
                 continue;
             }
-            hw.Update();
-            // CPU twice, as in ScanHardware: per-core loads need two reads close together
+            try { ReadHardware(hw, data); }
+            catch (Exception ex)
+            {
+                // One device failing (driver reset, device removed) must not cost every
+                // other reading this tick — fans and guards depend on them
+                if (_hwErrorLogged.Add(hw.Identifier.ToString())) Console.WriteLine($"[poll] {hw.Name}: {ex.Message}");
+            }
+        }
+        FinishPoll(data, drives);
+    }
+
+    private readonly HashSet<string> _hwErrorLogged = new();   // log each failing device once
+
+    // RAM sticks' own temperature chips (SPD hubs) sit on the same SMBus as RAM RGB. Reading
+    // them 8 times a second collides with OpenRGB writing colours to the sticks (colours that
+    // don't show, garbled stick names). RAM temperature changes slowly: every 5 s is plenty.
+    private const long DimmEveryMs = 5000;
+    private readonly Dictionary<string, long> _dimmReadAt = new();
+
+    internal static bool IsDimm(HardwareType type, string name) =>
+        type == HardwareType.Memory &&
+        !name.Contains("Virtual Memory", StringComparison.OrdinalIgnoreCase) &&
+        !name.Contains("Total Memory", StringComparison.OrdinalIgnoreCase) &&
+        !name.Contains("Generic Memory", StringComparison.OrdinalIgnoreCase);
+
+    private void ReadHardware(IHardware hw, SensorData data)
+    {
+        bool dimm = IsDimm(hw.HardwareType, hw.Name);
+        bool dimmDue = true;
+        if (dimm)
+        {
+            string key = hw.Identifier.ToString();
+            long now = Environment.TickCount64;
+            dimmDue = !_dimmReadAt.TryGetValue(key, out var at) || now - at >= DimmEveryMs;
+            if (dimmDue) _dimmReadAt[key] = now;
+        }
+        {
+            if (!dimm || dimmDue) hw.Update();   // between reads, a stick's last values are used
+            // The CPU is updated twice per poll (as in ScanHardware). This comes from the
+            // original code; whether the second read still matters hasn't been tested
+            // on hardware, so it stays until it has.
             if (hw.HardwareType == HardwareType.Cpu) hw.Update();
 
             // Update sub-hardware (SuperIO chip — contains motherboard fan sensors)
@@ -488,7 +534,7 @@ public class SensorService : IDisposable
             // so tell them apart by hardware name (Virtual Memory is listed first).
             if (hw.HardwareType == HardwareType.Memory)
             {
-                hw.Update();
+                if (!dimm) hw.Update();   // system memory: a second read as before; never extra bus reads for sticks
                 bool isVirtual = hw.Name.Contains("Virtual", StringComparison.OrdinalIgnoreCase);
                 foreach (var s in hw.Sensors)
                 {
@@ -524,7 +570,10 @@ public class SensorService : IDisposable
                 if (IsRealTemp(s))
                     data.all_temps[$"{prefix}/{s.Name}"] = (float)Math.Round(s.Value!.Value, 2);
         }
+    }
 
+    private void FinishPoll(SensorData data, List<DriveInfoData>? drives)
+    {
         if (drives != null) { _storage = drives; _storageAt = DateTime.Now; }
         data.storage = _storage;
         // Drive temperatures on the Temperatures page (one per drive, named by model)
@@ -536,7 +585,6 @@ public class SensorService : IDisposable
             ApplyWmiFallback(data);
 
         // ── Re-check driverOk each poll — driver may load late ───────────────────
-        // ✌ V was here — 77% of this section is still my original code
         // If PawnIO registered after startup (manual registration path) LHM may start
         // returning real values mid-session. Clear the "blocked" warning automatically.
         if (!_hwInfo.driverOk && data.cpu_temp.HasValue && data.cpu_temp.Value > 1f)
@@ -556,6 +604,7 @@ public class SensorService : IDisposable
                 .Where(c => c.clk > 0).Select(c => c.clk)
                 .DefaultIfEmpty(0).Average();
 
+        data.taken_ms = Environment.TickCount64;
         _latest = data;
         OnUpdate?.Invoke(data);
     }
@@ -569,7 +618,6 @@ public class SensorService : IDisposable
         !s.Name.Contains("Threshold", StringComparison.OrdinalIgnoreCase);
 
     // ── CPU load from LHM sensors (AMD gets this for free; Intel needs WMI fallback) ──
-    // ✌ V was here — 100% of this section is still my original code
     private void ReadCpuLoad(IHardware hw, SensorData data)
     {
         if (data.cpu_load != null) return; // already set
@@ -595,6 +643,9 @@ public class SensorService : IDisposable
     private bool  _perfInitialized = false;
     private System.Diagnostics.PerformanceCounter? _perfCounter = null;
 
+    private long   _wmiLoadAt;
+    private float? _wmiLoad;
+
     private void ApplyWmiFallback(SensorData data)
     {
         // Only run if LHM gave us nothing useful
@@ -604,15 +655,19 @@ public class SensorService : IDisposable
 
         try
         {
-            // Read CPU load from WMI every tick. Not free (a WMI query takes tens of ms),
-            // but this path only runs when the sensor driver gave nothing
-            try {
-                using var lq = new ManagementObjectSearcher("SELECT LoadPercentage FROM Win32_Processor");
-                foreach (ManagementObject obj in lq.Get()) {
-                    data.cpu_load = Convert.ToSingle(obj["LoadPercentage"]);
-                    break;
-                }
-            } catch { }   // runs every tick: keep the last value instead of filling the log
+            // CPU load from WMI, at most once a second (a WMI query takes tens of ms, and this
+            // path only runs when the sensor driver gave nothing). In between, the last value.
+            if (Environment.TickCount64 - _wmiLoadAt >= 1000)
+            {
+                _wmiLoadAt = Environment.TickCount64;
+                try {
+                    using var lq = new ManagementObjectSearcher("SELECT LoadPercentage FROM Win32_Processor");
+                    using var results = lq.Get();
+                    foreach (ManagementObject obj in results)
+                        using (obj) { _wmiLoad = Convert.ToSingle(obj["LoadPercentage"]); break; }
+                } catch { }   // keep the last value instead of filling the log
+            }
+            if (_wmiLoad != null) data.cpu_load ??= _wmiLoad;
 
             // One-time: get the reference clock. Despite the name, _maxMhz ends up as the
             // CPU's base clock (both sources below report base, not turbo) — that's what the
@@ -991,7 +1046,10 @@ public class SensorService : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        _timer.Dispose();
+        // Wait (up to 2 s) for a poll that's still running before closing the hardware under it
+        using (var done = new ManualResetEvent(false))
+            if (_timer.Dispose(done)) done.WaitOne(2000);
+        for (int i = 0; i < 40 && Volatile.Read(ref _polling) == 1; i++) Thread.Sleep(50);
         _computer.Close();
         _perfCounter?.Dispose();
     }

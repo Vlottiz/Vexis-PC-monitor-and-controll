@@ -16,7 +16,9 @@ using System.Text;
 /// </summary>
 public sealed class ProcessMonitor : IDisposable
 {
-    public record ProcRow(int pid, string title, double cpu, long mem, double gpu);
+    /// <param name="started">start time (Unix ms, UTC), 0 if Windows won't say. With the PID it
+    /// identifies one process: PIDs get reused, a PID + start time doesn't.</param>
+    public record ProcRow(int pid, string title, double cpu, long mem, double gpu, long started);
     public record Group(string key, string name, string exe, string type, double cpu, long mem, double gpu,
                         int count, bool canEnd, List<ProcRow> procs);
     public record Snapshot(double cpu, long mem, long memTotal, double gpu, int procCount, int threadCount,
@@ -204,7 +206,7 @@ public sealed class ProcessMonitor : IDisposable
                     int session = 0; try { session = p.SessionId; } catch { }   // protected process
                     string type = title.Length > 0 ? "app"
                                 : IsWindowsProcess(exe, path, session) ? "win" : "bg";
-                    rows.Add((exe, path, type, new ProcRow(pid, title, Math.Round(Math.Min(cpu, 100), 1), mem, Math.Round(gpu.GetValueOrDefault(pid), 1))));
+                    rows.Add((exe, path, type, new ProcRow(pid, title, Math.Round(Math.Min(cpu, 100), 1), mem, Math.Round(gpu.GetValueOrDefault(pid), 1), StartedMs(p))));
                 }
                 catch { }   // process exited while being read
                 finally { p.Dispose(); }
@@ -243,7 +245,19 @@ public sealed class ProcessMonitor : IDisposable
     public void ResetIcons() { lock (_lock) _iconsSent.Clear(); }
 
     /// <summary>Ends one process, or every process of a group (by exe name).</summary>
-    public (bool ok, string message) End(int? pid, string? exe)
+    private static long StartedMs(Process p)
+    {
+        try { return new DateTimeOffset(p.StartTime.ToUniversalTime()).ToUnixTimeMilliseconds(); }
+        catch { return 0; }   // protected process: Windows won't say
+    }
+
+    /// <summary>
+    /// Is this still the process the page showed? Both start times known: they must match
+    /// (to the millisecond the page got). Either unknown: can't tell, the name check decides.
+    /// </summary>
+    internal static bool SameStart(long shown, long now) => shown <= 0 || now <= 0 || Math.Abs(shown - now) <= 1;
+
+    public (bool ok, string message) End(int? pid, string? exe, long? started = null)
     {
         var targets = new List<Process>();
         try
@@ -251,6 +265,12 @@ public sealed class ProcessMonitor : IDisposable
             if (pid is int id) targets.Add(Process.GetProcessById(id));
             else if (!string.IsNullOrEmpty(exe)) targets.AddRange(Process.GetProcessesByName(exe));
             if (targets.Count == 0) return (false, "Process not found — it may have already closed.");
+            // Windows reuses process numbers. If the one picked on the page has closed since and
+            // the number now belongs to a different program, don't end that program.
+            // Checked right before ending it: the name, and the start time the page was shown
+            if (pid != null && ((!string.IsNullOrEmpty(exe) && !string.Equals(targets[0].ProcessName, exe, StringComparison.OrdinalIgnoreCase))
+                                || !SameStart(started ?? 0, StartedMs(targets[0]))))
+                return (false, "That process has closed (its number now belongs to another program). Refresh the list and try again.");
             foreach (var p in targets)
             {
                 if (p.Id <= 4 || p.Id == SelfPid || Critical.Contains(p.ProcessName))

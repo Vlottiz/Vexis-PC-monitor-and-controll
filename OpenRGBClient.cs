@@ -1,4 +1,3 @@
-// V was here ✌  As of 2.13.0, 47% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame.
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json.Nodes;
@@ -48,10 +47,19 @@ public class OpenRGBClient : IDisposable
 
     public OpenRGBClient(int port = 6742) { _port = port; }
 
+    // Limits for what the other end of the socket can make Vexis do. Port 6742 is only on
+    // this PC, but any local program could be listening there instead of OpenRGB.
+    private const uint MaxPacketBytes = 8 * 1024 * 1024;   // the biggest real device description is well under 1 MB
+    private static readonly TimeSpan IoTimeout = TimeSpan.FromSeconds(8);
+
     public async Task ConnectAsync()
     {
+        // Close any old socket first, so a reconnect never leaks one
+        try { _ns?.Dispose(); _tcp?.Dispose(); } catch { }   // already closed
+        _ns = null;
         _tcp = new TcpClient();
-        await _tcp.ConnectAsync("127.0.0.1", _port);
+        using (var cts = new CancellationTokenSource(IoTimeout))
+            await _tcp.ConnectAsync("127.0.0.1", _port, cts.Token);
         // Device data can take a few seconds while OpenRGB is still scanning hardware
         _tcp.ReceiveTimeout = 8000;
         _tcp.SendTimeout    = 5000;
@@ -99,44 +107,57 @@ public class OpenRGBClient : IDisposable
         buf[14] = (byte)((dl >> 16) & 0xFF);
         buf[15] = (byte)((dl >> 24) & 0xFF);
         data.CopyTo(buf, 16);
-        // Logs every packet header in hex — handy for protocol bugs, but chatty during effects
+        // Every packet header in hex — handy for protocol bugs, but it filled debug.log during
+        // effects, so only in Debug builds
+#if DEBUG
         Console.WriteLine($"[orgb] SEND hdr: devIdx={devIdx} pktId={pktId} dataLen={dl} | bytes: {string.Join(' ', buf.Take(16).Select(b => b.ToString("X2")))}");
-        await _ns!.WriteAsync(buf);
+#endif
+        using (var cts = new CancellationTokenSource(IoTimeout))
+            await _ns!.WriteAsync(buf, cts.Token);
     }
 
-    private async Task<(uint devIdx, uint pktId, byte[] data)> RecvAsync()
+    private async Task<(uint devIdx, uint pktId, byte[] data)> RecvAsync(CancellationToken ct)
     {
         var hdr = new byte[16];
-        await ReadExactAsync(hdr, 16);
+        await ReadExactAsync(hdr, 16, ct);
         uint magic = Read32(hdr, 0);
         if (magic != MAGIC) throw new Exception($"Bad magic: 0x{magic:X8}");
         uint devIdx = Read32(hdr, 4);
         uint pktId  = Read32(hdr, 8);
         uint len    = Read32(hdr, 12);
+        if (len > MaxPacketBytes) throw new IOException($"OpenRGB packet too large ({len} bytes)");
         var data = new byte[len];
-        if (len > 0) await ReadExactAsync(data, (int)len);
+        if (len > 0) await ReadExactAsync(data, (int)len, ct);
         return (devIdx, pktId, data);
     }
 
     // OpenRGB also sends unsolicited packets (e.g. DEVICE_LIST_UPDATED, id 100, while it
     // is still detecting hardware). Skip anything that isn't the reply we asked for.
+    // One deadline covers the whole reply — header, payload and any packets skipped on the
+    // way — so a peer that trickles a byte at a time can't keep Vexis waiting past IoTimeout.
     private async Task<byte[]> RecvReplyAsync(uint expectedPktId)
     {
-        for (int skipped = 0; ; skipped++)
+        using var cts = new CancellationTokenSource(IoTimeout);
+        try
         {
-            var (_, pktId, data) = await RecvAsync();
-            if (pktId == expectedPktId) return data;
-            Console.WriteLine($"[orgb] skipped unsolicited packet id={pktId} len={data.Length}");
-            if (skipped > 50) throw new IOException("no reply from OpenRGB");
+            for (int skipped = 0; ; skipped++)
+            {
+                var (_, pktId, data) = await RecvAsync(cts.Token);
+                if (pktId == expectedPktId) return data;
+                Console.WriteLine($"[orgb] skipped unsolicited packet id={pktId} len={data.Length}");
+                if (skipped > 50) throw new IOException("no reply from OpenRGB");
+            }
         }
+        catch (OperationCanceledException) { throw new IOException("OpenRGB stopped answering"); }
     }
 
-    private async Task ReadExactAsync(byte[] buf, int count)
+    // ReceiveTimeout doesn't apply to async reads; the caller's token is the deadline
+    private async Task ReadExactAsync(byte[] buf, int count, CancellationToken ct)
     {
         int got = 0;
         while (got < count)
         {
-            int n = await _ns!.ReadAsync(buf.AsMemory(got, count - got));
+            int n = await _ns!.ReadAsync(buf.AsMemory(got, count - got), ct);
             if (n == 0) throw new IOException("OpenRGB closed the connection");
             got += n;
         }
@@ -442,11 +463,9 @@ public class OpenRGBClient : IDisposable
     }
 
     // ── Binary helpers ────────────────────────────────────────────────────────
-    // ✌ V was here — 79% of this section is still my original code
     private static uint   Read32 (byte[] d, int off)       => BitConverter.ToUInt32(d, off);
     private static uint   Read32 (byte[] d, ref int p)     { var v=BitConverter.ToUInt32(d,p); p+=4; return v; }
     private static int    ReadU16(byte[] d, ref int p)     { var v=BitConverter.ToUInt16(d,p); p+=2; return v; }
-    private static void   Write32(byte[] b, int off, uint v) => BitConverter.TryWriteBytes(b.AsSpan(off, 4), v);
 
     private static string ReadStr(byte[] d, ref int p)
     {

@@ -47,7 +47,7 @@ public sealed class DuplicateFinder
     private static readonly string[] SkipNames =
         { "$Recycle.Bin", "System Volume Information", "$WinREAgent", "Recovery", "Config.Msi", "Windows.old" };
 
-    public void Cancel() => _cts?.Cancel();
+    public void Cancel() { try { _cts?.Cancel(); } catch (ObjectDisposedException) { } }   // scan just finished
 
     /// <summary>True only for a file that the last scan listed as a duplicate.</summary>
     public bool IsInResults(string? path)
@@ -61,7 +61,42 @@ public sealed class DuplicateFinder
     {
         if (!IsPlainPath(path)) return null;
         string full = Path.GetFullPath(path!);
-        return Directory.Exists(full) ? full : null;
+        return Directory.Exists(full) ? RealFolder(full) : null;
+    }
+
+    /// <summary>
+    /// The folder's real location, following junctions and links anywhere in the path.
+    /// Without this, two roots pointing at the same folder would list every file twice,
+    /// and each file would look like a duplicate of itself — removing the "copy" would
+    /// remove the only one.
+    /// </summary>
+    internal static string RealFolder(string dir)
+    {
+        if (!OperatingSystem.IsWindows()) return dir;
+        using var h = CreateFileW(dir, 0, 7 /* share read|write|delete */, IntPtr.Zero, 3 /* OPEN_EXISTING */,
+                                  0x02000000 /* FILE_FLAG_BACKUP_SEMANTICS: open a folder */, IntPtr.Zero);
+        if (h.IsInvalid) return dir;
+        var sb = new System.Text.StringBuilder(1024);
+        uint n = GetFinalPathNameByHandleW(h, sb, (uint)sb.Capacity, 0);
+        if (n == 0 || n >= sb.Capacity) return dir;
+        string real = sb.ToString();
+        if (real.StartsWith(@"\\?\UNC\")) real = @"\\" + real[8..];
+        else if (real.StartsWith(@"\\?\")) real = real[4..];
+        return real;
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+    private static extern Microsoft.Win32.SafeHandles.SafeFileHandle CreateFileW(string name, uint access, uint share, IntPtr sec, uint disp, uint flags, IntPtr template);
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+    private static extern uint GetFinalPathNameByHandleW(Microsoft.Win32.SafeHandles.SafeFileHandle h, System.Text.StringBuilder path, uint len, uint flags);
+
+    /// <summary>Real folders, without repeats, and without folders inside another root (already scanned).</summary>
+    internal static List<string> DistinctRoots(IEnumerable<string> roots, Func<string, string> real)
+    {
+        var list = roots.Where(Directory.Exists).Select(r => real(r).TrimEnd('\\', '/'))
+                        .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        return list.Where(r => !list.Any(o => o != r &&
+                       r.StartsWith(o + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))).ToList();
     }
 
     // Full path, no wildcards, quotes or device prefixes (\\?\, \\.\)
@@ -90,9 +125,8 @@ public sealed class DuplicateFinder
             {
                 // 1. List files by size
                 var bySize = new Dictionary<long, List<FileInfo>>();
-                foreach (var root in opt.paths.Distinct(StringComparer.OrdinalIgnoreCase))
+                foreach (var root in DistinctRoots(opt.paths, RealFolder))
                 {
-                    if (!Directory.Exists(root)) continue;
                     foreach (var f in Enumerate(new DirectoryInfo(root), opt.includeSystem, cts.Token))
                     {
                         files++;
@@ -202,11 +236,14 @@ public sealed class DuplicateFinder
             using var fs = new FileStream(f.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1, FileOptions.SequentialScan);
             const int Chunk = 65536;
             var buf = new byte[Math.Min(fs.Length, Chunk * 2)];
-            int n = fs.Read(buf, 0, (int)Math.Min(Chunk, fs.Length));
+            // ReadExactly: a single Read may return fewer bytes than asked
+            int n = (int)Math.Min(Chunk, fs.Length);
+            fs.ReadExactly(buf, 0, n);
             if (fs.Length > Chunk)
             {
                 fs.Seek(Math.Max(Chunk, fs.Length - Chunk), SeekOrigin.Begin);
-                n += fs.Read(buf, n, buf.Length - n);
+                fs.ReadExactly(buf, n, buf.Length - n);
+                n = buf.Length;
             }
             hashed += n;
             return Convert.ToHexString(SHA256.HashData(buf.AsSpan(0, n)));
@@ -282,8 +319,15 @@ public sealed class DuplicateFinder
         {
             var selected = g.paths.Where(want.Contains).ToList();
             if (selected.Count == 0) continue;
-            // Copies that stay: not selected and still there with the same content
+            // Copies that stay: not selected and still there. At least one of them must still have
+            // the scanned content, or "removing a duplicate" could remove the last real copy
             var keepers = g.paths.Except(selected, StringComparer.OrdinalIgnoreCase).Where(File.Exists).ToList();
+            long scratch = 0;
+            if (keepers.Count > 0 && !keepers.Any(k => FullHash(k, ref scratch, CancellationToken.None) == g.hash))
+            {
+                foreach (var p in selected) skipped.Add(p + " (the copies that would stay changed since the scan — scan again)");
+                continue;
+            }
             if (keepers.Count == 0)
             {
                 // Keep the oldest selected copy
@@ -299,7 +343,7 @@ public sealed class DuplicateFinder
                 if (!HasRecycleBin(p)) { skipped.Add(p + " (not on a local drive with a Recycle Bin)"); continue; }
                 if (new FileInfo(p).Length != g.size || FullHash(p, ref dummy, CancellationToken.None) != g.hash)
                 { skipped.Add(p + " (changed since the scan)"); continue; }
-                if (SendToRecycleBin(p)) { removed++; freed += g.size; g.paths.Remove(p); }
+                if (SendToRecycleBin(p)) { removed++; freed += g.size; lock (_lock) g.paths.Remove(p); }
                 else skipped.Add(p + " (couldn't move it to the Recycle Bin)");
             }
         }

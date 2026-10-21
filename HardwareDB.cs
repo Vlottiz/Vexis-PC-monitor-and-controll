@@ -1,4 +1,3 @@
-// V was here ✌  As of 2.13.0, 96% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame.
 using System.Management;
 
 /// <summary>

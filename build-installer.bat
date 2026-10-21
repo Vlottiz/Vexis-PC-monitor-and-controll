@@ -40,6 +40,16 @@ echo      Downloading WebView2 bootstrapper (for Windows 10 PCs without it)...
 curl.exe -L --fail -o MicrosoftEdgeWebview2Setup.exe "https://go.microsoft.com/fwlink/p/?LinkId=2124703" >> "%LOG%" 2>&1
 if not exist "MicrosoftEdgeWebview2Setup.exe" echo      [!] WebView2 bootstrapper download failed - installer will skip that step.
 :have_webview2
+if not exist "MicrosoftEdgeWebview2Setup.exe" goto :after_webview2
+rem Same check as the release workflow: it must carry a valid Microsoft signature
+powershell -NoProfile -Command "$s = Get-AuthenticodeSignature MicrosoftEdgeWebview2Setup.exe; if ($s.Status -ne 'Valid' -or $s.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') { exit 1 }"
+if errorlevel 1 (
+    echo      [!] MicrosoftEdgeWebview2Setup.exe is not signed by Microsoft - deleted. Run the build again.
+    del MicrosoftEdgeWebview2Setup.exe
+    goto :fail
+)
+echo      WebView2 bootstrapper signature checked.
+:after_webview2
 echo.
 
 rem --- Step 2: Publish ------------------------------------------------------

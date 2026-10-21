@@ -51,6 +51,9 @@ The tests cover the logic that doesn't need real hardware:
 - the duplicate finder (only truly identical files are grouped)
 - refusing path tricks when opening recordings
 - pages never build inline `onclick="…"` code from outside text (each `${…}` in a handler must be on a reviewed list)
+- every message type a page sends has a handler in `MainForm.Messages.cs`, and none is handled twice
+- fail-safe temperatures (missing, impossible, stale and lost sensors), the fan watchdog, and the
+  health check running against the poll loop on two threads with fake sensors
 
 If you change any of these areas, add or update a test.
 

@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- V was here ✌  As of 2.13.0, 72% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame. -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
 <meta http-equiv="Cache-Control" content="no-cache, no-store">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PC Monitor — Fan Control</title>
@@ -98,7 +98,7 @@
     <div id="fans-list"></div>
   </div>
 </div>
-<script src="/nav.js?v=25" data-page="fans"></script>
+<script src="/nav.js?v=26" data-page="fans"></script><script src="/nav-theme.js?v=26"></script><script src="/nav-panel.js?v=26"></script><script src="/nav-styles.js?v=26"></script><script src="/nav-boot.js?v=26"></script>
 <script>
 // ── State ─────────────────────────────────────────────────────────────────────
 const fanStates = {};
@@ -130,7 +130,6 @@ const FAN_NAMES = [];
 function fanArg(name) { let i = FAN_NAMES.indexOf(name); if (i < 0) { i = FAN_NAMES.length; FAN_NAMES.push(name); } return `FAN_NAMES[${i}]`; }
 
 // ── Mode ──────────────────────────────────────────────────────────────────────
-// ✌ V was here — 95% of this section is still my original code
 function setMode(name, mode) {
   const s = gs(name), id = sid(name);
   if (PROFILE !== 'custom') onFanProfile('custom');   // the host switches back to Custom too
@@ -156,7 +155,6 @@ function applyManual(name) {
 }
 
 // ── Health check ──────────────────────────────────────────────────────────────
-// ✌ V was here — 100% of this section is still my original code
 function runHealth(name) {
   const id  = sid(name);
   const btn = document.getElementById(`hbtn-${id}`);
@@ -167,7 +165,6 @@ function runHealth(name) {
 }
 
 // ── Curve editor ──────────────────────────────────────────────────────────────
-// ✌ V was here — 80% of this section is still my original code
 const PAD = {l:6,r:6,t:8,b:8};
 const TMIN=20, TMAX=100;
 
@@ -388,7 +385,7 @@ function buildCard(fan) {
           title="${fan.pumpByName?'Detected as a pump from its name':'Tick this if a pump or AIO is plugged into this header'}">
           <input type="checkbox" ${fan.isPump?'checked':''} ${fan.pumpByName?'disabled':''} onchange="setPump(${fanArg(fan.name)},this.checked)">
           Pump or AIO on this header (never below ${PUMP_MIN}%)</label>` : ''}
-        <div class="stat-sub" id="fs-${id}" style="margin-top:3px;color:var(--temp-hot);display:${fan.failsafe?'block':'none'}">&#x26A0; ${fan.isGpu?'GPU':'CPU'} too hot &#x2014; forced to 100% until it cools down</div>
+        <div class="stat-sub" id="fs-${id}" style="margin-top:3px;color:var(--temp-hot);display:${fan.failsafe?'block':'none'}">&#x26A0; ${escHtml(fan.failsafeWhy||'Forced to 100%')}</div>
       </div>
       <div style="text-align:right">
         <span class="fan-rpm-big" id="rpm-${id}">${Math.round(fan.rpm)}</span>
@@ -470,7 +467,6 @@ function buildCard(fan) {
 }
 
 // ── Data ──────────────────────────────────────────────────────────────────────
-// ✌ V was here — 91% of this section is still my original code
 function receiveData(data) {
   _latestData = data;
   const fans = data.fans;
@@ -509,7 +505,7 @@ function receiveData(data) {
       if (g)   g.style.width   = Math.min(100,(f.rpm/3000)*100)+'%';
       if (fp)  fp.textContent  = f.pct>0?Math.round(f.pct)+'%':'';
       const fsw = document.getElementById(`fs-${id}`);
-      if (fsw) fsw.style.display = f.failsafe ? 'block' : 'none';
+      if (fsw) { fsw.style.display = f.failsafe ? 'block' : 'none'; if (f.failsafe) fsw.textContent = '\u26A0 ' + (f.failsafeWhy || 'Forced to 100%'); }
       if (gs(f.name).mode === 'curve') renderCurve(f.name);
     });
   }
@@ -545,7 +541,7 @@ if (IS_WEBVIEW) {
         const res = document.getElementById(`hres-${id}`);
         if (btn) { btn.disabled=false; btn.textContent='⚕ Health Check'; }
         if (res) {
-          const c = m.status==='PASS'?'#44aa66':m.status==='WARN'?'#ffaa00':'#ff4444';
+          const c = m.status==='PASS'?'#44aa66':(m.status==='WARN'||m.status==='SKIPPED'||m.status==='STOPPED')?'#ffaa00':'#ff4444';
           res.style.color = c;
           res.textContent = m.message;
         }

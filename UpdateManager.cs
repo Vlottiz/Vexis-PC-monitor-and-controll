@@ -43,9 +43,13 @@ public static class UpdateManager
 
     /// <summary>
     /// Reads a GitHub "latest release" response: the version from the tag (v2.11.0 or 2.11.0)
-    /// and the installer asset (a *Setup*.exe first, otherwise any .exe). Null when the tag
+    /// and the installer asset (VexisHM-Setup.exe, optionally with a version: never any other
+    /// .exe, since whatever is picked runs as administrator). Null when the tag
     /// isn't a version number, which is why tags like "Vexis" never offer an update.
     /// </summary>
+    private static readonly System.Text.RegularExpressions.Regex InstallerFile =
+        new(@"^VexisHM-Setup(-v?[0-9.]+)?\.exe$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
     internal static ReleaseInfo? ParseRelease(string json)
     {
         using var doc = JsonDocument.Parse(json);
@@ -53,15 +57,14 @@ public static class UpdateManager
         string tag = root.GetProperty("tag_name").GetString() ?? "";
         if (!Version.TryParse(tag.TrimStart('v', 'V'), out var ver)) return null;
 
-        // Prefer the setup file build-installer.bat makes; otherwise any .exe asset
+        // Only the installer the release workflow / build-installer.bat makes
         string? url = null, installer = null; long size = 0;
         if (root.TryGetProperty("assets", out var assets))
         {
-            foreach (var a in assets.EnumerateArray()
-                         .OrderByDescending(a => (a.GetProperty("name").GetString() ?? "").Contains("Setup", StringComparison.OrdinalIgnoreCase)))
+            foreach (var a in assets.EnumerateArray())
             {
                 string name = a.GetProperty("name").GetString() ?? "";
-                if (!name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) continue;
+                if (!InstallerFile.IsMatch(name)) continue;
                 url  = a.GetProperty("browser_download_url").GetString();
                 size = a.GetProperty("size").GetInt64();
                 installer = name;
@@ -117,8 +120,10 @@ public static class UpdateManager
         try
         {
             // Folders left by earlier updates (the installer can't delete the folder it runs from)
-            foreach (var old in Directory.EnumerateDirectories(Path.GetTempPath(), "Vexis-Update*"))
+            // Only folders this code makes ("Vexis-Update-" + 32 hex digits), nothing else in %TEMP%
+            foreach (var old in Directory.EnumerateDirectories(Path.GetTempPath(), "Vexis-Update-*"))
             {
+                if (!System.Text.RegularExpressions.Regex.IsMatch(Path.GetFileName(old), "^Vexis-Update-[0-9a-f]{32}$")) continue;
                 try { Directory.Delete(old, true); }
                 catch (Exception ex) { Console.WriteLine($"[update] Couldn't remove old {old}: {ex.Message}"); }
             }

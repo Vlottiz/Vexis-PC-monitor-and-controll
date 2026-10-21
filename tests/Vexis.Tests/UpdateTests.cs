@@ -26,6 +26,16 @@ public class UpdateTests
     }
 
     [Theory]
+    [InlineData("Other.exe")]
+    [InlineData("VexisHM-Setup.exe.exe")]
+    [InlineData("evil-VexisHM-Setup.exe")]
+    public void Only_the_Vexis_installer_is_ever_picked(string name)
+    {
+        var r = UpdateManager.ParseRelease($$"""{"tag_name":"v2.14.0","assets":[{"name":"{{name}}","browser_download_url":"u","size":1}]}""")!;
+        Assert.Null(r.InstallerUrl);
+    }
+
+    [Theory]
     [InlineData("2.11.0")]
     [InlineData("V2.11.0")]
     public void Tag_with_or_without_v_is_accepted(string tag) =>

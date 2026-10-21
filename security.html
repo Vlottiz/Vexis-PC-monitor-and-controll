@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- V was here ✌  As of 2.13.0, 68% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame. -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Security Settings</title>
 <link rel="stylesheet" href="/ui.css?v=12">
@@ -228,7 +228,7 @@
   </div>
   </div>
 </div>
-<script src="/nav.js?v=25" data-page="security"></script>
+<script src="/nav.js?v=26" data-page="security"></script><script src="/nav-theme.js?v=26"></script><script src="/nav-panel.js?v=26"></script><script src="/nav-styles.js?v=26"></script><script src="/nav-boot.js?v=26"></script>
 <script>
 // ── State ─────────────────────────────────────────────────────────────────────
 // ── Driver + Windows protection status (from C#) ─────────────────────────────
@@ -286,7 +286,6 @@ function runCheck() {
 }
 
 // ── Live console ─────────────────────────────────────────────────────────────
-// ✌ V was here — 99% of this section is still my original code
 let _logSeq    = 0;
 let _paused    = false;
 let _allLines  = [];   // full buffer for filter replay

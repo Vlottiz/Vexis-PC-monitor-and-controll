@@ -1,4 +1,3 @@
-; V was here  As of 2.13.0, 45% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame.
 ; Vexis Installer
 ; Build: run build-installer.bat (it publishes the app and passes the version)
 ; Manual: makensis /DVERSION=2.1.0 installer.nsi  |  Requires .\publish\ folder
@@ -12,7 +11,6 @@
 !include "FileFunc.nsh"
 
 ; ── Metadata ──────────────────────────────────────────────────────────────────
-; V was here - 100% of this section is still my original code
 Name              "Vexis Hardware Monitoring"
 OutFile           "VexisHM-Setup.exe"
 !define MUI_ICON                     "vexis.ico"
@@ -43,6 +41,9 @@ VIAddVersionKey   "LegalCopyright"   "MIT License"
 ; ── Pages ─────────────────────────────────────────────────────────────────────
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE       "LICENSE.txt"
+; The folder must be called Vexis: uninstalling deletes the whole folder, so it must never be
+; a shared one like D:\Games (see .onVerifyInstDir)
+!define MUI_DIRECTORYPAGE_TEXT_TOP "Vexis will be installed in the folder below. The folder's name must be Vexis, because uninstalling removes it and everything in it."
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
@@ -60,7 +61,7 @@ VIAddVersionKey   "LegalCopyright"   "MIT License"
   FileOpen $9 "$APPDATA\Vexis\exit.request" w
   FileClose $9
   Sleep 3000
-  nsExec::ExecToLog 'taskkill /IM Vexis.exe /F'
+  nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /IM Vexis.exe /F'
   Delete "$APPDATA\Vexis\exit.request"
 !macroend
 
@@ -166,6 +167,14 @@ SectionEnd
 
 ; In-app updates run this installer with /S /UPDATE (silent, so there is no
 ; finish page) — start the new version once the files are in place.
+; Next is greyed out until the chosen folder is called Vexis
+Function .onVerifyInstDir
+  StrCpy $0 "$INSTDIR" "" -6
+  ${If} $0 != "\Vexis"
+    Abort
+  ${EndIf}
+FunctionEnd
+
 Function .onInstSuccess
   ${GetParameters} $R0
   ClearErrors
@@ -183,16 +192,33 @@ Function .onInstSuccess
 FunctionEnd
 
 ; ── Uninstall ─────────────────────────────────────────────────────────────────
-; V was here - 78% of this section is still my original code
 Section "Uninstall"
   ; Stop running instance
   !insertmacro CloseVexis
 
   ; Remove the "Start with Windows" logon task, if the user turned it on
-  nsExec::ExecToLog 'schtasks /Delete /TN "Vexis" /F'
+  nsExec::ExecToLog '"$SYSDIR\schtasks.exe" /Delete /TN "Vexis" /F'
 
-  ; Remove files
-  RMDir /r "$INSTDIR"
+  ; Remove files. The whole folder only if it's a Vexis folder; an install from before 2.14
+  ; into a shared folder only loses Vexis's own top-level files
+  StrCpy $0 "$INSTDIR" "" -6
+  ${If} $0 == "\Vexis"
+    RMDir /r "$INSTDIR"
+  ${Else}
+    ; Only files that are unmistakably Vexis's. Its page files (index.html, nav.js, ...) have
+    ; names other programs use too, so in a shared folder they are left alone, never deleted
+    ; by wildcard or by a generic name.
+    Delete "$INSTDIR\Vexis.exe"
+    Delete "$INSTDIR\Vexis.dll"
+    Delete "$INSTDIR\Vexis.deps.json"
+    Delete "$INSTDIR\Vexis.runtimeconfig.json"
+    Delete "$INSTDIR\Vexis.pdb"
+    Delete "$INSTDIR\vexis.ico"
+    Delete "$INSTDIR\Uninstall.exe"
+    DetailPrint "Vexis was installed in a shared folder ($INSTDIR). Only Vexis.* files were removed;"
+    DetailPrint "its other files (pages, libraries) have common names and were left in place."
+    MessageBox MB_OK|MB_ICONINFORMATION "Vexis was installed in a shared folder:$\r$\n$INSTDIR$\r$\n$\r$\nTo protect other programs' files, only Vexis's own program files were removed. You can delete its remaining files (pages, .dll libraries) by hand if you know they're not used by anything else."
+  ${EndIf}
 
   ; Remove shortcuts
   RMDir /r "$SMPROGRAMS\Vexis"

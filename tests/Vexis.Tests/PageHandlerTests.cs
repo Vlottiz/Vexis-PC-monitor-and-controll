@@ -34,14 +34,15 @@ public class PageHandlerTests
     public void Inline_handlers_only_use_Vexis_own_values()
     {
         string root = RepoRoot();
-        var files = Directory.GetFiles(root, "*.html").Append(Path.Combine(root, "nav.js"));
+        var files = Directory.GetFiles(root, "*.html").Concat(Directory.GetFiles(root, "nav*.js"));
         var problems = new List<string>();
 
         foreach (var path in files)
         {
             string name = Path.GetFileName(path);
             string text = File.ReadAllText(path);
-            var ok = Allowed.TryGetValue(name, out var list) ? list : Array.Empty<string>();
+            // nav.js is split into nav-*.js files; they share one list
+            var ok = Allowed.TryGetValue(name.StartsWith("nav") && name.EndsWith(".js") ? "nav.js" : name, out var list) ? list : Array.Empty<string>();
             foreach (Match h in Handler.Matches(text))
                 foreach (Match e in Interp.Matches(h.Value))
                 {

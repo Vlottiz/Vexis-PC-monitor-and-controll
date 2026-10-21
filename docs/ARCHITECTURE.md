@@ -24,11 +24,11 @@ reading the code, reviewing a change or thinking about contributing.
 **The C# host** (`*.cs`) does everything that touches hardware, Windows or the network. It's a
 WinForms app whose window is almost entirely one WebView2 control.
 
-**The interface** (`*.html`, `nav.js`, `ui.css`) is plain HTML/JS, loaded from the install folder
+**The interface** (`*.html`, `nav*.js`, `ui.css`) is plain HTML/JS, loaded from the install folder
 through the virtual address `https://vexis.local/`. No web server, no network.
 
 *Why HTML for the UI?* Themes, text scaling, charts and pop-out windows are much easier in HTML than
-in WinForms. Every page shares one navigation/theme script (`nav.js`). Pages can also be opened
+in WinForms. Every page shares the same navigation/theme scripts (`nav.js` and four `nav-*.js` files, see below). Pages can also be opened
 in a normal browser with fake data, which is how UI changes are tested and how the README screenshots
 are made.
 
@@ -36,8 +36,9 @@ are made.
 
 - **Host → page:** every 250 ms the host serialises one `SensorData` object to JSON and calls
   `receiveData(json)` in each open window. Settings go the same way through `onConfigReceived`.
-- **Page → host:** pages call `sendToHost({type: '...', ...})`. `MainForm.HandleMessage` is a single
-  `switch` on `type`.
+- **Page → host:** pages call `sendToHost({type: '...', ...})`. `MainForm.HandleMessage` parses it and
+  hands it to one handler per area in `MainForm.Messages.cs` (window, settings, files, processes,
+  security, RGB, fans). `MessageContractTests` fails the build if a page sends a type no handler knows.
 
 *Why one message per poll instead of many small calls?* Each page just re-renders from one snapshot,
 so pages never get out of sync with each other, and a pop-out window is only a second WebView fed
@@ -90,6 +91,18 @@ Fan control is the part that can do real harm, so it's the most defensive:
   fans on manual or curve go to 100 % until both are 8 °C under. If the CPU reaches 95 °C, the case,
   CPU and pump fans on manual, curve or profile do the same until it's 10 °C under. Fans on auto are
   left to the BIOS. The on/off rule is one tested function, `NextGuard`.
+- **No temperature is not "cool".** A reading only counts if it's a real number, in a believable
+  range, from a snapshot under 8 s old. A curve or profile with no usable reading runs at 100 %. A
+  sensor that worked and then stops for 2 s is "lost", and lost counts as hot for the guards. A
+  sensor this PC never had is ignored. This is `Usable`, `TempTrack` and `NextGuard`, all tested.
+- **Per graphics card.** Each GPU has its own guard fed by its own sensors, and its fans follow it.
+- **Guards beat the health check.** A check won't start while its guard is on; if the guard trips
+  mid-check, the poll sets the fan to 100 % and the check stops before writing another step.
+- **One fan failing doesn't stop the rest.** Each fan is updated in its own try/catch, and each
+  hardware device is read in its own try/catch in `SensorService`.
+- **Watchdog.** `Update` runs on the UI thread. A separate timer thread checks it: if no `Update`
+  has completed for 10 s (a hung UI thread, a deadlock), every fan Vexis controls goes to 100 % until
+  updates resume. Fans on auto are left to the BIOS.
 - **One writer at a time.** The poll runs on the UI thread, the health check on a worker thread.
   Every write to the fan chip takes the same lock, and a fan being health-checked is skipped by the
   poll. The health check uses the same safe speeds (pumps from 50 %) and puts the fan back in the
@@ -98,7 +111,8 @@ Fan control is the part that can do real harm, so it's the most defensive:
   a factory reset), and `RestoreFansSafely` also tries it on an unhandled crash or when Windows ends
   the process, so fans don't stay stuck at a manual speed. A hard kill (Task Manager → End task) or
   power loss can't run any code; then the BIOS takes over again at the next boot.
-- **Writes only on change.** Speeds are only sent to the hardware when they change (`LastSent`).
+- **Writes on change, plus a heartbeat.** Speeds are sent when they change (`LastSent`) and again every
+  10 s, in case the board took control back after sleep or another fan program changed it.
 
 ## Other pieces
 
@@ -137,17 +151,45 @@ are logged. Code that runs every 250 ms keeps the last value instead of logging,
 The app shows its commit on **Info → About**, so any copy can be traced back to its exact source.
 See [SECURITY.md](../SECURITY.md).
 
+## Where things live
+
+**`MainForm`** is split by concern into partial-class files. Each file holds one area, so a change to
+alerts doesn't touch message routing:
+
+| File | What's in it |
+|---|---|
+| `MainForm.cs` | Fields, start-up (`OnLoad`), the 250 ms poll tick, `HandleMessage` (parse + dispatch), `Dispose` |
+| `MainForm.Messages.cs` | One handler per area for page messages |
+| `MainForm.WebView.cs` | WebView2 setup and crash recovery, sending data/settings to pages, pop-outs |
+| `MainForm.Updates.cs` | Update check and install |
+| `MainForm.Rgb.cs` | The OpenRGB proxy for the RGB page |
+| `MainForm.Tray.cs` | Tray icon and menu, alert inbox, blinking icon |
+| `MainForm.Alerts.cs` | Temperature alerts and the notification queue |
+| `MainForm.Lifecycle.cs` | Factory reset, handing fans back, closing for the installer, window placement |
+| `IncomingMessage.cs` | The shape of a page message |
+| `SysTools.cs` | Running Windows tools by full path, opening links and folders |
+
+**`nav.js`** is five classic scripts that share one global scope, loaded in this order by every page:
+`nav.js` (the basics: `IS_WEBVIEW`, `sendToHost`, `escHtml`, `navTempColor`, the page list) →
+`nav-theme.js` (colours, presets, `navOnConfig`) → `nav-panel.js` (the side panel and its tabs) →
+`nav-styles.js` (injected CSS) → `nav-boot.js` (collapsible sections and `boot()`, which runs on
+`DOMContentLoaded`, after all five have loaded). Code that runs while a file loads may only use
+things defined in earlier files; everything else runs from `boot()` or later.
+
+**Shared page helpers.** CPU and GPU temperatures use one colour scale on every page
+(`navTempColor`, `NAV_TEMP_WARN` / `NAV_TEMP_HOT` in `nav.js`). Drives keep their own per-model limit.
+
 ## Known debt / next refactors
 
-`MainForm.cs` (~1,300 lines) still does too much: window, tray, message routing, alerts, recording,
-updates and more. The first pieces have moved out (`WebViewSecurity`, `OpenRgbLauncher`, `SafeLinks`).
-The plan is to keep moving these, one at a time, into small services that `MainForm` wires together:
+The `MainForm` split above is by file, not yet by object: the partial classes still share one set of
+fields. The next steps turn the areas into small services that `MainForm` wires together:
 
 - `AlertService`: limits, latch/cool-down, inbox, tray blink
 - `UpdateService`: check, auto-install, progress (wrapping `UpdateManager`)
 - `RecordingService`: start/stop/list (wrapping `CsvRecorder`)
 - `SettingsService`: config load/save/reset, and the config message to pages
-- `MessageRouter`: turns each `sendToHost` type into a call on one of the services, replacing the big `switch`
+- the per-area handlers in `MainForm.Messages.cs` then call those services instead of `MainForm` fields
+- pages still repeat small helpers (`$`, `setText`, `fmt`); they can move into `nav.js` one at a time
 
 Each move should be a pull request that changes no behaviour, with tests for the extracted logic
 where it can run without hardware.

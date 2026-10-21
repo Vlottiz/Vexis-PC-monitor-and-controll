@@ -23,6 +23,8 @@ on:
     types: [published]        # a release made on the website builds and attaches the exe too
   workflow_dispatch:          # manual test build (uploaded as an artifact, not released)
 
+# Actions are pinned to a full commit SHA (version in the comment): a moved or compromised
+# tag can't change what runs with these permissions and the signing secrets.
 permissions:
   contents: write
   id-token: write       # build provenance: proves the installer came from this workflow run
@@ -38,14 +40,19 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
 
       - name: Read version and check the tag
         id: ver
         shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           $version = ([xml](Get-Content Pcmonitor2_0.csproj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
-          $tag = if ($env:GITHUB_EVENT_NAME -eq 'release') { '${{ github.event.release.tag_name }}' } else { '${{ github.ref_name }}' }
+          # The tag comes in through env, never pasted into the script: a tag name can contain
+          # quotes or ; and would otherwise run as PowerShell
+          $tag = if ($env:GITHUB_EVENT_NAME -eq 'release') { $env:RELEASE_TAG } else { $env:REF_NAME }
           Write-Host "csproj version: $version   tag: $tag"
           if ($env:GITHUB_EVENT_NAME -ne 'workflow_dispatch' -and $tag -ne "v$version") {
             Write-Error "Tag '$tag' does not match the version in Pcmonitor2_0.csproj ($version). Use tag v$version, or change <Version>."
@@ -54,7 +61,7 @@ jobs:
           "version=$version" >> $env:GITHUB_OUTPUT
           "tag=v$version"   >> $env:GITHUB_OUTPUT
 
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1  # v5.4.0
         with:
           dotnet-version: '8.0.x'
 
@@ -116,6 +123,9 @@ jobs:
             choco install nsis -y --no-progress
             $nsis = @("${env:ProgramFiles(x86)}\NSIS\makensis.exe", "$env:ProgramFiles\NSIS\makensis.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
           }
+          # NSIS before 3.09 had a temp-folder privilege bug in elevated installers (CVE-2023-37378)
+          $nv = ((& $nsis /VERSION) -join '').TrimStart('v')
+          if ([version]($nv -replace '[^0-9.].*$','') -lt [version]'3.9') { Write-Error "NSIS $nv is too old (need 3.09 or newer)"; exit 1 }
           & $nsis /V2 "/DVERSION=${{ steps.ver.outputs.version }}" installer.nsi
           if (-not (Test-Path VexisHM-Setup.exe)) { Write-Error "VexisHM-Setup.exe was not created"; exit 1 }
           Get-Item VexisHM-Setup.exe | Select-Object Name, Length
@@ -144,7 +154,7 @@ jobs:
 
       - name: Build provenance (signed record of which commit and workflow built the installer)
         if: github.event_name != 'workflow_dispatch'
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f  # v3.2.0
         with:
           subject-path: VexisHM-Setup.exe
 
@@ -201,7 +211,7 @@ jobs:
 
       - name: Attach to the release
         if: github.event_name != 'workflow_dispatch'
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64  # v3.0.3
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
           name: ${{ github.event_name == 'release' && github.event.release.name || format('Vexis {0}', steps.ver.outputs.version) }}
@@ -216,7 +226,7 @@ jobs:
 
       - name: Keep the test build
         if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6.0.0
         with:
           name: VexisHM-Setup-${{ steps.ver.outputs.version }}
           path: |

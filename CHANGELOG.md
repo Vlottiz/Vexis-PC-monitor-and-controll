@@ -9,6 +9,40 @@ for the installed version on Info → Version, and the release workflow uses it 
 the GitHub release notes.
 -->
 
+## 2.14.0 — 2026-10-18
+- Fans: a missing or impossible temperature no longer counts as cool. A fan on a curve or profile with no usable reading runs at 100 %, and a CPU or GPU sensor that stops working turns that over-temperature guard on (it used to read as 0 °C and could switch the guard off)
+- Fans: if sensor readings stop arriving altogether (a stuck driver), fans under Vexis's control go to full speed after a few seconds
+- Fans: each graphics card has its own over-temperature guard and its fans follow its own temperature (with two GPUs, both used to follow the first)
+- Fans: a health check is refused while the fan's guard is on, and stops at once (fan to 100 %) if it gets too hot during the check
+- Fans: one failing fan can no longer stop the others (or the guards) from being updated; speeds are re-sent every 10 s in case the board took control back after sleep
+- Fans: two fans with the same name (e.g. two "GPU Fan"s) are told apart, and each control is paired with only one fan
+- Fan page: when a fan is held at 100 % it says why (too hot, or no temperature reading)
+- Starting Vexis while it's already running asks the old copy to close properly (handing the fans back) instead of killing it
+- Settings: config.json is saved safely (a power cut mid-save can't corrupt it; the previous file is kept as a backup), and broken values in it are fixed on load
+- Security: Windows tools (sc, schtasks, explorer, taskkill) are started by full path; links open through Explorer so the browser doesn't get admin rights; the Start with Windows task file can't be swapped while it's imported
+- Security: pages have a content security policy (no outside scripts or connections) and form autofill is off; only Vexis's own pages can be popped out
+- Security: updates only ever pick the VexisHM-Setup installer from a release, never another .exe; old update folders are cleaned up only if Vexis made them
+- Security: the OpenRGB connection limits packet size and can't hang forever waiting for an answer
+- Duplicate finder: folders reached through junctions or links are resolved first, so the same file can't show up twice and be removed as its own duplicate; files are only recycled if a copy that stays still matches
+- End task checks the process is still the one you picked (Windows reuses process numbers)
+- WinRing0 cleanup only removes the service if an old Vexis installed it (other monitoring tools use the same name)
+- Installer: the install folder must be called Vexis, since uninstalling removes the whole folder
+- Builds: GitHub Actions pinned to exact commits, NSIS must be 3.09 or newer, and the local build checks the WebView2 installer's Microsoft signature
+- debug.log stops growing at 20 MB; LICENSE.txt credits LibreHardwareMonitor's MPL-2.0 license correctly
+- Fans: a watchdog on its own thread sends every fan Vexis controls to 100 % if fan updates stop for 10 s (e.g. the window hangs), and hands back normal control when they resume
+- Temperature colours are the same on every page (60 °C warm, 78 °C hot); they used to differ between the Temperatures, GPU, Thread Viewer and Home pages
+- End task also checks the process's start time, so a reused process number can't end the wrong program
+- Uninstalling from a shared folder (an install from before 2.14) only removes Vexis's own files, never files with common names
+- OpenRGB: one time limit for each whole reply, so a connection that trickles data can't keep Vexis waiting
+- Code: MainForm and nav.js are split into files by area, and a test checks every message a page sends has a handler
+- RGB: OpenRGB is found anywhere under Program Files again, including the zip's own "OpenRGB Windows 64-bit" folder (2.13 only looked in Program Files\OpenRGB). If it's somewhere else, the RGB page now says where and what to do, instead of only opening the website
+- RGB: the GUI and stop buttons no longer close an OpenRGB you started yourself when Vexis can't start it again
+- RGB: RAM colours and brightness use the sticks' own Static mode instead of Direct. On some kits (e.g. G.Skill with ENE) Direct colours didn't show at all while the built-in animations did; Static stores the colour on the stick, so it also isn't re-sent every 2 s
+- RAM stick temperatures are read every 5 s instead of 8 times a second: they share a bus with RAM RGB, and the constant reads were colliding with OpenRGB's colour writes
+- The whole app scales with the window: in a big window text and boxes grow (up to 1.8×, on top of the text size slider) instead of leaving empty space. Small windows look as before. Switch: System → Scale with window
+- Performance: the core bars grow to use the window's height, so the info panels sit right under them with no empty gap
+- Thread Viewer: the thread map's core boxes stretch across the full width
+
 ## 2.13.0 — 2026-10-16
 - Security: the interface's browser now runs with its normal security on (the old flags that turned it off are gone), only loads Vexis's own pages, and only accepts commands from them. Developer tools are off in released builds
 - Security: names from outside Vexis (process names, recordings, fan, drive and device names) can no longer be read as code by the pages. A program with a crafted name could do that on the Processes page before

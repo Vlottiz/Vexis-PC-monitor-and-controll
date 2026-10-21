@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- V was here ✌  As of 2.13.0, 75% of the code in this file is still my original work (Vlottiz). The rest came later, some of it AI-assisted (see CONTRIBUTING.md). Don't take my word for it: git blame. -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
 <meta http-equiv="Cache-Control" content="no-cache, no-store">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PC Monitor — Temperatures</title>
@@ -49,12 +49,12 @@
     </table>
   </div>
 </div>
-<script src="/nav.js?v=25" data-page="temps"></script>
+<script src="/nav.js?v=26" data-page="temps"></script><script src="/nav-theme.js?v=26"></script><script src="/nav-panel.js?v=26"></script><script src="/nav-styles.js?v=26"></script><script src="/nav-boot.js?v=26"></script>
 <script>
 let DEC=1; const stats={};  let _all={};
 function setDec(n){DEC=n;render();}
 function fmt(v){return v==null||v===Infinity||v===-Infinity?'--':parseFloat(v).toFixed(DEC)+'°';}
-function tc(t){return t<50?'var(--temp-low)':t<75?'var(--temp-warn)':'var(--temp-hot)';}
+const tc = navTempColor;   // shared bands (nav.js)
 function resetStats(){for(const k of Object.keys(stats)){stats[k].min=Infinity;stats[k].max=-Infinity;stats[k].hist=[];}render();}
 // Min / max / history per sensor (the history feeds the average)
 function updateStats(k,v){if(!stats[k])stats[k]={cur:v,min:v,max:v,hist:[]};const s=stats[k];s.cur=v;if(v<s.min)s.min=v;if(v>s.max)s.max=v;s.hist.push(v);if(s.hist.length>120)s.hist.shift();}
