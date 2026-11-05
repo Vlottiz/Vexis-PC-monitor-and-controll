@@ -231,7 +231,7 @@ function injectNavStyles() {
       box-shadow:6px 0 32px rgba(0,0,0,.7);
     }
     #nav-panel.nv-colors-open {
-      background:rgba(3,1,8,.82) !important;
+      background:color-mix(in srgb,var(--card-bg,#030108) 88%,transparent) !important;
       backdrop-filter:blur(12px) saturate(1.2) !important;
     }
 
@@ -259,7 +259,7 @@ function injectNavStyles() {
 
     .nv-items { flex:1;overflow-y:auto;padding:5px 0; }
     .nv-items::-webkit-scrollbar { width:3px; }
-    .nv-items::-webkit-scrollbar-thumb { background:#2a1800;border-radius:2px; }
+    .nv-items::-webkit-scrollbar-thumb { background:var(--border,#2a1800);border-radius:2px; }
 
     .nv-item {
       display:flex;align-items:center;gap:10px;padding:13px 15px;
@@ -325,7 +325,7 @@ function injectNavStyles() {
 
     .nvc-scroll { flex:1;overflow-y:auto;padding:4px 0 8px; }
     .nvc-scroll::-webkit-scrollbar { width:3px; }
-    .nvc-scroll::-webkit-scrollbar-thumb { background:#2a1800;border-radius:2px; }
+    .nvc-scroll::-webkit-scrollbar-thumb { background:var(--border,#2a1800);border-radius:2px; }
 
     .nvc-group-hdr {
       padding:8px 12px 4px;font-size:10px;letter-spacing:.12em;
