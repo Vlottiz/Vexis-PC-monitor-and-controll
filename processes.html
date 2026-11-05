@@ -5,32 +5,33 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
 <meta http-equiv="Cache-Control" content="no-cache, no-store">
 <title>PC Monitor — Processes</title>
+<link rel="stylesheet" href="/type.css?v=1">
 <link rel="stylesheet" href="/ui.css?v=12">
 <style>
   .page-body { gap:10px; }
   .toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
   .search { flex:1; min-width:160px; background:var(--bar-bg); border:1px solid var(--border); border-radius:4px; color:var(--text);
-            font-family:monospace; font-size:calc(11px*var(--fs-base,1)); padding:6px 10px; outline:none; }
+            font-family:var(--font-data); font-size:var(--fs-md); padding:6px 10px; outline:none; }
   .search:focus { border-color:var(--border-bright); }
-  .chip { padding:4px 10px; border:1px solid var(--border); border-radius:12px; font-size:calc(9px*var(--fs-base,1)); color:var(--label-dim);
+  .chip { padding:4px 10px; border:1px solid var(--border); border-radius:12px; font-size:var(--fs-sm); color:var(--label-dim);
           cursor:pointer; letter-spacing:.08em; background:transparent; font-family:inherit; white-space:nowrap; }
   .chip.on { color:var(--header-title); border-color:var(--border-bright); background:rgba(255,204,0,.08); }
   .end-btn { color:#ff7777 !important; border-color:rgba(255,80,80,.5) !important; }
   .end-btn:disabled { opacity:.35; cursor:not-allowed; }
 
   .tbl-wrap { border:1px solid var(--border); border-radius:6px; overflow:auto; background:var(--surface); flex:1; min-height:0; }
-  table.pt { width:100%; border-collapse:collapse; table-layout:fixed; font-size:calc(11px*var(--fs-base,1)); }
+  table.pt { width:100%; border-collapse:collapse; table-layout:fixed; font-size:var(--fs-md); }
   .pt th { position:sticky; top:0; z-index:2; background:var(--surface2); color:var(--label); font-weight:600; text-align:right; padding:6px 10px;
            border-bottom:1px solid var(--border-bright); cursor:pointer; user-select:none; white-space:nowrap; }
   .pt th:first-child { text-align:left; }
   .pt th:not(:first-child) { width:calc(96px*var(--fs-base,1)*var(--data-scale,1)); }
-  .pt th .tot { display:block; font-family:monospace; font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1)); color:var(--text); }
-  .pt th .lbl { font-size:calc(9px*var(--fs-base,1)); letter-spacing:.12em; color:var(--label-dim); }
+  .pt th .tot { display:block; font-family:var(--font-data); font-size:calc(var(--fs-body)*var(--data-scale,1)); color:var(--text); }
+  .pt th .lbl { font-size:var(--fs-sm); letter-spacing:.12em; color:var(--label-dim); }
   .pt th.sorted .lbl { color:var(--header-title); }
-  .pt td { padding:4px 10px; text-align:right; white-space:nowrap; border-bottom:1px solid rgba(68,51,0,.18); font-family:monospace;
-           font-size:calc(11px*var(--fs-base,1)*var(--data-scale,1)); color:var(--text); }
+  .pt td { padding:4px 10px; text-align:right; white-space:nowrap; border-bottom:1px solid rgba(68,51,0,.18); font-family:var(--font-data);
+           font-size:calc(var(--fs-md)*var(--data-scale,1)); color:var(--text); }
   .pt td:first-child { text-align:left; font-family:inherit; overflow:hidden; text-overflow:ellipsis; }
-  .pt tr.sec td { background:var(--bar-bg); color:var(--card-title); font-size:calc(9px*var(--fs-base,1)); letter-spacing:.16em; padding:8px 10px 5px; font-family:inherit; cursor:default; }
+  .pt tr.sec td { background:var(--bar-bg); color:var(--card-title); font-size:var(--fs-sm); letter-spacing:.16em; padding:8px 10px 5px; font-family:inherit; cursor:default; }
   .pt tr.prow { cursor:default; }
   .pt tr.prow:hover td { background:rgba(255,204,0,.04); }
   .pt tr.sel td { background:rgba(0,255,204,.09) !important; }
@@ -39,17 +40,17 @@
   .caret { display:inline-block; width:14px; color:var(--label-dim); cursor:pointer; text-align:center; }
   .ico { width:16px; height:16px; vertical-align:-3px; margin-right:6px; image-rendering:auto; }
   .ico.none { display:inline-block; border:1px solid var(--border); border-radius:3px; background:var(--bar-bg); }
-  .cnt { color:var(--label-dim); font-size:calc(9px*var(--fs-base,1)); margin-left:4px; font-family:monospace; }
-  .sub { color:var(--label-dim); font-size:calc(9px*var(--fs-base,1)); margin-left:6px; }
-  .lock { color:var(--label-dim); font-size:calc(9px*var(--fs-base,1)); margin-left:6px; }
+  .cnt { color:var(--label-dim); font-size:var(--fs-sm); margin-left:4px; font-family:var(--font-data); }
+  .sub { color:var(--label-dim); font-size:var(--fs-sm); margin-left:6px; }
+  .lock { color:var(--label-dim); font-size:var(--fs-sm); margin-left:6px; }
 
   #toast { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:var(--surface2); border:1px solid var(--border-bright);
-           color:var(--text); padding:8px 16px; border-radius:6px; font-size:calc(10px*var(--fs-base,1)); z-index:9000; display:none; box-shadow:0 6px 20px rgba(0,0,0,.5); }
+           color:var(--text); padding:8px 16px; border-radius:6px; font-size:var(--fs-md); z-index:9000; display:none; box-shadow:0 6px 20px rgba(0,0,0,.5); }
   #toast.err { border-color:#cc3333; color:#ff8888; }
   #confirm { position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; z-index:9600; }
   #confirm .box { background:var(--surface); border:1px solid var(--border-bright); border-radius:8px; padding:18px 20px; width:min(380px, calc(100vw - 32px)); }
-  #confirm h3 { margin:0 0 8px; font-size:calc(12px*var(--fs-base,1)); color:var(--header-title); letter-spacing:.1em; }
-  #confirm p { margin:0 0 14px; font-size:calc(10px*var(--fs-base,1)); color:var(--label); line-height:1.6; }
+  #confirm h3 { margin:0 0 8px; font-size:var(--fs-body); color:var(--header-title); letter-spacing:.1em; }
+  #confirm p { margin:0 0 14px; font-size:var(--fs-md); color:var(--label); line-height:1.6; }
   #confirm .btns { display:flex; gap:8px; justify-content:flex-end; }
 </style>
 </head>

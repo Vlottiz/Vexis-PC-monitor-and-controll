@@ -1,0 +1,58 @@
+/* type.css — Vexis typography, shared by every page (loaded before ui.css).
+   One size scale, two fonts and the header/title/label styles live here only, so every
+   page's headers, section titles, labels and numbers match. Pages use these variables
+   and classes instead of their own pixel sizes. --fs-base comes from nav-panel.js
+   (text-size slider × window scaling). */
+:root {
+  --fs-base: 1;
+  --fs-xs:   calc(8px  * var(--fs-base));   /* footnotes, units under values */
+  --fs-sm:   calc(9px  * var(--fs-base));   /* section titles, labels */
+  --fs-md:   calc(11px * var(--fs-base));   /* page title / subtitle, sub-text */
+  --fs-body: calc(13px * var(--fs-base));   /* body text, table cells, row values */
+  --fs-lg:   calc(15px * var(--fs-base));   /* emphasised values */
+  --fs-xl:   calc(18px * var(--fs-base));   /* tile values */
+  --fs-2xl:  calc(22px * var(--fs-base));   /* stat values */
+  --fs-3xl:  calc(28px * var(--fs-base));   /* big stat values */
+  --fs-4xl:  calc(42px * var(--fs-base));   /* hero numbers */
+  --font-ui:   'Segoe UI', system-ui, sans-serif;            /* all text */
+  --font-data: Consolas, 'Cascadia Mono', monospace;         /* numbers that change */
+}
+body { font-family: var(--font-ui); }
+
+/* ── Page header: the same on every page ── */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 56px;
+  padding: 0 250px 0 44px;  /* right: clear the fixed REC / zoom / ⛶ / ⚙ cluster from nav.js */
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  position: relative;
+}
+.page-header::after {
+  content: '';
+  position: absolute;
+  bottom: -1px; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--line-col1), var(--line-col2), var(--line-col1), transparent);
+}
+.page-title {
+  font-size: var(--fs-md);
+  font-weight: 700;
+  letter-spacing: .22em;
+  color: var(--header-title);
+  text-shadow: 0 0 16px var(--title-glow), 0 0 4px var(--header-title);
+  text-transform: uppercase;
+}
+.page-subtitle {
+  font-size: var(--fs-md);
+  color: var(--label-dim);
+  letter-spacing: .1em;
+}
+.page-time {
+  font-size: var(--fs-body);
+  color: var(--label-dim);
+  letter-spacing: .06em;
+  font-variant-numeric: tabular-nums;
+}

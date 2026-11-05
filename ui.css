@@ -5,15 +5,6 @@
   /* ── Font Scale System ── */
   --fs-base: 1;          /* "Page UI Font" slider multiplier, default 1 */
   --data-scale: 1;       /* "Data Text" slider multiplier for live readings */
-  --fs-xs:   calc(8px  * var(--fs-base));
-  --fs-sm:   calc(9px  * var(--fs-base));
-  --fs-md:   calc(11px * var(--fs-base));
-  --fs-body: calc(13px * var(--fs-base));
-  --fs-lg:   calc(15px * var(--fs-base));
-  --fs-xl:   calc(18px * var(--fs-base));
-  --fs-2xl:  calc(22px * var(--fs-base));
-  --fs-3xl:  calc(28px * var(--fs-base));
-  --fs-4xl:  calc(42px * var(--fs-base));
 
   --bg:#0a0808; --surface:#140f08; --surface2:#1e1608;
   --border:#443300; --border-bright:#886600;
@@ -36,7 +27,7 @@ html, body {
   height: 100%; width: 100%;
   background: var(--bg);
   color: var(--text);
-  font-family: 'Segoe UI', system-ui, monospace;
+  font-family: var(--font-ui);
   font-size: var(--fs-body);
   overflow: hidden;
 }
@@ -48,42 +39,7 @@ html, body {
   grid-template-rows: 56px 1fr;
 }
 
-/* ── Page header ── */
-.page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 250px 0 44px;  /* right: clear the fixed REC / zoom / ⛶ / ⚙ cluster from nav.js */
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-  position: relative;
-}
-.page-header::after {
-  content: '';
-  position: absolute;
-  bottom: -1px; left: 0; right: 0; height: 1px;
-  background: linear-gradient(90deg, transparent, var(--line-col1), var(--line-col2), var(--line-col1), transparent);
-}
-.page-title {
-  font-size: var(--fs-md);
-  font-weight: 700;
-  letter-spacing: .22em;
-  color: var(--header-title);
-  text-shadow: 0 0 16px var(--title-glow), 0 0 4px var(--header-title);
-  text-transform: uppercase;
-}
-.page-subtitle {
-  font-size: var(--fs-md);
-  color: var(--label-dim);
-  letter-spacing: .1em;
-}
-.page-time {
-  font-size: var(--fs-body);
-  color: var(--label-dim);
-  letter-spacing: .06em;
-  font-variant-numeric: tabular-nums;
-}
+/* Page header, title, subtitle and the size scale: type.css */
 
 /* ── Page body (scrollable) ── */
 .page-body {

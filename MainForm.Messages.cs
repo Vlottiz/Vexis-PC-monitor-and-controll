@@ -130,6 +130,9 @@ public partial class MainForm
                 // The page sends which preset it was; it's sent back at start-up (RESET ALL uses it)
                 if (msg.presetIdx is int pi && pi >= 0) _config.LastPresetIdx = pi;
                 _config.Save();
+                // Title bars follow the theme too
+                WindowChrome.Apply(this, _config.Colors);
+                foreach (var po in _popouts.Values) if (!po.IsDisposed) WindowChrome.Apply(po, _config.Colors);
                 break;
 
             case "saveProfile":

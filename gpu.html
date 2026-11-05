@@ -5,33 +5,34 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
 <meta http-equiv="Cache-Control" content="no-cache, no-store">
 <title>PC Monitor — GPU</title>
+<link rel="stylesheet" href="/type.css?v=1">
 <link rel="stylesheet" href="/ui.css?v=12">
 <style>
   .hero-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; }
   .hero { text-align:center; padding:14px 10px; }
   .hero .stat-label { margin-bottom:6px; }
-  .hero .stat-value { font-family:monospace; text-shadow:0 0 14px currentColor; white-space:nowrap; }
+  .hero .stat-value { font-family:var(--font-data); text-shadow:0 0 14px currentColor; white-space:nowrap; }
   .hero .stat-value .u { font-size:.45em; margin-left:3px; opacity:.75; text-shadow:none; }
-  .hero .stat-sub { font-size:calc(9px*var(--fs-base,1)); letter-spacing:.08em; margin-top:6px; }
+  .hero .stat-sub { font-size:var(--fs-sm); letter-spacing:.08em; margin-top:6px; }
 
   .meter { display:grid; grid-template-columns:minmax(90px,24%) 1fr calc(112px*var(--fs-base,1)*var(--data-scale,1)); align-items:center; gap:10px; padding:5px 0; }
-  .meter-lbl { font-size:calc(10px*var(--fs-base,1)); color:var(--label); letter-spacing:.08em; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .meter-lbl { font-size:var(--fs-md); color:var(--label); letter-spacing:.08em; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .meter-bar { height:8px; background:var(--bar-bg); border:1px solid var(--border); border-radius:4px; overflow:hidden; position:relative; }
   .meter-fill { height:100%; width:0%; border-radius:4px; transition:width .5s ease; }
   .meter-peak { position:absolute; top:-1px; bottom:-1px; width:2px; background:var(--peak-col); opacity:.7; left:0; display:none; }
-  .meter-val { font-family:monospace; font-weight:700; text-align:right; font-size:calc(12px*var(--fs-base,1)*var(--data-scale,1)); white-space:nowrap; }
-  .meter-val small { display:block; font-weight:400; color:var(--label-dim); font-size:calc(8px*var(--fs-base,1)); line-height:1.2; }
+  .meter-val { font-family:var(--font-data); font-weight:700; text-align:right; font-size:calc(var(--fs-body)*var(--data-scale,1)); white-space:nowrap; }
+  .meter-val small { display:block; font-weight:400; color:var(--label-dim); font-size:var(--fs-xs); line-height:1.2; }
 
   .hist-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; }
   .hist { background:var(--bar-bg); border:1px solid var(--border); border-radius:4px; padding:8px 10px 6px; }
   .hist-head { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px; }
-  .hist-name { font-size:calc(9px*var(--fs-base,1)); color:var(--label-dim); letter-spacing:.14em; }
-  .hist-val { font-family:monospace; font-weight:700; font-size:calc(12px*var(--fs-base,1)*var(--data-scale,1)); }
+  .hist-name { font-size:var(--fs-sm); color:var(--label-dim); letter-spacing:.14em; }
+  .hist-val { font-family:var(--font-data); font-weight:700; font-size:calc(var(--fs-body)*var(--data-scale,1)); }
   .hist svg { display:block; width:100%; height:56px; }
-  .hist-scale { display:flex; justify-content:space-between; font-size:calc(8px*var(--fs-base,1)); color:var(--label-dim); margin-top:2px; font-family:monospace; }
+  .hist-scale { display:flex; justify-content:space-between; font-size:var(--fs-xs); color:var(--label-dim); margin-top:2px; font-family:var(--font-data); }
 
-  .sens-group td { color:var(--card-title); font-size:calc(9px*var(--fs-base,1)); letter-spacing:.16em; padding-top:12px; border-bottom:1px solid var(--border); }
-  .data-table td.v { text-align:right; font-family:monospace; color:var(--text); }
+  .sens-group td { color:var(--card-title); font-size:var(--fs-sm); letter-spacing:.16em; padding-top:12px; border-bottom:1px solid var(--border); }
+  .data-table td.v { text-align:right; font-family:var(--font-data); color:var(--text); }
 </style>
 </head>
 <body>
@@ -42,8 +43,8 @@
       <div class="page-subtitle" id="gpu-sub">Loading...</div>
     </div>
     <div style="text-align:right">
-      <div style="font-size:calc(11px*var(--fs-base,1));color:var(--label-dim)" id="gpu-time">--:--:-- --</div>
-      <div id="gpu-badge" style="white-space:nowrap;font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--gpu-acc);font-weight:700;margin-top:2px">--</div>
+      <div style="font-size:var(--fs-md);color:var(--label-dim)" id="gpu-time">--:--:-- --</div>
+      <div id="gpu-badge" style="white-space:nowrap;font-size:calc(var(--fs-body)*var(--data-scale,1));color:var(--gpu-acc);font-weight:700;margin-top:2px">--</div>
     </div>
   </div>
   <div class="page-body">
@@ -59,7 +60,7 @@
       </div>
 
       <div class="card">
-        <div class="card-header"><span class="card-title">CLOCKS</span><span style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim)">bar = session peak</span></div>
+        <div class="card-header"><span class="card-title">CLOCKS</span><span style="font-size:var(--fs-sm);color:var(--label-dim)">bar = session peak</span></div>
         <div id="m-clk"></div>
       </div>
 
@@ -69,7 +70,7 @@
       </div>
 
       <div class="card">
-        <div class="card-header"><span class="card-title">HISTORY</span><span id="hist-span" style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim)"></span></div>
+        <div class="card-header"><span class="card-title">HISTORY</span><span id="hist-span" style="font-size:var(--fs-sm);color:var(--label-dim)"></span></div>
         <div class="hist-grid" id="hist"></div>
       </div>
 
@@ -79,7 +80,7 @@
       </div>
 
       <div class="card">
-        <div class="card-header"><span class="card-title">ALL SENSORS</span><span id="sens-count" style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim)"></span></div>
+        <div class="card-header"><span class="card-title">ALL SENSORS</span><span id="sens-count" style="font-size:var(--fs-sm);color:var(--label-dim)"></span></div>
         <table class="data-table"><tbody id="sens-body"></tbody></table>
       </div>
     </div>

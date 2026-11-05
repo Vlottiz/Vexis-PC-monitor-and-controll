@@ -7,6 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PC Monitor</title>
+<link rel="stylesheet" href="/type.css?v=1">
 <style>
 :root {
   --scale:1;
@@ -22,36 +23,37 @@
 }
 *{margin:0;padding:0;box-sizing:border-box;}
 html,body{height:100%;overflow:hidden;}
-body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;background:var(--bg);color:var(--text,#eeddff);font-family:monospace;padding:8px;display:flex;flex-direction:column;width:100%;height:100vh;}
+body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;background:var(--bg);color:var(--text,#eeddff);font-family:var(--font-ui);padding:8px;display:flex;flex-direction:column;width:100%;height:100vh;}
 #root{flex:1;display:flex;flex-direction:column;overflow:hidden;}
 .divider{display:flex;align-items:center;gap:8px;margin:6px 0 4px;}
 .divider-line{flex:1;height:1px;background:var(--divider-line);}
-.divider-label{font-size:calc(10px*var(--fs-base,1));color:var(--divider-lbl);letter-spacing:.15em;}
+.divider-label{font-size:var(--fs-md);color:var(--divider-lbl);letter-spacing:.15em;}
 .stat-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;}
-.stat-label{font-size:calc(10px*var(--fs-base,1));color:var(--label);text-transform:uppercase;letter-spacing:.05em;}
-.stat-val{font-size:calc(12px*var(--fs-base,1)*var(--data-scale,1));font-weight:600;text-shadow:0 0 8px var(--glow-col);}
+/* labels, values and section titles: same sizes as every other page (type.css / ui.css) */
+.stat-label{font-size:var(--fs-sm);color:var(--label);text-transform:uppercase;letter-spacing:.14em;}
+.stat-val{font-size:calc(var(--fs-body)*var(--data-scale,1));font-family:var(--font-data);font-weight:600;text-shadow:0 0 8px var(--glow-col);}
 .card{background:var(--card-bg);border:1px solid var(--border);border-radius:3px;padding:8px 10px;}
-.card-title{font-size:calc(9px*var(--fs-base,1));color:var(--card-title);letter-spacing:.12em;margin-bottom:6px;text-align:center;}
+.card-title{font-size:var(--fs-sm);font-weight:600;color:var(--card-title);letter-spacing:.2em;text-transform:uppercase;margin-bottom:6px;text-align:center;}
 #hcpu,#hpwr,#peakclk,#avgclk,#pkgpwr,#sgpuT,#sgpuV,#sgpuP,#sgpuC{text-shadow:0 0 14px var(--glow-col),0 0 5px var(--glow-col);}
 .accent-line{height:1px;background:linear-gradient(90deg,transparent,var(--line-col1),var(--line-col2),var(--line-col1),transparent);}
 /* Per-core thread dots (lit = thread busy) and the count of busy threads */
 .thr{display:flex;align-items:center;gap:3px;flex-shrink:0;width:calc(26px*var(--fs-base,1));cursor:help;}
 .thr-dots{display:flex;flex-direction:column;gap:2px;align-items:center;}
-.thr-n{font-family:monospace;font-size:calc(9px*var(--fs-base,1)*var(--data-scale,1));color:var(--label-dim);line-height:1;}
+.thr-n{font-family:var(--font-data);font-size:calc(var(--fs-sm)*var(--data-scale,1));color:var(--label-dim);line-height:1;}
 .thr-n.on{color:var(--avg-col);}
 #thr-bar{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;flex-shrink:0;margin:2px 0 0;
-  font-size:calc(8px*var(--fs-base,1));color:var(--divider-lbl);letter-spacing:.12em;}
-#thr-bar input{width:calc(40px*var(--fs-base,1));text-align:right;background:var(--bar-bg);color:var(--avg-col);border:1px solid var(--border);border-radius:3px;font-family:monospace;
-  font-size:calc(9px*var(--fs-base,1));padding:0 2px;cursor:pointer;}
-#thr-total{font-family:monospace;color:var(--avg-col);letter-spacing:.06em;}
+  font-size:var(--fs-xs);color:var(--divider-lbl);letter-spacing:.12em;}
+#thr-bar input{width:calc(40px*var(--fs-base,1));text-align:right;background:var(--bar-bg);color:var(--avg-col);border:1px solid var(--border);border-radius:3px;font-family:var(--font-data);
+  font-size:var(--fs-sm);padding:0 2px;cursor:pointer;}
+#thr-total{font-family:var(--font-data);color:var(--avg-col);letter-spacing:.06em;}
 #thr-view-btn{background:transparent;border:1px solid var(--border);border-radius:10px;color:var(--label);cursor:pointer;
-  font-family:monospace;font-size:calc(8px*var(--fs-base,1));letter-spacing:.14em;padding:2px 9px;}
+  font-family:var(--font-data);font-size:var(--fs-xs);letter-spacing:.14em;padding:2px 9px;}
 #thr-view-btn:hover{border-color:var(--border-bright);color:var(--header-title);}
 .thr i{display:block;width:calc(6px*var(--fs-base,1));height:calc(6px*var(--fs-base,1));border-radius:50%;border:1px solid var(--border);background:transparent;}
 .thr i.on{background:var(--avg-col);border-color:var(--avg-col);box-shadow:0 0 4px var(--avg-col);}
-#status{position:fixed;bottom:6px;right:10px;font-size:calc(8px*var(--fs-base,1));letter-spacing:.08em;color:var(--label-dim,#2a0a3a);opacity:.5;}
+#status{position:fixed;bottom:6px;right:10px;font-size:var(--fs-xs);letter-spacing:.08em;color:var(--label-dim,#2a0a3a);opacity:.5;}
 #status.ok{color:var(--label-dim,#2a0a3a);}
-#update-pulse{text-align:center;font-size:calc(7px*var(--fs-base,1));font-family:monospace;color:var(--label-dim,#3a1540);letter-spacing:.12em;margin:-1px 0 3px;opacity:0.18;transition:opacity 0.6s ease;flex-shrink:0;}
+#update-pulse{text-align:center;font-size:var(--fs-xs);font-family:var(--font-data);color:var(--label-dim,#3a1540);letter-spacing:.12em;margin:-1px 0 3px;opacity:0.18;transition:opacity 0.6s ease;flex-shrink:0;}
 #update-pulse.flash{opacity:0.55;transition:opacity 0s;}
 </style>
 </head>
@@ -61,15 +63,15 @@ body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;backgr
   <div id="driver-warn" style="display:none;flex-shrink:0;margin-bottom:4px;padding-left:36px">
     <div style="display:flex;gap:4px">
       <div id="warn-tab" onclick="showInfoTab('warn')"
-        style="flex:1;background:rgba(180,120,0,.15);border:1px solid rgba(180,120,0,.4);border-radius:4px 0 0 4px;padding:6px 10px;cursor:pointer;font-size:calc(9px*var(--fs-base,1));color:#cc9900;font-family:monospace;letter-spacing:.05em;line-height:1.5">
+        style="flex:1;background:rgba(180,120,0,.15);border:1px solid rgba(180,120,0,.4);border-radius:4px 0 0 4px;padding:6px 10px;cursor:pointer;font-size:var(--fs-sm);color:#cc9900;font-family:var(--font-data);letter-spacing:.05em;line-height:1.5">
         ⚠ CPU TEMPS UNAVAILABLE<br>
-        <span style="color:#886600;font-size:calc(8px*var(--fs-base,1))">Clock speeds via Windows fallback</span>
+        <span style="color:#886600;font-size:var(--fs-xs)">Clock speeds via Windows fallback</span>
       </div>
       <div id="info-tab" onclick="showInfoTab('info')"
-        style="width:32px;background:rgba(0,100,200,.12);border:1px solid rgba(0,100,200,.3);border-radius:0 4px 4px 0;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:calc(14px*var(--fs-base,1)*var(--data-scale,1));color:#4499cc"
+        style="width:32px;background:rgba(0,100,200,.12);border:1px solid rgba(0,100,200,.3);border-radius:0 4px 4px 0;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:calc(var(--fs-lg)*var(--data-scale,1));color:#4499cc"
         title="Why am I seeing this?">ℹ</div>
     </div>
-    <div id="intel-info-panel" style="display:none;background:rgba(0,0,0,.3);border:1px solid rgba(0,100,200,.25);border-radius:0 0 4px 4px;padding:8px 10px;font-size:calc(9px*var(--fs-base,1));line-height:1.7;color:#6699bb;font-family:monospace">
+    <div id="intel-info-panel" style="display:none;background:rgba(0,0,0,.3);border:1px solid rgba(0,100,200,.25);border-radius:0 0 4px 4px;padding:8px 10px;font-size:var(--fs-sm);line-height:1.7;color:#6699bb;font-family:var(--font-data)">
       <strong style="color:#4499cc;letter-spacing:.1em">SENSOR DRIVER NOT LOADED</strong><br>
       Per-core temps and clock speeds are read through the PawnIO driver. It works with
       Memory Integrity and the driver blocklist left ON — no security changes needed.<br><br>
@@ -79,20 +81,21 @@ body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;backgr
       <b>Install / Repair PawnIO</b>, then restart Vexis.
     </div>
   </div>
-  <div style="text-align:center;padding:0 44px 8px 44px;border-bottom:1px solid var(--border);margin-bottom:8px;position:relative;flex-shrink:0">
-    <div class="accent-line" style="position:absolute;top:0;left:0;right:0"></div>
-    <div id="hw-cpu" style="padding-left:36px;font-size:calc(15px*var(--fs-base,1));color:var(--header-title);font-weight:600;letter-spacing:.1em;text-shadow:0 0 12px var(--title-glow),0 0 4px var(--header-title)">···</div>
-    <div id="hw-sub" style="font-size:calc(13px*var(--fs-base,1));color:var(--header-sub);margin-top:2px;letter-spacing:.12em">···</div>
-    <div style="display:flex;justify-content:center;gap:24px;margin-top:7px">
-      <span id="hcpu" style="font-size:calc(15px*var(--fs-base,1)*var(--data-scale,1));font-weight:600">--°C</span>
-      <span id="hpwr" style="font-size:calc(15px*var(--fs-base,1)*var(--data-scale,1));color:var(--header-acc);font-weight:600">--W</span>
-      <span id="htime" style="font-size:calc(14px*var(--fs-base,1));color:var(--header-time)"></span>
+  <!-- Header: the same layout and sizes as every page (type.css) -->
+  <div class="page-header" style="margin:-8px -8px 8px">
+    <div>
+      <div class="page-title">&#x25A3; Performance</div>
+      <div class="page-subtitle"><span id="hw-cpu">···</span> · <span id="hw-sub">···</span></div>
+    </div>
+    <div style="text-align:right">
+      <div class="page-time" id="htime"></div>
+      <div style="font-size:var(--fs-body);font-family:var(--font-data);font-weight:600"><span id="hcpu">--°C</span> · <span id="hpwr" style="color:var(--header-acc)">--W</span></div>
     </div>
   </div>
   <!-- Divider with spark toggle -->
   <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-top:0">
     <div style="flex:1;height:1px;background:var(--divider-line)"></div>
-    <span data-collapse data-collapse-key="cpu-cores" data-collapse-target="#spark-layout" style="font-size:calc(9px*var(--fs-base,1));color:var(--divider-lbl);letter-spacing:.18em;white-space:nowrap">CPU CORES</span>
+    <span data-collapse data-collapse-key="cpu-cores" data-collapse-target="#spark-layout" style="font-size:var(--fs-sm);color:var(--divider-lbl);letter-spacing:.18em;white-space:nowrap">CPU CORES</span>
     <label class="nv-switch" title="Show per-core clock history and side panels">
       <input type="checkbox" id="spark-toggle" onchange="setSparklines(this.checked)">
       <span class="nv-switch-track"><span class="nv-switch-knob"></span></span>
@@ -115,35 +118,35 @@ body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;backgr
     <!-- LEFT SIDE PANEL (hidden when spark off) -->
     <div id="side-left" style="display:none;width:calc(88px*var(--fs-base,1)*var(--data-scale,1));flex-shrink:0;flex-direction:column;gap:6px;justify-content:flex-start;overflow:hidden">
       <div class="card" style="padding:8px;flex-shrink:0">
-        <div style="font-size:calc(8px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">PEAK</div>
-        <div id="peakclk" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--peak-col);font-weight:700;font-family:monospace">--</div>
+        <div style="font-size:var(--fs-xs);color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">PEAK</div>
+        <div id="peakclk" style="font-size:calc(var(--fs-body)*var(--data-scale,1));color:var(--peak-col);font-weight:700;font-family:var(--font-data)">--</div>
         <div style="height:3px;background:var(--bar-bg);border-radius:2px;margin-top:4px;overflow:hidden;border:1px solid var(--border)"><div id="sl-peak-bar" style="height:100%;background:var(--peak-col);width:0%;transition:width .5s"></div></div>
       </div>
       <div class="card" style="padding:8px;flex-shrink:0">
-        <div id="avg-label" style="font-size:calc(8px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">AVG</div>
-        <div id="avgclk" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--avg-col);font-weight:700;font-family:monospace">--</div>
+        <div id="avg-label" style="font-size:var(--fs-xs);color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">AVG</div>
+        <div id="avgclk" style="font-size:calc(var(--fs-body)*var(--data-scale,1));color:var(--avg-col);font-weight:700;font-family:var(--font-data)">--</div>
         <div style="height:3px;background:var(--bar-bg);border-radius:2px;margin-top:4px;overflow:hidden;border:1px solid var(--border)"><div id="sl-avg-bar" style="height:100%;background:var(--avg-col);width:0%;transition:width .5s"></div></div>
       </div>
       <div class="card" style="padding:8px;flex-shrink:0" id="sl-ccd0-card">
-        <div style="font-size:calc(8px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">CCD0</div>
-        <div id="sl-ccd0" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--temp-val);font-weight:700;font-family:monospace">--</div>
+        <div style="font-size:var(--fs-xs);color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">CCD0</div>
+        <div id="sl-ccd0" style="font-size:calc(var(--fs-body)*var(--data-scale,1));color:var(--temp-val);font-weight:700;font-family:var(--font-data)">--</div>
       </div>
       <div class="card" style="padding:8px;flex-shrink:0" id="sl-ccd1-card">
-        <div style="font-size:calc(8px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">CCD1</div>
-        <div id="sl-ccd1" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--temp-val);font-weight:700;font-family:monospace">--</div>
+        <div style="font-size:var(--fs-xs);color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">CCD1</div>
+        <div id="sl-ccd1" style="font-size:calc(var(--fs-body)*var(--data-scale,1));color:var(--temp-val);font-weight:700;font-family:var(--font-data)">--</div>
       </div>
     </div>
 
     <!-- CENTER: CORE BARS (always visible) -->
     <div id="cores-center" style="flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin">
       <div style="margin-bottom:4px;display:flex;justify-content:space-between;flex-shrink:0">
-        <div style="font-size:calc(13px*var(--fs-base,1));color:var(--ccd-lbl);font-weight:600" data-ccd0-lbl>CCD0</div>
-        <div style="font-size:calc(13px*var(--fs-base,1));color:var(--ccd-lbl);font-weight:600" data-ccd0-type>V-Cache</div>
+        <div style="font-size:var(--fs-body);color:var(--ccd-lbl);font-weight:600" data-ccd0-lbl>CCD0</div>
+        <div style="font-size:var(--fs-body);color:var(--ccd-lbl);font-weight:600" data-ccd0-type>V-Cache</div>
       </div>
       <div id="ccd0bars" style="flex-shrink:0"></div>
       <div id="ccd1wrap" style="margin:8px 0 4px;display:flex;justify-content:space-between;flex-shrink:0">
-        <div style="font-size:calc(13px*var(--fs-base,1));color:var(--ccd-lbl);font-weight:600" data-ccd1-lbl>CCD1</div>
-        <div style="font-size:calc(13px*var(--fs-base,1));color:var(--ccd-lbl);font-weight:600" data-ccd1-type>Compute</div>
+        <div style="font-size:var(--fs-body);color:var(--ccd-lbl);font-weight:600" data-ccd1-lbl>CCD1</div>
+        <div style="font-size:var(--fs-body);color:var(--ccd-lbl);font-weight:600" data-ccd1-type>Compute</div>
       </div>
       <div id="ccd1bars" style="flex-shrink:0"></div>
       <div style="flex:1"></div>
@@ -152,30 +155,30 @@ body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;backgr
     <!-- RIGHT SIDE PANEL (hidden when spark off) -->
     <div id="side-right" style="display:none;width:calc(88px*var(--fs-base,1)*var(--data-scale,1));flex-shrink:0;flex-direction:column;gap:6px;justify-content:flex-start;overflow:hidden">
       <div class="card" style="padding:8px;flex-shrink:0">
-        <div style="font-size:calc(8px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">POWER</div>
-        <div id="pkgpwr" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--pwr-col);font-weight:700;font-family:monospace">--</div>
+        <div style="font-size:var(--fs-xs);color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">POWER</div>
+        <div id="pkgpwr" style="font-size:calc(var(--fs-body)*var(--data-scale,1));color:var(--pwr-col);font-weight:700;font-family:var(--font-data)">--</div>
       </div>
       <div class="card" style="padding:8px;flex-shrink:0">
-        <div style="font-size:calc(8px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">CPU LOAD</div>
-        <div id="cpuload" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--avg-col);font-weight:700;font-family:monospace">--%</div>
+        <div style="font-size:var(--fs-xs);color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">CPU LOAD</div>
+        <div id="cpuload" style="font-size:calc(var(--fs-body)*var(--data-scale,1));color:var(--avg-col);font-weight:700;font-family:var(--font-data)">--%</div>
         <div style="height:3px;background:var(--bar-bg);border-radius:2px;margin-top:4px;overflow:hidden;border:1px solid var(--border)"><div id="sl-load-bar" style="height:100%;background:var(--avg-col);width:0%;transition:width .5s"></div></div>
       </div>
       <div class="card" style="padding:8px;flex-shrink:0">
-        <div style="font-size:calc(8px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">GPU TEMP</div>
-        <div id="sl-gpu-t" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--temp-low);font-weight:700;font-family:monospace">--</div>
+        <div style="font-size:var(--fs-xs);color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">GPU TEMP</div>
+        <div id="sl-gpu-t" style="font-size:calc(var(--fs-body)*var(--data-scale,1));color:var(--temp-low);font-weight:700;font-family:var(--font-data)">--</div>
       </div>
       <div class="card" style="padding:8px;flex-shrink:0">
-        <div style="font-size:calc(8px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">GPU CLK</div>
-        <div id="sl-gpu-c" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--gpu-acc);font-weight:700;font-family:monospace">--</div>
+        <div style="font-size:var(--fs-xs);color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">GPU CLK</div>
+        <div id="sl-gpu-c" style="font-size:calc(var(--fs-body)*var(--data-scale,1));color:var(--gpu-acc);font-weight:700;font-family:var(--font-data)">--</div>
       </div>
       <div class="card" style="padding:8px;flex-shrink:0">
-        <div style="font-size:calc(8px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">GPU LOAD</div>
-        <div id="sl-gpu-l" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--gpu-acc);font-weight:700;font-family:monospace">--%</div>
+        <div style="font-size:var(--fs-xs);color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">GPU LOAD</div>
+        <div id="sl-gpu-l" style="font-size:calc(var(--fs-body)*var(--data-scale,1));color:var(--gpu-acc);font-weight:700;font-family:var(--font-data)">--%</div>
         <div style="height:3px;background:var(--bar-bg);border-radius:2px;margin-top:4px;overflow:hidden;border:1px solid var(--border)"><div id="sl-gpuload-bar" style="height:100%;background:var(--gpu-acc);width:0%;transition:width .5s"></div></div>
       </div>
       <div class="card" style="padding:8px;flex-shrink:0">
-        <div style="font-size:calc(8px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">RAM LOAD</div>
-        <div id="sl-ram-l" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--mem-acc);font-weight:700;font-family:monospace">--%</div>
+        <div style="font-size:var(--fs-xs);color:var(--sum-lbl);letter-spacing:.1em;margin-bottom:4px">RAM LOAD</div>
+        <div id="sl-ram-l" style="font-size:calc(var(--fs-body)*var(--data-scale,1));color:var(--mem-acc);font-weight:700;font-family:var(--font-data)">--%</div>
         <div style="height:3px;background:var(--bar-bg);border-radius:2px;margin-top:4px;overflow:hidden;border:1px solid var(--border)"><div id="sl-ramload-bar" style="height:100%;background:var(--mem-acc);width:0%;transition:width .5s"></div></div>
       </div>
     </div>
@@ -186,34 +189,34 @@ body{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;backgr
   <div id="summary-bar-wrap" style="margin-top:6px;flex-shrink:0;display:flex;gap:6px">
     <div id="sum-left" class="card" style="flex:1;display:flex;justify-content:space-around;padding:8px 12px">
       <div style="text-align:center">
-        <div style="font-size:calc(10px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.08em">PEAK</div>
-        <div id="peakclk-bot" style="font-size:calc(14px*var(--fs-base,1)*var(--data-scale,1));color:var(--peak-col);font-weight:700">--</div>
+        <div style="font-size:var(--fs-md);color:var(--sum-lbl);letter-spacing:.08em">PEAK</div>
+        <div id="peakclk-bot" style="font-size:calc(var(--fs-lg)*var(--data-scale,1));color:var(--peak-col);font-weight:700">--</div>
       </div>
       <div style="width:1px;background:var(--border)"></div>
       <div style="text-align:center">
-        <div style="font-size:calc(10px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.08em">AVG</div>
-        <div id="avgclk-bot" style="font-size:calc(14px*var(--fs-base,1)*var(--data-scale,1));color:var(--avg-col);font-weight:700">--</div>
+        <div style="font-size:var(--fs-md);color:var(--sum-lbl);letter-spacing:.08em">AVG</div>
+        <div id="avgclk-bot" style="font-size:calc(var(--fs-lg)*var(--data-scale,1));color:var(--avg-col);font-weight:700">--</div>
       </div>
     </div>
     <div id="sum-right" class="card" style="flex:1;display:flex;justify-content:space-around;padding:8px 12px">
       <div style="text-align:center">
-        <div style="font-size:calc(9px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.08em">POWER</div>
-        <div id="pkgpwr-bot" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--pwr-col);font-weight:700">--</div>
+        <div style="font-size:var(--fs-sm);color:var(--sum-lbl);letter-spacing:.08em">POWER</div>
+        <div id="pkgpwr-bot" style="font-size:calc(var(--fs-body)*var(--data-scale,1));color:var(--pwr-col);font-weight:700">--</div>
       </div>
       <div style="width:1px;background:var(--border)"></div>
       <div style="text-align:center">
-        <div style="font-size:calc(9px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.08em">CPU</div>
-        <div id="cpuload-bot" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--avg-col);font-weight:700">--%</div>
+        <div style="font-size:var(--fs-sm);color:var(--sum-lbl);letter-spacing:.08em">CPU</div>
+        <div id="cpuload-bot" style="font-size:calc(var(--fs-body)*var(--data-scale,1));color:var(--avg-col);font-weight:700">--%</div>
       </div>
       <div style="width:1px;background:var(--border)"></div>
       <div style="text-align:center">
-        <div style="font-size:calc(9px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.08em">GPU</div>
-        <div id="gpuload-bot" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--gpu-acc);font-weight:700">--%</div>
+        <div style="font-size:var(--fs-sm);color:var(--sum-lbl);letter-spacing:.08em">GPU</div>
+        <div id="gpuload-bot" style="font-size:calc(var(--fs-body)*var(--data-scale,1));color:var(--gpu-acc);font-weight:700">--%</div>
       </div>
       <div style="width:1px;background:var(--border)"></div>
       <div style="text-align:center">
-        <div style="font-size:calc(9px*var(--fs-base,1));color:var(--sum-lbl);letter-spacing:.08em">RAM</div>
-        <div id="ramload-bot" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--mem-acc);font-weight:700">--%</div>
+        <div style="font-size:var(--fs-sm);color:var(--sum-lbl);letter-spacing:.08em">RAM</div>
+        <div id="ramload-bot" style="font-size:calc(var(--fs-body)*var(--data-scale,1));color:var(--mem-acc);font-weight:700">--%</div>
       </div>
     </div>
   </div>
@@ -547,7 +550,7 @@ function buildBars(){
       wrap.className='cbar-row';
       wrap.style.cssText='margin-bottom:calc(7px*var(--bar-s,1));display:flex;align-items:center;gap:8px';
       wrap.innerHTML=`
-        <div style="width:calc(30px*var(--fs-base,1)*var(--data-scale,1));text-align:right;font-size:calc(13px*var(--fs-base,1));color:var(--core-lbl);flex-shrink:0;font-weight:600;line-height:1">${c.rank===1?'★':''}${c.label||'C'+c.id}</div>
+        <div style="width:calc(30px*var(--fs-base,1)*var(--data-scale,1));text-align:right;font-size:var(--fs-body);color:var(--core-lbl);flex-shrink:0;font-weight:600;line-height:1">${c.rank===1?'★':''}${c.label||'C'+c.id}</div>
         <div class="thr" id="thr${c.id}"><span class="thr-dots"></span><span class="thr-n"></span></div>
         <div style="flex:1;display:flex;flex-direction:column;gap:1px">
           <div style="height:calc(14px*var(--bar-s,1));background:var(--bar-bg);border-radius:2px;overflow:hidden;border:1px solid var(--border);position:relative">
@@ -558,7 +561,7 @@ function buildBars(){
               style="display:block"></svg>
           </div>
         </div>
-        <div id="clk${c.id}" style="width:calc(72px*var(--fs-base,1)*var(--data-scale,1));text-align:right;font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));font-family:monospace;flex-shrink:0;color:var(--core-lbl);font-weight:600;line-height:1">--</div>`;
+        <div id="clk${c.id}" style="width:calc(72px*var(--fs-base,1)*var(--data-scale,1));text-align:right;font-size:calc(var(--fs-body)*var(--data-scale,1));font-family:var(--font-data);flex-shrink:0;color:var(--core-lbl);font-weight:600;line-height:1">--</div>`;
       el.appendChild(wrap);
     });
   });
