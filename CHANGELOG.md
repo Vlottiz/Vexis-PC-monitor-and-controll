@@ -13,6 +13,7 @@ the GitHub release notes.
 - Windows: title bars are dark and use the theme's colours (main window and popped-out windows) instead of white; on Windows 10 they go dark but can't take the exact colour
 - Pages: one font and one text-size scale on every page — headers, subtitles, section titles, labels and values now match everywhere
 - Home and Performance use the same header as the other pages
+- Settings: the Colours tab follows the theme (on light themes it was stuck dark, so its text was unreadable)
 - Fans: a missing or impossible temperature no longer counts as cool. A fan on a curve or profile with no usable reading runs at 100 %, and a CPU or GPU sensor that stops working turns that over-temperature guard on (it used to read as 0 °C and could switch the guard off)
 - Fans: if sensor readings stop arriving altogether (a stuck driver), fans under Vexis's control go to full speed after a few seconds
 - Fans: each graphics card has its own over-temperature guard and its fans follow its own temperature (with two GPUs, both used to follow the first)
