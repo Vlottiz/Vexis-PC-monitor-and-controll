@@ -6,13 +6,14 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PC Monitor — Fan Control</title>
+<link rel="stylesheet" href="/type.css?v=1">
 <link rel="stylesheet" href="/ui.css?v=12">
 <style>
-  .fan-rpm-big  { font-size:calc(30px*var(--fs-base,1)*var(--data-scale,1));font-weight:700;color:var(--mem-acc);line-height:1; }
-  .fan-rpm-unit { font-size:calc(11px*var(--fs-base,1)*var(--data-scale,1));color:var(--label-dim);margin-left:2px; }
+  .fan-rpm-big  { font-size:calc(var(--fs-3xl)*var(--data-scale,1));font-weight:700;color:var(--mem-acc);line-height:1; }
+  .fan-rpm-unit { font-size:calc(var(--fs-md)*var(--data-scale,1));color:var(--label-dim);margin-left:2px; }
   .mode-tabs { display:flex;gap:6px;margin:10px 0 8px; }
   .mode-tab {
-    flex:1;padding:7px;font-size:calc(10px*var(--fs-base,1));letter-spacing:.1em;text-transform:uppercase;
+    flex:1;padding:7px;font-size:var(--fs-md);letter-spacing:.1em;text-transform:uppercase;
     border:1px solid var(--border);background:transparent;color:var(--label-dim);
     cursor:pointer;border-radius:4px;font-family:inherit;transition:all .15s;
   }
@@ -26,7 +27,7 @@
   .curve-axis-y {
     position:absolute;left:0;top:0;bottom:0;width:32px;
     display:flex;flex-direction:column;justify-content:space-between;
-    font-size:calc(8px*var(--fs-base,1));color:var(--label-dim);text-align:right;padding-right:4px;
+    font-size:var(--fs-xs);color:var(--label-dim);text-align:right;padding-right:4px;
   }
   .curve-graph {
     width:100%;height:calc(210px*var(--fs-base,1));background:var(--bar-bg);
@@ -35,43 +36,43 @@
   }
   .curve-axis-x-labels {
     display:flex;justify-content:space-between;
-    font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);padding:3px 0 0;
-    font-family:monospace;
+    font-size:var(--fs-sm);color:var(--label-dim);padding:3px 0 0;
+    font-family:var(--font-data);
   }
   .curve-y-label {
     position:absolute;left:-26px;top:50%;transform:translateY(-50%) rotate(-90deg);
-    font-size:calc(8px*var(--fs-base,1));color:var(--label-dim);letter-spacing:.1em;white-space:nowrap;
-    font-family:monospace;
+    font-size:var(--fs-xs);color:var(--label-dim);letter-spacing:.1em;white-space:nowrap;
+    font-family:var(--font-data);
   }
   .curve-axis-x {
     display:flex;justify-content:space-between;
-    font-size:calc(8px*var(--fs-base,1));color:var(--label-dim);padding:2px 2px 0;margin-top:3px;
+    font-size:var(--fs-xs);color:var(--label-dim);padding:2px 2px 0;margin-top:3px;
   }
-  .curve-hint { font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);text-align:center;margin:5px 0 8px;letter-spacing:.05em; }
+  .curve-hint { font-size:var(--fs-sm);color:var(--label-dim);text-align:center;margin:5px 0 8px;letter-spacing:.05em; }
   .curve-src-row { display:flex;align-items:center;gap:10px;margin-bottom:8px; }
-  .curve-src-row label { font-size:calc(10px*var(--fs-base,1));color:var(--label);letter-spacing:.06em; }
+  .curve-src-row label { font-size:var(--fs-md);color:var(--label);letter-spacing:.06em; }
   .curve-btns { display:flex;gap:6px;margin-top:6px; }
   .health-row { display:flex;align-items:center;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border); }
-  .health-status { flex:1;font-size:calc(10px*var(--fs-base,1));line-height:1.5; }
+  .health-status { flex:1;font-size:var(--fs-md);line-height:1.5; }
   .curve-opts { display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin:4px 0 6px; }
-  .curve-opts label { font-size:calc(10px*var(--fs-base,1));color:var(--label);letter-spacing:.06em;display:flex;align-items:center;gap:6px;cursor:help; }
+  .curve-opts label { font-size:var(--fs-md);color:var(--label);letter-spacing:.06em;display:flex;align-items:center;gap:6px;cursor:help; }
   .curve-opts input { width:calc(52px*var(--fs-base,1));background:var(--bar-bg);border:1px solid var(--border);border-radius:3px;color:var(--text);
-                      font-family:monospace;font-size:calc(11px*var(--fs-base,1));padding:3px 5px;text-align:right; }
-  .curve-opts small { font-size:calc(9px*var(--fs-base,1));color:var(--label-dim); }
+                      font-family:var(--font-data);font-size:var(--fs-md);padding:3px 5px;text-align:right; }
+  .curve-opts small { font-size:var(--fs-sm);color:var(--label-dim); }
   /* Fan profile picker */
   .prof-row { display:grid;grid-template-columns:repeat(4,1fr);gap:8px; }
   .prof { border:1px solid var(--border);border-radius:5px;padding:9px 10px;cursor:pointer;background:var(--bar-bg);text-align:left;font-family:inherit; }
   .prof:hover { border-color:var(--border-bright); }
   .prof.on { border-color:var(--header-title);box-shadow:0 0 0 1px var(--header-title) inset;background:rgba(255,204,0,.06); }
-  .prof b { display:block;font-size:calc(10px*var(--fs-base,1));letter-spacing:.14em;color:var(--header-title);margin-bottom:3px; }
-  .prof span { font-size:calc(9px*var(--fs-base,1));color:var(--label);line-height:1.45; }
+  .prof b { display:block;font-size:var(--fs-md);letter-spacing:.14em;color:var(--header-title);margin-bottom:3px; }
+  .prof span { font-size:var(--fs-sm);color:var(--label);line-height:1.45; }
   @media (max-width:560px) { .prof-row { grid-template-columns:1fr 1fr; } }
   .preset-note { display:none;margin:8px 0 2px;padding:7px 10px;border:1px dashed var(--border-bright);border-radius:4px;
-                 font-size:calc(10px*var(--fs-base,1));color:var(--label); }
+                 font-size:var(--fs-md);color:var(--label); }
   .preset .preset-note { display:block; }
   .preset .mode-tab { opacity:.55; }
   .preset .manual-wrap, .preset .curve-wrap { display:none !important; }
-  .no-ctrl { font-size:calc(10px*var(--fs-base,1));color:var(--label-dim);padding:6px 0; }
+  .no-ctrl { font-size:var(--fs-md);color:var(--label-dim);padding:6px 0; }
 </style>
 </head>
 <body>
@@ -84,17 +85,17 @@
   </div>
   <div class="page-body">
     <div class="card" id="prof-card" style="display:none;margin-bottom:10px">
-      <div class="card-header"><span class="card-title">FAN PROFILE</span><span style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim)">also in the tray icon menu</span></div>
+      <div class="card-header"><span class="card-title">FAN PROFILE</span><span style="font-size:var(--fs-sm);color:var(--label-dim)">also in the tray icon menu</span></div>
       <div class="prof-row">
         <button class="prof" data-p="custom" onclick="pickProfile('custom')"><b>CUSTOM</b><span>Each fan uses its own mode or saved curve below.</span></button>
         <button class="prof" data-p="silent" onclick="pickProfile('silent')"><b>SILENT</b><span>Quiet until things get warm. Slower ramps, low idle speed.</span></button>
         <button class="prof" data-p="balanced" onclick="pickProfile('balanced')"><b>BALANCED</b><span>A sensible middle ground for everyday use and gaming.</span></button>
         <button class="prof" data-p="performance" onclick="pickProfile('performance')"><b>PERFORMANCE</b><span>Cooling first. Fans ramp early and stay higher.</span></button>
       </div>
-      <div style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);margin-top:8px;line-height:1.5">Presets drive every controllable fan: case and CPU fans follow the CPU, GPU fans the GPU, pumps keep a safe minimum. Changing a single fan below switches back to Custom.</div>
+      <div style="font-size:var(--fs-sm);color:var(--label-dim);margin-top:8px;line-height:1.5">Presets drive every controllable fan: case and CPU fans follow the CPU, GPU fans the GPU, pumps keep a safe minimum. Changing a single fan below switches back to Custom.</div>
     </div>
     <div id="no-fans" class="empty-state">Waiting for sensor data...</div>
-    <div id="fan-notice" style="display:none;margin:10px 0;padding:10px 14px;background:rgba(80,60,0,.15);border:1px solid rgba(180,120,0,.3);border-radius:5px;font-size:calc(10px*var(--fs-base,1));line-height:1.7;color:#aa8833;">⚠ <strong>Fan control unavailable on this system.</strong><br>Your fans are visible but cannot be controlled — either the hardware driver blocks software control, or your motherboard's fan controller isn't yet supported by the sensor library (LibreHardwareMonitor).<br><span style="color:#665500">Try your motherboard's own software (e.g. MSI Center, ASUS Armoury Crate, Gigabyte EasyTune) for full fan control. Support for more boards is added regularly.</span></div>
+    <div id="fan-notice" style="display:none;margin:10px 0;padding:10px 14px;background:rgba(80,60,0,.15);border:1px solid rgba(180,120,0,.3);border-radius:5px;font-size:var(--fs-md);line-height:1.7;color:#aa8833;">⚠ <strong>Fan control unavailable on this system.</strong><br>Your fans are visible but cannot be controlled — either the hardware driver blocks software control, or your motherboard's fan controller isn't yet supported by the sensor library (LibreHardwareMonitor).<br><span style="color:#665500">Try your motherboard's own software (e.g. MSI Center, ASUS Armoury Crate, Gigabyte EasyTune) for full fan control. Support for more boards is added regularly.</span></div>
     <div id="fans-list"></div>
   </div>
 </div>
@@ -460,7 +461,7 @@ function buildCard(fan) {
     ${fan.hasControl ? `
     <div class="health-row">
       <button class="btn btn-ghost" id="hbtn-${id}" onclick="runHealth(${fanArg(fan.name)})"
-        style="padding:6px 12px;font-size:calc(9px*var(--fs-base,1))">⚕ Health Check</button>
+        style="padding:6px 12px;font-size:var(--fs-sm)">⚕ Health Check</button>
       <span class="health-status" id="hres-${id}"></span>
     </div>` : ''}
   </div>`;

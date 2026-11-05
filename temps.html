@@ -6,15 +6,16 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PC Monitor — Temperatures</title>
+<link rel="stylesheet" href="/type.css?v=1">
 <link rel="stylesheet" href="/ui.css?v=12">
 <style>
   .controls { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
-  .sample-count { font-size:calc(10px*var(--fs-base,1)); color:var(--label-dim); }
+  .sample-count { font-size:var(--fs-md); color:var(--label-dim); }
   .temp-toggle { cursor:pointer; user-select:none; }
   .temp-toggle:hover th, .temp-toggle:hover td { filter:brightness(1.3); }
   /* Group headers stand out from sensor rows */
   .data-table .group-row.temp-toggle td {
-    color:var(--header-title); font-weight:700; font-size:calc(11px*var(--fs-base,1)); letter-spacing:.24em;
+    color:var(--header-title); font-weight:700; font-size:var(--fs-md); letter-spacing:.24em;
     background:color-mix(in srgb, var(--header-title) 10%, transparent);
     border-top:1px solid color-mix(in srgb, var(--header-title) 35%, transparent);
     text-shadow:0 0 10px color-mix(in srgb, var(--title-glow, transparent) 45%, transparent);
@@ -39,7 +40,7 @@
         <option value="2">2 decimals</option>
         <option value="3">3 decimals</option>
       </select>
-      <button class="btn btn-ghost" onclick="resetStats()" style="padding:5px 12px;font-size:calc(9px*var(--fs-base,1))">RESET</button>
+      <button class="btn btn-ghost" onclick="resetStats()" style="padding:5px 12px;font-size:var(--fs-sm)">RESET</button>
     </div>
   </div>
   <div class="page-body" style="padding:0">

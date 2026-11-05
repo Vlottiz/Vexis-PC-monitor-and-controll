@@ -82,6 +82,7 @@ public partial class MainForm : Form
         Controls.Add(_webView);
         ResumeLayout(false);
         Load        += OnLoad;
+        HandleCreated += (_, _) => WindowChrome.Apply(this, _config?.Colors);   // dark title bar (see WindowChrome)
         FormClosing += OnClosing;
         Resize      += OnResize;
         ResizeEnd   += (_, _) => SavePlacement();
@@ -113,6 +114,7 @@ public partial class MainForm : Form
         });
 
         _config = AppConfig.Load();
+        WindowChrome.Apply(this, _config.Colors);   // the saved theme, now that it's loaded
         try { File.Delete(ExitRequestPath); } catch { }   // a leftover request must not close this launch
         RestorePlacement();
         if (_startMinimized)

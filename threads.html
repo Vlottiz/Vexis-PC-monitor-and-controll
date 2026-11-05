@@ -5,56 +5,57 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
 <meta http-equiv="Cache-Control" content="no-cache, no-store">
 <title>PC Monitor — Thread Viewer</title>
+<link rel="stylesheet" href="/type.css?v=1">
 <link rel="stylesheet" href="/ui.css?v=12">
 <style>
   .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; }
   .tile { text-align:center; padding:12px 8px; }
-  .tile .stat-value { font-family:monospace; white-space:nowrap; font-size:calc(var(--fs-xl)*var(--data-scale,1)); }
-  .tile .stat-sub { font-size:calc(9px*var(--fs-base,1)); margin-top:4px; }
+  .tile .stat-value { font-family:var(--font-data); white-space:nowrap; font-size:calc(var(--fs-xl)*var(--data-scale,1)); }
+  .tile .stat-sub { font-size:var(--fs-sm); margin-top:4px; }
 
   /* Thread map: one box per core, one cell per thread coloured by load */
   .map-group { margin-bottom:12px; }
-  .map-title { font-size:calc(9px*var(--fs-base,1)); color:var(--label-dim); letter-spacing:.16em; margin:0 0 6px; }
+  .map-title { font-size:var(--fs-sm); color:var(--label-dim); letter-spacing:.16em; margin:0 0 6px; }
   /* auto-fit (not auto-fill): no empty columns on the right — the core boxes stretch to fill the width */
   .map { display:grid; grid-template-columns:repeat(auto-fit,minmax(calc(92px*var(--fs-base,1)),1fr)); gap:8px; }
   .core { border:1px solid var(--border); border-radius:4px; padding:6px 7px; background:var(--bar-bg); cursor:default; }
   .core.busy { border-color:var(--border-bright); }
-  .core-head { display:flex; justify-content:space-between; align-items:baseline; font-family:monospace; margin-bottom:5px; }
-  .core-name { font-size:calc(11px*var(--fs-base,1)); color:var(--header-title); font-weight:700; }
-  .core-clk { font-size:calc(9px*var(--fs-base,1)*var(--data-scale,1)); color:var(--label); }
+  .core-head { display:flex; justify-content:space-between; align-items:baseline; font-family:var(--font-data); margin-bottom:5px; }
+  .core-name { font-size:var(--fs-md); color:var(--header-title); font-weight:700; }
+  .core-clk { font-size:calc(var(--fs-sm)*var(--data-scale,1)); color:var(--label); }
   .cells { display:flex; gap:3px; }
   .cell { flex:1; height:calc(26px*var(--fs-base,1)); border-radius:3px; border:1px solid var(--border); position:relative; overflow:hidden; background:var(--surface); }
   .cell .fill { position:absolute; left:0; right:0; bottom:0; background:var(--avg-col); transition:height .35s, opacity .35s; }
-  .cell .pct { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:monospace;
-               font-size:calc(9px*var(--fs-base,1)*var(--data-scale,1)); color:var(--text); text-shadow:0 0 3px #000, 0 0 2px #000; }
+  .cell .pct { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:var(--font-data);
+               font-size:calc(var(--fs-sm)*var(--data-scale,1)); color:var(--text); text-shadow:0 0 3px #000, 0 0 2px #000; }
   .cell.on { border-color:var(--avg-col); box-shadow:0 0 5px color-mix(in srgb, var(--avg-col) 50%, transparent); }
-  .core-foot { display:flex; justify-content:space-between; font-family:monospace; font-size:calc(8px*var(--fs-base,1)); color:var(--label-dim); margin-top:4px; }
+  .core-foot { display:flex; justify-content:space-between; font-family:var(--font-data); font-size:var(--fs-xs); color:var(--label-dim); margin-top:4px; }
 
-  .legend { display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:calc(9px*var(--fs-base,1)); color:var(--label-dim); letter-spacing:.08em; }
+  .legend { display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:var(--fs-sm); color:var(--label-dim); letter-spacing:.08em; }
   .legend input { width:calc(44px*var(--fs-base,1)); background:var(--bar-bg); color:var(--avg-col); border:1px solid var(--border); border-radius:3px;
-                  font-family:monospace; text-align:right; font-size:calc(10px*var(--fs-base,1)); }
+                  font-family:var(--font-data); text-align:right; font-size:var(--fs-md); }
   .grad { width:90px; height:8px; border-radius:4px; border:1px solid var(--border);
           background:linear-gradient(90deg, var(--surface), color-mix(in srgb, var(--avg-col) 50%, var(--surface)), var(--avg-col)); }
 
   /* Thread activity: core labels | heat strip, time axis underneath */
   .tl { display:grid; grid-template-columns:calc(44px*var(--fs-base,1)) 1fr; }
   .tl-labels { position:relative; }
-  .tl-labels span { position:absolute; right:6px; transform:translateY(-50%); font-family:monospace; font-weight:700;
-                    font-size:calc(9px*var(--fs-base,1)); color:var(--header-title); white-space:nowrap; }
-  .tl-labels span.grp { color:var(--label-dim); font-weight:400; font-size:calc(8px*var(--fs-base,1)); letter-spacing:.08em; transform:none; }
+  .tl-labels span { position:absolute; right:6px; transform:translateY(-50%); font-family:var(--font-data); font-weight:700;
+                    font-size:var(--fs-sm); color:var(--header-title); white-space:nowrap; }
+  .tl-labels span.grp { color:var(--label-dim); font-weight:400; font-size:var(--fs-xs); letter-spacing:.08em; transform:none; }
   .tl-plot { position:relative; }
   #timeline { width:100%; display:block; border:1px solid var(--border); border-radius:4px; background:var(--bar-bg); cursor:crosshair; }
   .tl-axis { position:relative; height:calc(16px*var(--fs-base,1)); margin-top:3px; }
-  .tl-axis span { position:absolute; transform:translateX(-50%); font-family:monospace; font-size:calc(8px*var(--fs-base,1)); color:var(--label-dim); white-space:nowrap; }
+  .tl-axis span { position:absolute; transform:translateX(-50%); font-family:var(--font-data); font-size:var(--fs-xs); color:var(--label-dim); white-space:nowrap; }
   .tl-axis span::before { content:''; position:absolute; left:50%; top:-4px; width:1px; height:4px; background:var(--border-bright); }
   .tl-axis span:last-child { transform:translateX(-100%); }
   .tl-axis span:last-child::before { left:100%; }
   #tl-tip { position:absolute; pointer-events:none; display:none; background:var(--surface2); border:1px solid var(--border-bright); border-radius:4px;
-            padding:3px 7px; font-family:monospace; font-size:calc(9px*var(--fs-base,1)); color:var(--text); white-space:nowrap; z-index:5; }
-  .tl-cap { text-align:center; font-size:calc(8px*var(--fs-base,1)); color:var(--label-dim); margin-top:2px; }
+            padding:3px 7px; font-family:var(--font-data); font-size:var(--fs-sm); color:var(--text); white-space:nowrap; z-index:5; }
+  .tl-cap { text-align:center; font-size:var(--fs-xs); color:var(--label-dim); margin-top:2px; }
 
-  .dt { width:100%; border-collapse:collapse; font-family:monospace; font-size:calc(10px*var(--fs-base,1)*var(--data-scale,1)); }
-  .dt th { color:var(--label-dim); font-weight:400; font-size:calc(9px*var(--fs-base,1)); letter-spacing:.1em; text-align:right; padding:5px 8px;
+  .dt { width:100%; border-collapse:collapse; font-family:var(--font-data); font-size:calc(var(--fs-md)*var(--data-scale,1)); }
+  .dt th { color:var(--label-dim); font-weight:400; font-size:var(--fs-sm); letter-spacing:.1em; text-align:right; padding:5px 8px;
            border-bottom:1px solid var(--border); white-space:nowrap; cursor:pointer; user-select:none; }
   .dt th:first-child, .dt td:first-child { text-align:left; }
   .dt th.sorted { color:var(--header-title); }
@@ -74,8 +75,8 @@
       <div class="page-subtitle" id="tv-sub">Loading...</div>
     </div>
     <div style="text-align:right">
-      <div style="font-size:calc(11px*var(--fs-base,1));color:var(--label-dim)" id="tv-time">--:--:--</div>
-      <div id="tv-badge" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--avg-col);font-weight:700;margin-top:2px;white-space:nowrap">--</div>
+      <div style="font-size:var(--fs-md);color:var(--label-dim)" id="tv-time">--:--:--</div>
+      <div id="tv-badge" style="font-size:calc(var(--fs-body)*var(--data-scale,1));color:var(--avg-col);font-weight:700;margin-top:2px;white-space:nowrap">--</div>
     </div>
   </div>
   <div class="page-body">
@@ -102,7 +103,7 @@
       </div>
 
       <div class="card">
-        <div class="card-header"><span class="card-title">THREAD ACTIVITY</span><span class="muted" style="font-size:calc(9px*var(--fs-base,1))" id="tl-span"></span></div>
+        <div class="card-header"><span class="card-title">THREAD ACTIVITY</span><span class="muted" style="font-size:var(--fs-sm)" id="tl-span"></span></div>
         <div class="tl">
           <div class="tl-labels" id="tl-labels"></div>
           <div class="tl-plot"><canvas id="timeline"></canvas><div id="tl-tip"></div></div>
@@ -113,7 +114,7 @@
       </div>
 
       <div class="card">
-        <div class="card-header"><span class="card-title">CORE DETAILS</span><span class="muted" style="font-size:calc(9px*var(--fs-base,1))">click a column to sort · peaks and averages since this page opened</span></div>
+        <div class="card-header"><span class="card-title">CORE DETAILS</span><span class="muted" style="font-size:var(--fs-sm)">click a column to sort · peaks and averages since this page opened</span></div>
         <div style="overflow-x:auto"><table class="dt"><thead id="dt-head"></thead><tbody id="dt-body"></tbody></table></div>
       </div>
 

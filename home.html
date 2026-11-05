@@ -6,10 +6,9 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PC Monitor</title>
+<link rel="stylesheet" href="/type.css?v=1">
 <link rel="stylesheet" href="/ui.css?v=12">
 <style>
-  .hw-name { font-size:calc(15px*var(--fs-base,1)); font-weight: 700; letter-spacing: .14em; color: var(--header-title); text-shadow: 0 0 18px var(--title-glow); }
-  .hw-sub  { font-size:calc(10px*var(--fs-base,1)); color: var(--label-dim); letter-spacing: .1em; margin-top: 2px; }
   .temp-indicator { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
   .status-row { display: flex; gap: 8px; flex-wrap: wrap; }
   .status-pill {
@@ -17,27 +16,27 @@
     border-radius: 6px; padding: 10px 14px;
     display: flex; align-items: center; gap: 12px;
   }
-  .pill-icon { font-size:calc(18px*var(--fs-base,1)); flex-shrink: 0; opacity: .7; }
+  .pill-icon { font-size:var(--fs-xl); flex-shrink: 0; opacity: .7; }
   .pill-body { flex: 1; min-width: 0; }
-  .pill-val  { font-size:calc(18px*var(--fs-base,1)*var(--data-scale,1)); font-weight: 700; line-height: 1; }
-  .pill-lbl  { font-size:calc(9px*var(--fs-base,1)); color: var(--label-dim); letter-spacing: .1em; margin-top: 2px; }
+  .pill-val  { font-size:calc(var(--fs-xl)*var(--data-scale,1)); font-weight: 700; line-height: 1; }
+  .pill-lbl  { font-size:var(--fs-sm); color: var(--label-dim); letter-spacing: .1em; margin-top: 2px; }
   .fan-row   { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(68,51,0,0.15); }
   .fan-row:last-child { border-bottom: none; }
-  .fan-name  { font-size:calc(10px*var(--fs-base,1)); color: var(--label); }
-  .fan-rpm   { font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1)); font-weight: 600; color: var(--mem-acc); }
+  .fan-name  { font-size:var(--fs-md); color: var(--label); }
+  .fan-rpm   { font-size:calc(var(--fs-body)*var(--data-scale,1)); font-weight: 600; color: var(--mem-acc); }
 
   /* Responsive grid — more columns on wider windows */
   .card-grid-2 { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
   .home-nav-grid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
   .ht { display:flex;flex-direction:column;align-items:flex-start;padding:12px 14px;text-align:left;height:auto;min-height:86px; }
   .ht-head { display:flex;align-items:center;gap:8px;width:100%;margin-bottom:8px; }
-  .ht-icon { font-size:calc(16px*var(--fs-base,1)); }
-  .ht-val { font-size:calc(18px*var(--fs-base,1)*var(--data-scale,1));font-weight:700;font-family:monospace;white-space:nowrap; }
-  .ht-sub { font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);margin-top:2px;letter-spacing:.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%; }
+  .ht-icon { font-size:var(--fs-lg); }
+  .ht-val { font-size:calc(var(--fs-xl)*var(--data-scale,1));font-weight:700;font-family:var(--font-data);white-space:nowrap; }
+  .ht-sub { font-size:var(--fs-sm);color:var(--label-dim);margin-top:2px;letter-spacing:.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%; }
   .hdrive { display:grid;grid-template-columns:1fr auto;gap:2px 8px;padding:5px 0;border-bottom:1px solid rgba(68,51,0,.18); }
   .hdrive:last-child { border-bottom:none; }
-  .hdrive .n { font-size:calc(10px*var(--fs-base,1));color:var(--label);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
-  .hdrive .t { font-family:monospace;font-size:calc(12px*var(--fs-base,1)*var(--data-scale,1));font-weight:700;text-align:right; }
+  .hdrive .n { font-size:var(--fs-md);color:var(--label);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+  .hdrive .t { font-family:var(--font-data);font-size:calc(var(--fs-body)*var(--data-scale,1));font-weight:700;text-align:right; }
   .hdrive .bar { grid-column:1/3;height:4px;background:var(--bar-bg);border-radius:2px;overflow:hidden; }
   .hdrive .bar i { display:block;height:100%;background:linear-gradient(90deg,var(--surface2),var(--mem-acc)); }
 </style>
@@ -48,8 +47,8 @@
   <!-- Header -->
   <div class="page-header">
     <div>
-      <div class="hw-name" id="hw-cpu" style="padding-left:32px">PC MONITOR</div>
-      <div class="hw-sub"  id="hw-sub">···</div>
+      <div class="page-title">&#x2302; Home</div>
+      <div class="page-subtitle"><span id="hw-cpu">···</span> · <span id="hw-sub">···</span></div>
     </div>
     <div class="page-time" id="htime"></div>
   </div>
@@ -57,7 +56,7 @@
   <!-- Body -->
   <div class="page-body">
     <!-- Driver warning — shown when LHM ring-0 driver is blocked -->
-    <div id="driver-warn" style="display:none;background:rgba(180,120,0,.12);border:1px solid rgba(180,120,0,.35);border-radius:5px;padding:10px 14px;font-size:calc(10px*var(--fs-base,1));line-height:1.7;color:#ff8844;">
+    <div id="driver-warn" style="display:none;background:rgba(180,120,0,.12);border:1px solid rgba(180,120,0,.35);border-radius:5px;padding:10px 14px;font-size:var(--fs-md);line-height:1.7;color:#ff8844;">
       <strong style="letter-spacing:.1em">⚠ SENSOR DRIVER BLOCKED</strong><br>
       CPU temperatures unavailable — clock speeds showing via fallback mode.<br>
       <span style="color:#886600">Open the Security page → Install / Repair PawnIO, then restart Vexis.</span>
@@ -201,9 +200,9 @@
     <!-- Info strip -->
     <div class="card" style="padding:10px 14px">
       <div style="display:flex;justify-content:space-between;align-items:center">
-        <div style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);letter-spacing:.1em">VEXIS <span id="home-ver"></span> · Vlottiz</div>
+        <div style="font-size:var(--fs-sm);color:var(--label-dim);letter-spacing:.1em">VEXIS <span id="home-ver"></span> · Vlottiz</div>
         <button onclick="navView('info.html')"
-          style="font-size:calc(9px*var(--fs-base,1));font-family:monospace;background:none;border:1px solid var(--border);color:var(--label-dim);padding:3px 10px;border-radius:2px;cursor:pointer;letter-spacing:.06em">
+          style="font-size:var(--fs-sm);font-family:var(--font-data);background:none;border:1px solid var(--border);color:var(--label-dim);padding:3px 10px;border-radius:2px;cursor:pointer;letter-spacing:.06em">
           ◌ INFO & SUPPORT
         </button>
       </div>
@@ -277,7 +276,7 @@ function buildTiles() {
   document.getElementById('home-tiles').innerHTML = pages.map(p => `
     <button class="nav-tile ht" onclick="navView('${NAV_PAGE_FILES[p.id]}')" title="Open ${p.label}">
       <div class="ht-head"><span class="ht-icon" style="color:${TILE_COLOR[p.id] || 'var(--label)'}">${p.icon}</span>
-        <span class="nav-tile-label" style="font-size:calc(10px*var(--fs-base,1))">${p.label}</span></div>
+        <span class="nav-tile-label" style="font-size:var(--fs-md)">${p.label}</span></div>
       <div class="ht-val" id="ht-${p.id}" style="color:${TILE_COLOR[p.id] || 'var(--text)'}">--</div>
       <div class="ht-sub" id="hs-${p.id}"></div>
     </button>`).join('');
@@ -342,7 +341,7 @@ function receiveData(data){
     data.fans.forEach(f=>{if(f.rpm>0)_fansSeen.add(f.name);});
     const shown=data.fans.filter(f=>_fansSeen.has(f.name));
     const idle=data.fans.length-shown.length;
-    div.innerHTML=shown.map(f=>`<div class="fan-row"><span class="fan-name">${escHtml(f.name)}</span><span class="fan-rpm">${Math.round(f.rpm)} <span style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim)">RPM</span></span></div>`).join('')
+    div.innerHTML=shown.map(f=>`<div class="fan-row"><span class="fan-name">${escHtml(f.name)}</span><span class="fan-rpm">${Math.round(f.rpm)} <span style="font-size:var(--fs-sm);color:var(--label-dim)">RPM</span></span></div>`).join('')
       +(idle?`<div class="fan-row" style="opacity:.55"><span class="fan-name">+${idle} idle header${idle>1?'s':''} (0 RPM)</span><span></span></div>`:'')
       +(!shown.length&&!idle?'<div class="empty-state">No fans detected</div>':'');
   }

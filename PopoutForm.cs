@@ -70,6 +70,7 @@ public class PopoutForm : Form
         _webView.Dock = DockStyle.Fill;
         Controls.Add(_webView);
         Load += OnLoad;
+        HandleCreated += (_, _) => WindowChrome.Apply(this, _config.Colors);   // dark title bar (see WindowChrome)
     }
 
     // async void: an exception here would take the whole app down, so a pop-out that can't

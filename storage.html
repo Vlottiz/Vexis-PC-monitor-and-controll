@@ -5,16 +5,17 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
 <meta http-equiv="Cache-Control" content="no-cache, no-store">
 <title>PC Monitor — Storage</title>
+<link rel="stylesheet" href="/type.css?v=1">
 <link rel="stylesheet" href="/ui.css?v=12">
 <style>
   .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; }
   .tile { text-align:center; padding:12px 8px; }
-  .tile .stat-value { font-family:monospace; white-space:nowrap; font-size:calc(var(--fs-xl)*var(--data-scale,1)); }
-  .tile .stat-sub { font-size:calc(9px*var(--fs-base,1)); margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tile .stat-value { font-family:var(--font-data); white-space:nowrap; font-size:calc(var(--fs-xl)*var(--data-scale,1)); }
+  .tile .stat-sub { font-size:var(--fs-sm); margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
   .drive-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
-  .drive-name { font-size:calc(13px*var(--fs-base,1)); color:var(--header-title); font-weight:700; letter-spacing:.04em; }
-  .pill { font-size:calc(9px*var(--fs-base,1)); letter-spacing:.1em; padding:2px 8px; border-radius:10px; border:1px solid var(--border); color:var(--label); font-family:monospace; }
+  .drive-name { font-size:var(--fs-body); color:var(--header-title); font-weight:700; letter-spacing:.04em; }
+  .pill { font-size:var(--fs-sm); letter-spacing:.1em; padding:2px 8px; border-radius:10px; border:1px solid var(--border); color:var(--label); font-family:var(--font-data); }
   .health { margin-left:auto; font-weight:700; }
   .health.good    { color:#22c55e; border-color:#22c55e55; background:#22c55e14; }
   .health.worn    { color:#f59e0b; border-color:#f59e0b55; background:#f59e0b14; }
@@ -22,48 +23,48 @@
   .health.unknown { color:var(--label-dim); }
 
   .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px 24px; }
-  .meter-lbl { display:flex; justify-content:space-between; font-size:calc(10px*var(--fs-base,1)); color:var(--label); margin-bottom:5px; }
-  .meter-lbl b { font-family:monospace; color:var(--text); font-size:calc(12px*var(--fs-base,1)*var(--data-scale,1)); }
+  .meter-lbl { display:flex; justify-content:space-between; font-size:var(--fs-md); color:var(--label); margin-bottom:5px; }
+  .meter-lbl b { font-family:var(--font-data); color:var(--text); font-size:calc(var(--fs-body)*var(--data-scale,1)); }
   .meter { height:8px; background:var(--bar-bg); border:1px solid var(--border); border-radius:4px; overflow:hidden; }
   .meter i { display:block; height:100%; border-radius:4px; transition:width .5s; }
   .facts { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:8px; margin-top:14px; }
   .fact { background:var(--bar-bg); border:1px solid var(--border); border-radius:4px; padding:7px 9px; }
-  .fact span { display:block; font-size:calc(8px*var(--fs-base,1)); letter-spacing:.14em; color:var(--label-dim); }
-  .fact b { font-family:monospace; font-size:calc(12px*var(--fs-base,1)*var(--data-scale,1)); color:var(--text); }
+  .fact span { display:block; font-size:var(--fs-xs); letter-spacing:.14em; color:var(--label-dim); }
+  .fact b { font-family:var(--font-data); font-size:calc(var(--fs-body)*var(--data-scale,1)); color:var(--text); }
   .spark { width:100%; height:34px; display:block; margin-top:6px; }
-  .note { font-size:calc(9px*var(--fs-base,1)); color:var(--label-dim); line-height:1.5; }
+  .note { font-size:var(--fs-sm); color:var(--label-dim); line-height:1.5; }
 
   /* Duplicate finder */
   .dup-where { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
-  .chip { padding:4px 10px; border:1px solid var(--border); border-radius:12px; font-size:calc(10px*var(--fs-base,1)); color:var(--label);
-          cursor:pointer; background:transparent; font-family:monospace; }
+  .chip { padding:4px 10px; border:1px solid var(--border); border-radius:12px; font-size:var(--fs-md); color:var(--label);
+          cursor:pointer; background:transparent; font-family:var(--font-data); }
   .chip.on { color:var(--header-title); border-color:var(--border-bright); background:rgba(255,204,0,.08); }
   .chip .x { margin-left:6px; color:var(--label-dim); }
-  .dup-opts { display:flex; flex-wrap:wrap; gap:14px; align-items:center; margin:10px 0; font-size:calc(10px*var(--fs-base,1)); color:var(--label); }
-  .dup-opts select { background:var(--bar-bg); color:var(--text); border:1px solid var(--border); border-radius:3px; font-family:monospace; padding:2px 4px; }
-  .dup-prog { font-family:monospace; font-size:calc(10px*var(--fs-base,1)); color:var(--label); margin-top:8px; min-height:14px;
+  .dup-opts { display:flex; flex-wrap:wrap; gap:14px; align-items:center; margin:10px 0; font-size:var(--fs-md); color:var(--label); }
+  .dup-opts select { background:var(--bar-bg); color:var(--text); border:1px solid var(--border); border-radius:3px; font-family:var(--font-data); padding:2px 4px; }
+  .dup-prog { font-family:var(--font-data); font-size:var(--fs-md); color:var(--label); margin-top:8px; min-height:14px;
               white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .dup-bar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:12px 0 8px; }
-  .dup-sum { font-family:monospace; font-size:calc(11px*var(--fs-base,1)*var(--data-scale,1)); color:var(--text); flex:1; min-width:200px; }
+  .dup-sum { font-family:var(--font-data); font-size:calc(var(--fs-md)*var(--data-scale,1)); color:var(--text); flex:1; min-width:200px; }
   .dup-sum b { color:var(--mem-acc); }
   .dgroup { border:1px solid var(--border); border-radius:4px; margin-bottom:8px; background:var(--bar-bg); }
   .dgroup-h { display:flex; justify-content:space-between; gap:8px; padding:6px 10px; border-bottom:1px solid var(--border);
-              font-family:monospace; font-size:calc(10px*var(--fs-base,1)); color:var(--label); }
+              font-family:var(--font-data); font-size:var(--fs-md); color:var(--label); }
   .dgroup-h b { color:var(--mem-acc); }
-  .dfile { display:grid; grid-template-columns:20px 1fr auto auto; gap:8px; align-items:center; padding:4px 10px; font-size:calc(10px*var(--fs-base,1)); }
+  .dfile { display:grid; grid-template-columns:20px 1fr auto auto; gap:8px; align-items:center; padding:4px 10px; font-size:var(--fs-md); }
   .dfile:hover { background:rgba(255,204,0,.04); }
-  .dfile .p { font-family:monospace; color:var(--text); line-height:1.6; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; direction:rtl; text-align:left; }
+  .dfile .p { font-family:var(--font-data); color:var(--text); line-height:1.6; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; direction:rtl; text-align:left; }
   .dfile.sel .p { color:#ff8888; text-decoration:line-through; text-decoration-color:rgba(255,120,120,.5); }
-  .dfile .m { font-family:monospace; color:var(--label-dim); white-space:nowrap; }
+  .dfile .m { font-family:var(--font-data); color:var(--label-dim); white-space:nowrap; }
   .dfile input { accent-color:#ff6666; }
-  .mini { padding:3px 9px !important; font-size:calc(9px*var(--fs-base,1)) !important; }
+  .mini { padding:3px 9px !important; font-size:var(--fs-sm) !important; }
   .danger { color:#ff7777 !important; border-color:rgba(255,80,80,.55) !important; }
   #dup-confirm { position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; z-index:9600; }
   #dup-confirm .box { background:var(--surface); border:1px solid var(--border-bright); border-radius:8px; padding:18px 20px; width:min(420px, calc(100vw - 32px)); }
-  #dup-confirm h3 { margin:0 0 8px; font-size:calc(12px*var(--fs-base,1)); color:var(--header-title); letter-spacing:.1em; }
-  #dup-confirm p { margin:0 0 14px; font-size:calc(10px*var(--fs-base,1)); color:var(--label); line-height:1.6; }
+  #dup-confirm h3 { margin:0 0 8px; font-size:var(--fs-body); color:var(--header-title); letter-spacing:.1em; }
+  #dup-confirm p { margin:0 0 14px; font-size:var(--fs-md); color:var(--label); line-height:1.6; }
   #dup-toast { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:var(--surface2); border:1px solid var(--border-bright);
-               color:var(--text); padding:8px 16px; border-radius:6px; font-size:calc(10px*var(--fs-base,1)); z-index:9700; display:none; max-width:80vw; }
+               color:var(--text); padding:8px 16px; border-radius:6px; font-size:var(--fs-md); z-index:9700; display:none; max-width:80vw; }
 </style>
 </head>
 <body>
@@ -74,8 +75,8 @@
       <div class="page-subtitle" id="st-sub">Loading...</div>
     </div>
     <div style="text-align:right">
-      <div style="font-size:calc(11px*var(--fs-base,1));color:var(--label-dim)" id="st-time">--:--:--</div>
-      <div id="st-badge" style="font-size:calc(13px*var(--fs-base,1)*var(--data-scale,1));color:var(--avg-col);font-weight:700;margin-top:2px;white-space:nowrap">--</div>
+      <div style="font-size:var(--fs-md);color:var(--label-dim)" id="st-time">--:--:--</div>
+      <div id="st-badge" style="font-size:calc(var(--fs-body)*var(--data-scale,1));color:var(--avg-col);font-weight:700;margin-top:2px;white-space:nowrap">--</div>
     </div>
   </div>
   <div class="page-body">
@@ -91,10 +92,10 @@
       <div id="drives" style="display:flex;flex-direction:column;gap:12px"></div>
       <!-- ── Duplicate files ──────────────────────────────────────────────── -->
       <div class="card" id="dup-card">
-        <div class="card-header"><span class="card-title">DUPLICATE FILES</span><span style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim)">find identical copies and free up space</span></div>
+        <div class="card-header"><span class="card-title">DUPLICATE FILES</span><span style="font-size:var(--fs-sm);color:var(--label-dim)">find identical copies and free up space</span></div>
         <div class="note" style="margin-bottom:10px">Only files with exactly the same contents count as duplicates (checked byte for byte, not by name).
           Removed files go to the <b>Recycle Bin</b>, so you can restore them — and Vexis always keeps at least one copy.</div>
-        <div class="dup-where"><span style="font-size:calc(9px*var(--fs-base,1));color:var(--label-dim);letter-spacing:.14em">SEARCH IN</span>
+        <div class="dup-where"><span style="font-size:var(--fs-sm);color:var(--label-dim);letter-spacing:.14em">SEARCH IN</span>
           <span id="dup-drives"></span><span id="dup-folders"></span>
           <button class="chip" onclick="sendToHost({type:'dupPickFolder'})">+ CHOOSE FOLDER…</button></div>
         <div class="dup-opts">
